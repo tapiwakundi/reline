@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: reline
+    runtime: node
+    plan: free
+    region: oregon
+    # Migrations run during build; DATABASE_URL must be set before first deploy.
+    buildCommand: npm ci && npx drizzle-kit migrate && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false

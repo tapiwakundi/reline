@@ -1,0 +1,44 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+const tabs = [
+  { href: "/settings", label: "General" },
+  { href: "/settings/members", label: "Members" },
+  { href: "/settings/labels", label: "Labels" },
+  { href: "/settings/import", label: "Import" },
+];
+
+export default function SettingsLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex h-12 shrink-0 items-center gap-4 border-b border-border px-4">
+        <h1 className="text-sm font-semibold">Settings</h1>
+        <nav className="flex items-center gap-1">
+          {tabs.map((t) => (
+            <Link
+              key={t.href}
+              href={t.href}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+                pathname === t.href && "bg-accent text-foreground"
+              )}
+            >
+              {t.label}
+            </Link>
+          ))}
+        </nav>
+      </header>
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl px-6 py-8">{children}</div>
+      </div>
+    </div>
+  );
+}
