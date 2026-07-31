@@ -4,9 +4,16 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
-import { invites, memberships, statuses, workspaces } from "@/db/schema";
+import {
+  attachments,
+  invites,
+  memberships,
+  statuses,
+  workspaces,
+} from "@/db/schema";
 import { requireSession, requireWorkspace } from "@/lib/session";
 import { DEFAULT_STATUSES } from "@/lib/defaults";
+import { deleteObjects } from "@/lib/r2";
 
 export async function createWorkspace(formData: FormData) {
   const session = await requireSession();
@@ -85,4 +92,30 @@ export async function acceptInvite(token: string) {
   }
 
   redirect("/board");
+}
+
+/**
+ * Permanently delete the current workspace and all of its data.
+ * Owner-only; `confirmName` must match the workspace name exactly.
+ */
+export async function deleteWorkspace(confirmName: string) {
+  const { workspace, membership } = await requireWorkspace();
+
+  if (membership.role !== "owner") {
+    throw new Error("Only the workspace owner can delete it");
+  }
+  if (confirmName.trim() !== workspace.name) {
+    throw new Error("Workspace name does not match");
+  }
+
+  const files = await db.query.attachments.findMany({
+    where: eq(attachments.workspaceId, workspace.id),
+    columns: { key: true },
+  });
+
+  await db.delete(workspaces).where(eq(workspaces.id, workspace.id));
+
+  if (files.length) {
+    await deleteObjects(files.map((f) => f.key));
+  }
 }

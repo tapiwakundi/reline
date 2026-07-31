@@ -1,7 +1,8 @@
 import { requireWorkspace } from "@/lib/session";
+import { DeleteWorkspace } from "@/components/settings/delete-workspace";
 
 export default async function SettingsGeneralPage() {
-  const { workspace } = await requireWorkspace();
+  const { workspace, membership } = await requireWorkspace();
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,6 +34,18 @@ export default async function SettingsGeneralPage() {
           </dd>
         </div>
       </dl>
+
+      {membership.role === "owner" && (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-base font-semibold">Danger zone</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Irreversible actions for this workspace.
+            </p>
+          </div>
+          <DeleteWorkspace workspaceName={workspace.name} />
+        </div>
+      )}
     </div>
   );
 }

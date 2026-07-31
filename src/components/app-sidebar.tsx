@@ -9,12 +9,11 @@ import {
   KanbanSquareIcon,
   ListIcon,
   LogOutIcon,
+  MoreHorizontalIcon,
   PenSquareIcon,
   RefreshCwIcon,
   SearchIcon,
   SettingsIcon,
-  TagIcon,
-  UploadIcon,
   UserIcon,
   UsersIcon,
 } from "lucide-react";
@@ -108,25 +107,8 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
             <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <div className="flex items-center gap-2 px-2 py-1.5">
-              <UserAvatar user={me} className="size-6" />
-              <div className="min-w-0">
-                <div className="truncate text-xs font-medium">{me.name}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
-                  {me.email}
-                </div>
-              </div>
-            </div>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
-              <SettingsIcon /> Workspace settings
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => router.push("/settings/members")}>
               <UsersIcon /> Invite teammates
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} variant="destructive">
-              <LogOutIcon /> Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -168,10 +150,45 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
         </nav>
       </div>
 
-      <div className="mt-auto flex flex-col gap-0.5 px-3 pb-3">
-        <NavItem href="/settings/labels" icon={<TagIcon />} label="Labels" />
-        <NavItem href="/settings/import" icon={<UploadIcon />} label="Import" />
-        <NavItem href="/settings" icon={<SettingsIcon />} label="Settings" />
+      <div className="mt-auto border-t border-sidebar-border p-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent">
+            <UserAvatar user={me} className="size-7" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium text-foreground">
+                {me.name}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {workspace.name}
+              </div>
+            </div>
+            <MoreHorizontalIcon className="size-4 shrink-0 text-muted-foreground" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="w-56"
+          >
+            <div className="px-2 py-1.5">
+              <div className="truncate text-sm font-medium">{me.name}</div>
+              <div className="truncate text-xs text-muted-foreground">
+                {me.email}
+              </div>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => router.push("/settings")}>
+              <SettingsIcon /> Settings
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/settings/members")}>
+              <UsersIcon /> Invite teammates
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={logout}>
+              <LogOutIcon /> Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   );
