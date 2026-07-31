@@ -5,7 +5,7 @@ import { CommandPalette } from "@/components/command-palette";
 import { CreateIssueDialog } from "@/components/create-issue-dialog";
 
 const ShortcutsContext = createContext<{
-  openCreateIssue: () => void;
+  openCreateIssue: (statusId?: string) => void;
   openPalette: () => void;
 }>({ openCreateIssue: () => {}, openPalette: () => {} });
 
@@ -21,7 +21,13 @@ function isTyping(target: EventTarget | null) {
 
 export function GlobalShortcuts({ children }: { children: React.ReactNode }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [defaultStatusId, setDefaultStatusId] = useState<string | undefined>();
   const [paletteOpen, setPaletteOpen] = useState(false);
+
+  function openCreateIssue(statusId?: string) {
+    setDefaultStatusId(statusId);
+    setCreateOpen(true);
+  }
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -33,7 +39,7 @@ export function GlobalShortcuts({ children }: { children: React.ReactNode }) {
       if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.toLowerCase() === "c") {
         e.preventDefault();
-        setCreateOpen(true);
+        openCreateIssue();
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -43,16 +49,23 @@ export function GlobalShortcuts({ children }: { children: React.ReactNode }) {
   return (
     <ShortcutsContext.Provider
       value={{
-        openCreateIssue: () => setCreateOpen(true),
+        openCreateIssue,
         openPalette: () => setPaletteOpen(true),
       }}
     >
       {children}
-      <CreateIssueDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateIssueDialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) setDefaultStatusId(undefined);
+        }}
+        defaultStatusId={defaultStatusId}
+      />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        onCreateIssue={() => setCreateOpen(true)}
+        onCreateIssue={() => openCreateIssue()}
       />
     </ShortcutsContext.Provider>
   );

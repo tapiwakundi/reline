@@ -8,7 +8,7 @@ import — free to run on Render + Neon.
 
 - **Next.js** (App Router) + TypeScript
 - **Tailwind CSS + shadcn/ui** — Linear-inspired dark UI
-- **Better Auth** — email & password sessions
+- **Better Auth** — email & password + Google OAuth
 - **Neon Postgres** + **Drizzle ORM**
 - **@dnd-kit** — drag & drop kanban
 
@@ -40,6 +40,23 @@ npm run dev
 Open http://localhost:3000, sign up, and create your workspace. Invite your
 teammate from Settings → Members.
 
+### Google login (optional)
+
+1. In [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth 2.0 Client ID** (Web application).
+2. Add authorized redirect URI:
+   `{BETTER_AUTH_URL}/api/auth/callback/google`
+   (e.g. `http://localhost:3100/api/auth/callback/google` in local dev).
+3. Put the values in `.env`:
+
+```bash
+GOOGLE_CLIENT_ID=....apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=....
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=....apps.googleusercontent.com  # same as GOOGLE_CLIENT_ID
+```
+
+4. Restart the dev server. Login/signup will show **Continue with Google**.
+
 ## Deploy (Render + Neon)
 
 1. **Neon**: create a project at [console.neon.tech](https://console.neon.tech),
@@ -49,6 +66,9 @@ teammate from Settings → Members.
    - `DATABASE_URL` — your Neon connection string
    - `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` — `https://<your-service>.onrender.com`
    - `BETTER_AUTH_SECRET` is generated automatically
+   - Optional Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+     `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same as client id), and add
+     `https://<your-service>.onrender.com/api/auth/callback/google` in Google Cloud
 3. Deploy. Migrations run during build; the app binds to `0.0.0.0:$PORT` and
    health-checks at `/api/health`.
 

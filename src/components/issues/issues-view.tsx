@@ -65,7 +65,7 @@ export function IssuesView({
             onChange={onFiltersChange}
             hideAssignee={!!fixedAssigneeId}
           />
-          <Button size="sm" className="h-7 gap-1 text-xs" onClick={openCreateIssue}>
+          <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => openCreateIssue()}>
             <PlusIcon className="size-3.5" />
             New issue
           </Button>
@@ -75,7 +75,7 @@ export function IssuesView({
         {groups.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-muted-foreground">No issues here yet.</p>
-            <Button size="sm" variant="secondary" onClick={openCreateIssue}>
+            <Button size="sm" variant="secondary" onClick={() => openCreateIssue()}>
               Create an issue
             </Button>
           </div>

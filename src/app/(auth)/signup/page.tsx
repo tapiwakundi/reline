@@ -8,12 +8,17 @@ import { signUp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/logo";
+import {
+  AuthDivider,
+  GoogleSignInButton,
+} from "@/components/google-sign-in-button";
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const invite = searchParams.get("invite");
   const [loading, setLoading] = useState(false);
+  const googleCallback = invite ? `/invite/${invite}` : "/board";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -37,27 +42,34 @@ function SignupForm() {
     <div className="flex flex-col items-center gap-6">
       <Logo className="size-12 rounded-xl" />
       <h1 className="text-lg font-medium">Create your account</h1>
-      <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
-        <Input name="name" placeholder="Full name" required autoFocus />
-        <Input
-          name="email"
-          type="email"
-          placeholder="Email address"
-          required
-          autoComplete="email"
+      <div className="flex w-full flex-col gap-3">
+        <GoogleSignInButton
+          callbackURL={googleCallback}
+          label="Sign up with Google"
         />
-        <Input
-          name="password"
-          type="password"
-          placeholder="Password (8+ characters)"
-          required
-          minLength={8}
-          autoComplete="new-password"
-        />
-        <Button type="submit" disabled={loading} className="mt-1 w-full">
-          {loading ? "Creating account…" : "Continue"}
-        </Button>
-      </form>
+        <AuthDivider />
+        <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
+          <Input name="name" placeholder="Full name" required autoFocus />
+          <Input
+            name="email"
+            type="email"
+            placeholder="Email address"
+            required
+            autoComplete="email"
+          />
+          <Input
+            name="password"
+            type="password"
+            placeholder="Password (8+ characters)"
+            required
+            minLength={8}
+            autoComplete="new-password"
+          />
+          <Button type="submit" disabled={loading} className="mt-1 w-full">
+            {loading ? "Creating account…" : "Continue"}
+          </Button>
+        </form>
+      </div>
       <p className="text-sm text-muted-foreground">
         Already have an account?{" "}
         <Link href="/login" className="text-foreground hover:underline">

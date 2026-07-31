@@ -134,7 +134,7 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground"
-          onClick={openCreateIssue}
+          onClick={() => openCreateIssue()}
           title="New issue (C)"
         >
           <PenSquareIcon className="size-4" />

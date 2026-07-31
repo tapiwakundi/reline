@@ -53,10 +53,12 @@ const dropAnimation: DropAnimation = {
 function Column({
   status,
   issues,
+  dragging,
   onNewIssue,
 }: {
   status: StatusRow;
   issues: IssueListItem[];
+  dragging: boolean;
   onNewIssue: () => void;
 }) {
   const { setNodeRef } = useDroppable({
@@ -65,7 +67,7 @@ function Column({
   });
 
   return (
-    <div className="flex w-[300px] shrink-0 flex-col">
+    <div className="group/col flex w-[300px] shrink-0 flex-col">
       <div className="flex h-9 items-center gap-2 px-1.5">
         <StatusIcon status={status} />
         <span className="text-[13px] font-medium">{status.name}</span>
@@ -91,6 +93,16 @@ function Column({
           {issues.map((issue) => (
             <BoardCard key={issue.id} issue={issue} />
           ))}
+          {!dragging && (
+            <button
+              type="button"
+              onClick={onNewIssue}
+              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-transparent text-xs text-muted-foreground opacity-0 transition-all duration-150 group-hover/col:border-border/80 group-hover/col:opacity-100 hover:border-primary/45 hover:bg-primary/5 hover:text-foreground"
+            >
+              <PlusIcon className="size-3.5" />
+              Create new issue
+            </button>
+          )}
         </div>
       </SortableContext>
     </div>
@@ -121,21 +133,11 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
 
   useEffect(() => {
     if (activeId) return;
-    if (Date.now() < suppressServerSyncUntil.current) {
-      // #region agent log
-      fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'pre-fix',hypothesisId:'E',location:'board.tsx:serverSync',message:'server sync suppressed',data:{until:suppressServerSyncUntil.current,now:Date.now()},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      return;
-    }
+    if (Date.now() < suppressServerSyncUntil.current) return;
 
     const key = orderKey(serverIssues);
-    // Only adopt server data when the set of jobs/orders actually changed
-    // (create/delete/edit), not on every identical re-render.
     if (key === lastServerKey.current && key === orderKey(issues)) return;
     lastServerKey.current = key;
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'pre-fix',hypothesisId:'E',location:'board.tsx:serverSync',message:'adopting serverIssues',data:{count:serverIssues.length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setIssues(serverIssues);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from server props only
   }, [serverIssues, activeId]);
@@ -165,7 +167,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     return map;
   }, [visible, statuses]);
 
-  // Live columns during drag — mutated in onDragOver for instant feedback
   const [columns, setColumns] = useState<Record<string, string[]>>(() => {
     const next: Record<string, string[]> = {};
     for (const s of statuses) {
@@ -177,8 +178,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     return next;
   });
 
-  const dragOverCount = useRef(0);
-  const dragStartedAt = useRef(0);
   const lastOverId = useRef<UniqueIdentifier | null>(null);
 
   useEffect(() => {
@@ -187,9 +186,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     for (const s of statuses) {
       next[s.id] = (byStatus.get(s.id) ?? []).map((i) => i.id);
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'pre-fix',hypothesisId:'D',location:'board.tsx:columnsSync',message:'columns rebuilt from byStatus after activeId cleared',data:{msSinceDragStart:dragStartedAt.current?Date.now()-dragStartedAt.current:null,sample:Object.fromEntries(Object.entries(next).map(([k,v])=>[k,v.length]))},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setColumns(next);
   }, [byStatus, statuses, activeId]);
 
@@ -206,8 +202,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     return Object.keys(columns).find((key) => columns[key]?.includes(id));
   }
 
-  // Prefer pointer/rect hits over closestCorners-on-self (which was making
-  // every drop resolve to the dragged card and fly the overlay home).
   const collisionDetection: CollisionDetection = useCallback(
     (args) => {
       const active = args.active.id;
@@ -218,7 +212,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
       let overId = getFirstCollision(hits, "id");
 
       if (overId != null) {
-        // If pointer is over a column droppable, prefer the nearest card in it
         if (String(overId).startsWith("col-")) {
           const statusId = String(overId).slice(4);
           const cardIds = columns[statusId] ?? [];
@@ -226,9 +219,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
             const closest = closestCorners({
               ...args,
               droppableContainers: args.droppableContainers.filter(
-                (c) =>
-                  c.id !== active &&
-                  cardIds.includes(String(c.id))
+                (c) => c.id !== active && cardIds.includes(String(c.id))
               ),
             });
             if (closest[0]) overId = closest[0].id;
@@ -238,7 +229,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
         return [{ id: overId }];
       }
 
-      // Keep last valid target while briefly leaving droppables
       if (lastOverId.current && lastOverId.current !== active) {
         return [{ id: lastOverId.current }];
       }
@@ -254,12 +244,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
   );
 
   function onDragStart(e: DragStartEvent) {
-    dragOverCount.current = 0;
-    dragStartedAt.current = Date.now();
     lastOverId.current = null;
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'post-fix',hypothesisId:'F',location:'board.tsx:onDragStart',message:'drag start',data:{id:String(e.active.id)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setActiveId(String(e.active.id));
   }
 
@@ -276,13 +261,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     if (!activeContainer || !overContainer) return;
     if (activeContainer === overContainer) return;
 
-    dragOverCount.current += 1;
     lastOverId.current = over.id;
-    // #region agent log
-    if (dragOverCount.current <= 5 || dragOverCount.current % 10 === 0) {
-      fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'post-fix',hypothesisId:'F',location:'board.tsx:onDragOver',message:'cross-column dragOver state update',data:{n:dragOverCount.current,from:activeContainer,to:overContainer,overId},timestamp:Date.now()})}).catch(()=>{});
-    }
-    // #endregion
 
     setColumns((prev) => {
       const activeItems = prev[activeContainer] ?? [];
@@ -309,7 +288,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
       };
     });
 
-    // Keep issue.statusId in sync so Sortable data stays correct
     setIssues((prev) =>
       prev.map((i) =>
         i.id === activeIssueId ? { ...i, statusId: overContainer } : i
@@ -318,21 +296,15 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
   }
 
   function onDragEnd(e: DragEndEvent) {
-    const t0 = Date.now();
     const { active, over } = e;
     const issueId = String(active.id);
 
-    // Prefer last collision target when over collapses to the active item
     const resolvedOverId = String(
       (over && over.id !== active.id ? over.id : null) ??
         lastOverId.current ??
         over?.id ??
         ""
     );
-
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'post-fix',hypothesisId:'F',location:'board.tsx:onDragEnd:enter',message:'drag end enter',data:{issueId,over:over?String(over.id):null,resolvedOverId,lastOverId:lastOverId.current?String(lastOverId.current):null,dragOverCount:dragOverCount.current,dragMs:t0-dragStartedAt.current},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     if (!resolvedOverId) {
       setActiveId(null);
@@ -351,7 +323,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
 
     let nextColumns = columns;
 
-    // Same-column reorder
     if (activeContainer === overContainer && !overId.startsWith("col-")) {
       const items = columns[activeContainer] ?? [];
       const oldIndex = items.indexOf(issueId);
@@ -390,7 +361,6 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
       boardOrder = Date.now();
     }
 
-    // Commit optimistically — card is already in place via columns
     setIssues((prevIssues) =>
       prevIssues.map((i) =>
         i.id === issueId
@@ -400,23 +370,10 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     );
 
     suppressServerSyncUntil.current = Date.now() + 4000;
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'post-fix',hypothesisId:'F',location:'board.tsx:onDragEnd:beforeClearActive',message:'about to clear activeId and call server',data:{issueId,to:overContainer,from:activeContainer,boardOrder,syncMs:Date.now()-t0,columnIndex:(nextColumns[overContainer]??[]).indexOf(issueId),crossColumn:activeContainer!==overContainer},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setActiveId(null);
     lastOverId.current = null;
 
-    // Persist in background; do not await (keeps drop snappy)
-    const serverT0 = Date.now();
-    void moveIssueOnBoard(issueId, overContainer, boardOrder).then(() => {
-      // #region agent log
-      fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'post-fix',hypothesisId:'A',location:'board.tsx:onDragEnd:serverDone',message:'moveIssueOnBoard resolved on client',data:{issueId,serverMs:Date.now()-serverT0,totalMs:Date.now()-dragStartedAt.current},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    }).catch((err) => {
-      // #region agent log
-      fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'post-fix',hypothesisId:'A',location:'board.tsx:onDragEnd:serverErr',message:'moveIssueOnBoard failed',data:{err:String(err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-    });
+    void moveIssueOnBoard(issueId, overContainer, boardOrder);
   }
 
   function issuesForColumn(statusId: string): IssueListItem[] {
@@ -425,9 +382,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
       .map((id) => {
         const issue = issueMap.get(id);
         if (!issue) return null;
-        return issue.statusId === statusId
-          ? issue
-          : { ...issue, statusId };
+        return issue.statusId === statusId ? issue : { ...issue, statusId };
       })
       .filter((i): i is IssueListItem => !!i);
   }
@@ -442,7 +397,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
           <Button
             size="sm"
             className="h-7 gap-1 text-xs"
-            onClick={openCreateIssue}
+            onClick={() => openCreateIssue()}
           >
             <PlusIcon className="size-3.5" />
             New issue
@@ -468,7 +423,8 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
                 key={s.id}
                 status={s}
                 issues={issuesForColumn(s.id)}
-                onNewIssue={openCreateIssue}
+                dragging={!!activeId}
+                onNewIssue={() => openCreateIssue(s.id)}
               />
             ))}
           </div>

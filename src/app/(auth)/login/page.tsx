@@ -8,6 +8,10 @@ import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/logo";
+import {
+  AuthDivider,
+  GoogleSignInButton,
+} from "@/components/google-sign-in-button";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -34,26 +38,30 @@ export default function LoginPage() {
     <div className="flex flex-col items-center gap-6">
       <Logo className="size-12 rounded-xl" />
       <h1 className="text-lg font-medium">Log in to Reline</h1>
-      <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
-        <Input
-          name="email"
-          type="email"
-          placeholder="Email address"
-          required
-          autoFocus
-          autoComplete="email"
-        />
-        <Input
-          name="password"
-          type="password"
-          placeholder="Password"
-          required
-          autoComplete="current-password"
-        />
-        <Button type="submit" disabled={loading} className="mt-1 w-full">
-          {loading ? "Logging in…" : "Continue"}
-        </Button>
-      </form>
+      <div className="flex w-full flex-col gap-3">
+        <GoogleSignInButton callbackURL="/board" />
+        <AuthDivider />
+        <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
+          <Input
+            name="email"
+            type="email"
+            placeholder="Email address"
+            required
+            autoFocus
+            autoComplete="email"
+          />
+          <Input
+            name="password"
+            type="password"
+            placeholder="Password"
+            required
+            autoComplete="current-password"
+          />
+          <Button type="submit" disabled={loading} className="mt-1 w-full">
+            {loading ? "Logging in…" : "Continue"}
+          </Button>
+        </form>
+      </div>
       <p className="text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
         <Link href="/signup" className="text-foreground hover:underline">

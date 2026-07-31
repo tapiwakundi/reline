@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -28,29 +28,29 @@ export function CreateIssueDialog({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  const initialStatus =
-    defaultStatusId ??
+  const fallbackStatus =
     (statuses.find((s) => s.type === "unstarted") ?? statuses[0]).id;
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [statusId, setStatusId] = useState(initialStatus);
+  const [statusId, setStatusId] = useState(fallbackStatus);
   const [priority, setPriority] = useState(0);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [cycleId, setCycleId] = useState<string | null>(null);
   const [labelIds, setLabelIds] = useState<string[]>([]);
 
-  function reset() {
+  useEffect(() => {
+    if (!open) return;
     setTitle("");
     setDescription("");
-    setStatusId(initialStatus);
+    setStatusId(defaultStatusId ?? fallbackStatus);
     setPriority(0);
     setAssigneeId(null);
     setCycleId(null);
     setLabelIds([]);
-  }
+  }, [open, defaultStatusId, fallbackStatus]);
 
-  function submit(andMore = false) {
+  function submit() {
     if (!title.trim()) return;
     startTransition(async () => {
       try {
@@ -64,8 +64,7 @@ export function CreateIssueDialog({
           labelIds,
         });
         toast.success(`${identifier} created`);
-        reset();
-        if (!andMore) onOpenChange(false);
+        onOpenChange(false);
         router.refresh();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to create issue");

@@ -186,24 +186,15 @@ export async function moveIssueOnBoard(
   statusId: string,
   boardOrder: number
 ) {
-  const t0 = Date.now();
-  // #region agent log
-  fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'pre-fix',hypothesisId:'A',location:'issues.ts:moveIssueOnBoard:enter',message:'server move enter',data:{issueId,statusId,boardOrder},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const { workspace, user } = await requireWorkspace();
-  const tAuth = Date.now();
   const before = await ownedIssue(issueId, workspace.id);
-  const tOwned = Date.now();
 
-  // Fast path: persist the move first so the client isn't waiting on side effects
   await db
     .update(issues)
     .set({ statusId, boardOrder, updatedAt: new Date() })
     .where(eq(issues.id, issueId));
-  const tUpdate = Date.now();
 
   // Skip revalidating /board — the board already updated optimistically.
-  // Revalidating it was causing a multi-second snap/lag after drop.
   if (statusId !== before.statusId) {
     const to = await db.query.statuses.findFirst({
       where: eq(statuses.id, statusId),
@@ -225,9 +216,6 @@ export async function moveIssueOnBoard(
     revalidatePath("/issues");
     revalidatePath("/my-issues");
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'f545ab'},body:JSON.stringify({sessionId:'f545ab',runId:'pre-fix',hypothesisId:'A',location:'issues.ts:moveIssueOnBoard:exit',message:'server move exit',data:{issueId,statusChanged:statusId!==before.statusId,authMs:tAuth-t0,ownedMs:tOwned-tAuth,updateMs:tUpdate-tOwned,sideEffectMs:Date.now()-tUpdate,totalMs:Date.now()-t0},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
 }
 
 export async function deleteIssue(issueId: string) {
