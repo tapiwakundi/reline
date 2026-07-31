@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CircleDashedIcon,
   InboxIcon,
   KanbanSquareIcon,
   ListIcon,
@@ -78,6 +79,9 @@ export function CommandPalette({
           </CommandItem>
           <CommandItem onSelect={() => go("/issues")}>
             <ListIcon /> All issues
+          </CommandItem>
+          <CommandItem onSelect={() => go("/backlog")}>
+            <CircleDashedIcon /> Backlog
           </CommandItem>
           <CommandItem onSelect={() => go("/cycles")}>
             <RefreshCwIcon /> Cycles

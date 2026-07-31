@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ChevronDownIcon,
+  CircleDashedIcon,
   InboxIcon,
   KanbanSquareIcon,
   ListIcon,
@@ -128,6 +129,11 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
         <nav className="flex flex-col gap-0.5">
           <NavItem href="/board" icon={<KanbanSquareIcon />} label="Board" />
           <NavItem href="/issues" icon={<ListIcon />} label="Issues" />
+          <NavItem
+            href="/backlog"
+            icon={<CircleDashedIcon />}
+            label="Backlog"
+          />
           <NavItem href="/cycles" icon={<RefreshCwIcon />} label="Cycles" />
         </nav>
       </div>

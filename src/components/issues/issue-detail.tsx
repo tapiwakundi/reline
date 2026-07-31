@@ -71,7 +71,6 @@ export function IssueDetail({
   const key = initialData.issue.identifier;
   const { data = initialData } = useIssueDetail(key, initialData);
   const { issue, comments, activities } = data;
-
   const { members } = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();

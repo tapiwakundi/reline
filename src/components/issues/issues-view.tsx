@@ -22,10 +22,13 @@ export function IssuesView({
   issues: initialIssues,
   title,
   fixedAssigneeId,
+  fixedStatusType,
 }: {
   issues: IssueListItem[];
   title: string;
   fixedAssigneeId?: string;
+  /** When set, only show issues in statuses of this type (e.g. backlog). */
+  fixedStatusType?: "backlog" | "unstarted" | "started" | "done" | "canceled";
 }) {
   const { statuses, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
@@ -34,6 +37,19 @@ export function IssuesView({
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
   );
+
+  const scopedStatuses = useMemo(
+    () =>
+      fixedStatusType
+        ? statuses.filter((s) => s.type === fixedStatusType)
+        : statuses,
+    [statuses, fixedStatusType]
+  );
+  // Only pin a status when the view is scoped (e.g. Backlog); otherwise the
+  // create dialog defaults to backlog on its own.
+  const defaultStatusId = fixedStatusType
+    ? scopedStatuses[0]?.id
+    : undefined;
 
   function onFiltersChange(f: IssueFilters) {
     setFilters(f);
@@ -44,10 +60,14 @@ export function IssuesView({
   const visible = useMemo(() => {
     let list = applyFilters(issues, filters, cycles);
     if (fixedAssigneeId) list = list.filter((i) => i.assigneeId === fixedAssigneeId);
+    if (fixedStatusType) {
+      const ids = new Set(scopedStatuses.map((s) => s.id));
+      list = list.filter((i) => ids.has(i.statusId));
+    }
     return list;
-  }, [issues, filters, cycles, fixedAssigneeId]);
+  }, [issues, filters, cycles, fixedAssigneeId, fixedStatusType, scopedStatuses]);
 
-  const groups = statuses
+  const groups = scopedStatuses
     .map((s) => ({
       status: s,
       items: visible
@@ -67,7 +87,11 @@ export function IssuesView({
           hideAssignee={!!fixedAssigneeId}
         />
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => openCreateIssue()}>
+          <Button
+            size="sm"
+            className="h-7 gap-1 text-xs"
+            onClick={() => openCreateIssue(defaultStatusId)}
+          >
             <PlusIcon className="size-3.5" />
             New issue
           </Button>
@@ -77,7 +101,11 @@ export function IssuesView({
         {groups.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <p className="text-sm text-muted-foreground">No issues here yet.</p>
-            <Button size="sm" variant="secondary" onClick={() => openCreateIssue()}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => openCreateIssue(defaultStatusId)}
+            >
               Create an issue
             </Button>
           </div>

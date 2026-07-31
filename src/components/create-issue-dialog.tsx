@@ -32,7 +32,9 @@ export function CreateIssueDialog({
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
+  const backlogStatusId = statuses.find((s) => s.type === "backlog")?.id;
   const fallbackStatus =
+    backlogStatusId ??
     (statuses.find((s) => s.type === "unstarted") ?? statuses[0]).id;
 
   const [title, setTitle] = useState("");
