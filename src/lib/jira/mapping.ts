@@ -168,3 +168,182 @@ export function adfToText(node: unknown): string {
   if (n.type === "listItem") return "- " + children;
   return children;
 }
+
+export type JiraSprint = {
+  /** Stable dedupe key: jira id when known, otherwise lowercased name. */
+  key: string;
+  jiraId?: number;
+  name: string;
+  state?: "future" | "active" | "closed";
+  startDate?: Date;
+  endDate?: Date;
+};
+
+function normalizeSprintState(
+  raw: string | undefined | null
+): JiraSprint["state"] | undefined {
+  const s = raw?.trim().toLowerCase();
+  if (!s) return undefined;
+  if (s === "active" || s === "future") return s;
+  if (s === "closed" || s === "complete" || s === "completed") return "closed";
+  return undefined;
+}
+
+function sprintFromParts(parts: {
+  id?: number;
+  name?: string;
+  state?: string;
+  startDate?: string | Date | null;
+  endDate?: string | Date | null;
+}): JiraSprint | null {
+  const name = parts.name?.trim();
+  if (!name) return null;
+  const jiraId =
+    typeof parts.id === "number" && Number.isFinite(parts.id)
+      ? parts.id
+      : undefined;
+  const startDate =
+    parts.startDate instanceof Date
+      ? parts.startDate
+      : parseJiraDate(
+          typeof parts.startDate === "string" ? parts.startDate : undefined
+        );
+  const endDate =
+    parts.endDate instanceof Date
+      ? parts.endDate
+      : parseJiraDate(
+          typeof parts.endDate === "string" ? parts.endDate : undefined
+        );
+  return {
+    key: jiraId != null ? `id:${jiraId}` : `name:${name.toLowerCase()}`,
+    jiraId,
+    name,
+    state: normalizeSprintState(parts.state),
+    startDate,
+    endDate,
+  };
+}
+
+/** Parse Greenhopper's legacy `Sprint@hash[id=…,name=…]` string. */
+function parseGreenhopperSprint(raw: string): JiraSprint | null {
+  const name = raw.match(/name=([^,\]]*)/)?.[1]?.trim();
+  if (!name) return null;
+  const idRaw = raw.match(/id=(\d+)/)?.[1];
+  const state = raw.match(/state=([^,\]]*)/)?.[1];
+  const startDate = raw.match(/startDate=([^,\]]*)/)?.[1];
+  const endDate = raw.match(/endDate=([^,\]]*)/)?.[1];
+  return sprintFromParts({
+    id: idRaw ? Number(idRaw) : undefined,
+    name,
+    state,
+    startDate:
+      startDate && startDate !== "<null>" && startDate !== "null"
+        ? startDate
+        : undefined,
+    endDate:
+      endDate && endDate !== "<null>" && endDate !== "null" ? endDate : undefined,
+  });
+}
+
+/**
+ * Parse a Jira API sprint custom-field value (object, array, or Greenhopper
+ * string). Returns every sprint referenced on the issue.
+ */
+export function parseJiraSprintField(value: unknown): JiraSprint[] {
+  if (value == null || value === "") return [];
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    if (trimmed.includes("com.atlassian.greenhopper.service.sprint.Sprint")) {
+      const one = parseGreenhopperSprint(trimmed);
+      return one ? [one] : [];
+    }
+    const one = sprintFromParts({ name: trimmed });
+    return one ? [one] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((v) => parseJiraSprintField(v));
+  }
+
+  if (typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    const rawId =
+      typeof o.id === "number"
+        ? o.id
+        : typeof o.id === "string"
+          ? Number(o.id)
+          : undefined;
+    const one = sprintFromParts({
+      id: rawId != null && Number.isFinite(rawId) ? rawId : undefined,
+      name: typeof o.name === "string" ? o.name : undefined,
+      state: typeof o.state === "string" ? o.state : undefined,
+      startDate:
+        typeof o.startDate === "string"
+          ? o.startDate
+          : typeof o.startDate === "number"
+            ? new Date(o.startDate)
+            : null,
+      endDate:
+        typeof o.endDate === "string"
+          ? o.endDate
+          : typeof o.endDate === "number"
+            ? new Date(o.endDate)
+            : null,
+    });
+    return one ? [one] : [];
+  }
+
+  return [];
+}
+
+/** Parse a single Jira CSV "Sprint" cell (usually just the sprint name). */
+export function parseJiraSprintCsvCell(
+  value: string | undefined | null
+): JiraSprint | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  if (raw.includes("com.atlassian.greenhopper.service.sprint.Sprint")) {
+    return parseGreenhopperSprint(raw);
+  }
+  return sprintFromParts({ name: raw });
+}
+
+/**
+ * Pick the sprint an issue currently belongs to: prefer active, else the
+ * latest by end/start date (typical Jira "current sprint" semantics when
+ * history keeps closed sprints on the field).
+ */
+export function pickCurrentSprint(sprints: JiraSprint[]): JiraSprint | null {
+  if (!sprints.length) return null;
+  const active = sprints.find((s) => s.state === "active");
+  if (active) return active;
+  const ranked = [...sprints].sort((a, b) => {
+    const at = (a.endDate ?? a.startDate)?.getTime() ?? 0;
+    const bt = (b.endDate ?? b.startDate)?.getTime() ?? 0;
+    return bt - at;
+  });
+  return ranked[0] ?? null;
+}
+
+export function mapSprintToCycleStatus(
+  state: JiraSprint["state"]
+): "planned" | "active" | "completed" {
+  if (state === "active") return "active";
+  if (state === "closed") return "completed";
+  return "planned";
+}
+
+/** Sort sprints chronologically so imported cycle numbers follow Jira order. */
+export function sortSprintsChronologically(sprints: JiraSprint[]): JiraSprint[] {
+  return [...sprints].sort((a, b) => {
+    const at = a.startDate?.getTime() ?? a.endDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const bt = b.startDate?.getTime() ?? b.endDate?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    if (at !== bt) return at - bt;
+    if (a.jiraId != null && b.jiraId != null && a.jiraId !== b.jiraId) {
+      return a.jiraId - b.jiraId;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}

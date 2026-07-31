@@ -54,70 +54,14 @@ export async function POST(req: Request) {
   const key = objectKey(membership.workspaceId, media.ext);
   const bytes = Buffer.from(await file.arrayBuffer());
 
-  // #region agent log
-  fetch("http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "846e9b",
-    },
-    body: JSON.stringify({
-      sessionId: "846e9b",
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "upload/route.ts:before-put",
-      message: "server upload to R2",
-      data: { key, contentType, size, kind: media.kind },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
-
   try {
     await putObject(key, bytes, contentType);
   } catch (e) {
-    // #region agent log
-    fetch("http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "846e9b",
-      },
-      body: JSON.stringify({
-        sessionId: "846e9b",
-        runId: "post-fix",
-        hypothesisId: "A",
-        location: "upload/route.ts:put-error",
-        message: "R2 putObject failed",
-        data: { error: e instanceof Error ? e.message : String(e) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     return Response.json(
       { error: e instanceof Error ? e.message : "Upload failed" },
       { status: 500 }
     );
   }
-
-  // #region agent log
-  fetch("http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "846e9b",
-    },
-    body: JSON.stringify({
-      sessionId: "846e9b",
-      runId: "post-fix",
-      hypothesisId: "A",
-      location: "upload/route.ts:put-ok",
-      message: "R2 putObject ok",
-      data: { key },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
 
   return Response.json({
     key,

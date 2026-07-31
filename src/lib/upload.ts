@@ -108,51 +108,10 @@ export function useAttachmentUploads() {
         ]);
 
         (async () => {
-          // #region agent log
-          fetch("http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "846e9b",
-            },
-            body: JSON.stringify({
-              sessionId: "846e9b",
-              runId: "post-fix",
-              hypothesisId: "A",
-              location: "upload.ts:proxy-start",
-              message: "proxy upload start",
-              data: {
-                localId,
-                filename: file.name,
-                contentType: file.type,
-                size: file.size,
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           const { key, publicUrl, kind } = await uploadWithProgress(
             file,
             (fraction) => patch(localId, { progress: fraction })
           );
-          // #region agent log
-          fetch("http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "846e9b",
-            },
-            body: JSON.stringify({
-              sessionId: "846e9b",
-              runId: "post-fix",
-              hypothesisId: "A",
-              location: "upload.ts:proxy-done",
-              message: "proxy upload done",
-              data: { localId, key, kind },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           patch(localId, {
             status: "done",
             progress: 1,
@@ -161,27 +120,6 @@ export function useAttachmentUploads() {
             kind,
           });
         })().catch((e: unknown) => {
-          // #region agent log
-          fetch("http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Debug-Session-Id": "846e9b",
-            },
-            body: JSON.stringify({
-              sessionId: "846e9b",
-              runId: "post-fix",
-              hypothesisId: "A",
-              location: "upload.ts:error",
-              message: "upload failed",
-              data: {
-                localId,
-                error: e instanceof Error ? e.message : String(e),
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {});
-          // #endregion
           patch(localId, {
             status: "error",
             error: e instanceof Error ? e.message : "Upload failed",

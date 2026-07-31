@@ -80,10 +80,6 @@ export async function createIssue(input: {
   labelIds?: string[];
   attachments?: AttachmentInput[];
 }) {
-  // #region agent log
-  fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'B',location:'issues.ts:createIssue:entry',message:'createIssue server entry',data:{titleLen:input.title?.trim().length??0,attachmentCount:input.attachments?.length??0,hasStatusId:!!input.statusId},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
-  try {
   const { workspace, user } = await requireWorkspace();
   const title = input.title.trim();
   if (!title) throw new Error("Title is required");
@@ -151,16 +147,7 @@ export async function createIssue(input: {
   }
 
   revalidateIssueViews();
-  // #region agent log
-  fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'C',location:'issues.ts:createIssue:exit',message:'createIssue server success',data:{id:issue.id,number:issue.number,prefix:workspace.prefix},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   return { id: issue.id, identifier: `${workspace.prefix}-${issue.number}` };
-  } catch (e) {
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'B',location:'issues.ts:createIssue:error',message:'createIssue server error',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    throw e;
-  }
 }
 
 export async function updateIssue(

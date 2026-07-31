@@ -131,4 +131,6 @@ Settings → Import:
 
 Statuses map to Backlog/Todo/In Progress/Done/Canceled by name, priorities map
 to Urgent/High/Medium/Low, labels are created on the fly, and assignees are
-matched by email or display name (unmatched ones import as unassigned).
+matched by email or display name (unmatched ones import as unassigned). Sprints
+become cycles (numbered after any cycles you already have); each issue is
+placed in its current/latest sprint.

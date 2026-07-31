@@ -57,13 +57,7 @@ export function CreateIssueDialog({
   }, [open, defaultStatusId, fallbackStatus, clearUploads]);
 
   function submit() {
-    // #region agent log
-    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'A',location:'create-issue-dialog.tsx:submit',message:'submit called',data:{titleLen:title.trim().length,uploading:uploads.uploading,pending,itemStatuses:uploads.items.map(i=>({status:i.status,progress:i.progress,hasKey:!!i.key,error:i.error??null})),attachmentCount:uploads.toInput().length},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!title.trim() || uploads.uploading) {
-      // #region agent log
-      fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'post-fix',hypothesisId:'A',location:'create-issue-dialog.tsx:early-return',message:'submit blocked',data:{reason:!title.trim()?'empty-title':'uploading'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (uploads.uploading) {
         toast.message("Wait for uploads to finish");
       }
@@ -72,9 +66,6 @@ export function CreateIssueDialog({
     startTransition(async () => {
       try {
         const payload = uploads.toInput();
-        // #region agent log
-        fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'B',location:'create-issue-dialog.tsx:before-createIssue',message:'calling createIssue',data:{attachmentCount:payload.length,statusId,priority},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         const { identifier } = await createIssue({
           title,
           description,
@@ -85,16 +76,10 @@ export function CreateIssueDialog({
           labelIds,
           attachments: payload,
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'C',location:'create-issue-dialog.tsx:success',message:'createIssue succeeded',data:{identifier},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         toast.success(`${identifier} created`);
         onOpenChange(false);
         router.refresh();
       } catch (e) {
-        // #region agent log
-        fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'B',location:'create-issue-dialog.tsx:catch',message:'createIssue threw',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         toast.error(e instanceof Error ? e.message : "Failed to create issue");
       }
     });

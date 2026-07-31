@@ -21,6 +21,11 @@ function Report({ report }: { report: ImportReport }) {
         Imported {report.created} issue{report.created === 1 ? "" : "s"}
         {report.skipped > 0 && `, skipped ${report.skipped} empty row(s)`}.
       </p>
+      {report.createdCycles.length > 0 && (
+        <p className="mt-2 text-muted-foreground">
+          Created cycles from sprints: {report.createdCycles.join(", ")}
+        </p>
+      )}
       {report.createdLabels.length > 0 && (
         <p className="mt-2 text-muted-foreground">
           Created labels: {report.createdLabels.join(", ")}
@@ -95,9 +100,9 @@ export function ImportPanel() {
       <div>
         <h2 className="text-base font-semibold">Import from Jira</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          One-time import of your Jira issues. Statuses, priorities, labels, and
-          assignees are mapped automatically; anything unknown lands in Backlog
-          or unassigned.
+          One-time import of your Jira issues. Statuses, priorities, labels,
+          assignees, and sprints (as cycles) are mapped automatically; anything
+          unknown lands in Backlog or unassigned.
         </p>
       </div>
 
@@ -118,7 +123,8 @@ export function ImportPanel() {
           >
             <p className="text-sm text-muted-foreground">
               In Jira: Filters → search your project → Export → CSV (all
-              fields). Then upload the file here.
+              fields). Include the Sprint column so issues land in matching
+              cycles.
             </p>
             <Input ref={fileRef} type="file" accept=".csv,text/csv" />
             <Button type="submit" disabled={pending} className="self-start">
