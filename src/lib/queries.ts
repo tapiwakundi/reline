@@ -1,6 +1,9 @@
-import { and, asc, count, eq, gte, isNull, notInArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, isNull, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activities,
+  attachments,
+  comments,
   cycles,
   issues,
   labels,
@@ -12,13 +15,19 @@ import {
   completedToDays,
   type BoardCompletedWindow,
 } from "@/lib/board-display";
+import { resolveCycleStatuses } from "@/lib/cycle-status";
+import { publicUrl } from "@/lib/r2";
 import type {
+  CycleListItem,
   CycleRow,
+  InboxItem,
+  IssueDetailData,
   IssueListItem,
   LabelRow,
   Member,
   StatusRow,
   WorkspaceData,
+  WorkspaceSettings,
 } from "@/lib/types";
 
 export async function getWorkspaceData(
@@ -141,4 +150,211 @@ export async function getUnreadCount(userId: string): Promise<number> {
     .from(notifications)
     .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
   return row?.value ?? 0;
+}
+
+export async function getCyclesList(
+  workspaceId: string
+): Promise<CycleListItem[]> {
+  const [cycleRows, issueRows, statusRows] = await Promise.all([
+    db.query.cycles.findMany({
+      where: eq(cycles.workspaceId, workspaceId),
+      orderBy: asc(cycles.startDate),
+    }),
+    db.query.issues.findMany({
+      where: eq(issues.workspaceId, workspaceId),
+      columns: { id: true, cycleId: true, statusId: true, estimate: true },
+    }),
+    db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspaceId),
+    }),
+  ]);
+
+  const statusType = new Map(statusRows.map((s) => [s.id, s.type]));
+  const statusOf = resolveCycleStatuses(cycleRows);
+
+  return cycleRows.map((c) => {
+    const inCycle = issueRows.filter((i) => i.cycleId === c.id);
+    let done = 0;
+    let started = 0;
+    let estimateTotal = 0;
+    let estimateDone = 0;
+    for (const i of inCycle) {
+      const type = statusType.get(i.statusId);
+      const est = i.estimate ?? 0;
+      estimateTotal += est;
+      if (type === "done" || type === "canceled") {
+        done++;
+        estimateDone += est;
+      } else if (type === "started") {
+        started++;
+      }
+    }
+    return {
+      id: c.id,
+      number: c.number,
+      name: c.name,
+      startDate: c.startDate.toISOString(),
+      endDate: c.endDate.toISOString(),
+      status: statusOf(c),
+      total: inCycle.length,
+      done,
+      started,
+      estimateTotal,
+      estimateDone,
+    };
+  });
+}
+
+export async function getIssueDetail(
+  workspaceId: string,
+  prefix: string,
+  key: string
+): Promise<IssueDetailData | null> {
+  const match = key.match(/^(.+)-(\d+)$/);
+  if (!match || match[1] !== prefix) return null;
+  const number = Number(match[2]);
+  if (!Number.isFinite(number)) return null;
+
+  const issue = await db.query.issues.findFirst({
+    where: and(eq(issues.workspaceId, workspaceId), eq(issues.number, number)),
+    with: { labels: true },
+  });
+  if (!issue) return null;
+
+  const [commentRows, activityRows, attachmentRows] = await Promise.all([
+    db.query.comments.findMany({
+      where: eq(comments.issueId, issue.id),
+      with: { author: true },
+      orderBy: asc(comments.createdAt),
+    }),
+    db.query.activities.findMany({
+      where: eq(activities.issueId, issue.id),
+      with: { actor: true },
+      orderBy: asc(activities.createdAt),
+    }),
+    db.query.attachments.findMany({
+      where: eq(attachments.issueId, issue.id),
+      orderBy: asc(attachments.createdAt),
+    }),
+  ]);
+
+  const toSaved = (a: (typeof attachmentRows)[number]) => ({
+    id: a.id,
+    url: publicUrl(a.key),
+    filename: a.filename,
+    kind: a.kind,
+  });
+  const issueAttachments = attachmentRows
+    .filter((a) => a.commentId === null)
+    .map(toSaved);
+  const commentAttachments = new Map<string, ReturnType<typeof toSaved>[]>();
+  for (const a of attachmentRows) {
+    if (!a.commentId) continue;
+    const list = commentAttachments.get(a.commentId) ?? [];
+    list.push(toSaved(a));
+    commentAttachments.set(a.commentId, list);
+  }
+
+  return {
+    issue: {
+      id: issue.id,
+      identifier: `${prefix}-${issue.number}`,
+      title: issue.title,
+      description: issue.description,
+      priority: issue.priority,
+      statusId: issue.statusId,
+      assigneeId: issue.assigneeId,
+      cycleId: issue.cycleId,
+      labelIds: issue.labels.map((l) => l.labelId),
+      createdAt: issue.createdAt.toISOString(),
+      attachments: issueAttachments,
+    },
+    comments: commentRows.map((c) => ({
+      id: c.id,
+      body: c.body,
+      createdAt: c.createdAt.toISOString(),
+      author: c.author
+        ? {
+            id: c.author.id,
+            name: c.author.name,
+            email: c.author.email,
+            image: c.author.image ?? null,
+          }
+        : null,
+      attachments: commentAttachments.get(c.id) ?? [],
+    })),
+    activities: activityRows.map((a) => ({
+      id: a.id,
+      type: a.type,
+      data: a.data ?? {},
+      createdAt: a.createdAt.toISOString(),
+      actor: a.actor
+        ? {
+            id: a.actor.id,
+            name: a.actor.name,
+            email: a.actor.email,
+            image: a.actor.image ?? null,
+          }
+        : null,
+    })),
+  };
+}
+
+export async function getInbox(
+  userId: string,
+  prefix: string
+): Promise<InboxItem[]> {
+  const rows = await db.query.notifications.findMany({
+    where: eq(notifications.userId, userId),
+    with: { issue: true, actor: true },
+    orderBy: desc(notifications.createdAt),
+    limit: 100,
+  });
+
+  return rows.map((n) => ({
+    id: n.id,
+    type: n.type,
+    payload: (n.payload ?? {}) as Record<string, string>,
+    readAt: n.readAt?.toISOString() ?? null,
+    createdAt: n.createdAt.toISOString(),
+    issue: {
+      identifier: `${prefix}-${n.issue.number}`,
+      title: n.issue.title,
+    },
+    actor: n.actor
+      ? {
+          id: n.actor.id,
+          name: n.actor.name,
+          email: n.actor.email,
+          image: n.actor.image ?? null,
+        }
+      : null,
+  }));
+}
+
+export async function getWorkspaceSettings(
+  workspace: {
+    id: string;
+    name: string;
+    prefix: string;
+    createdAt: Date;
+  },
+  membershipRole: string,
+  meId: string
+): Promise<WorkspaceSettings> {
+  const data = await getWorkspaceData(
+    { id: workspace.id, name: workspace.name, prefix: workspace.prefix },
+    meId
+  );
+  return {
+    workspace: {
+      id: workspace.id,
+      name: workspace.name,
+      prefix: workspace.prefix,
+      createdAt: workspace.createdAt.toISOString(),
+    },
+    role: membershipRole,
+    members: data.members,
+    labels: data.labels,
+  };
 }

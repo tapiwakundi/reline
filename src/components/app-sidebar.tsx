@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -28,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { useWorkspace } from "@/lib/workspace-context";
+import { useUnreadCount } from "@/lib/hooks/queries";
 import { useShortcuts } from "@/components/global-shortcuts";
 import { UserAvatar } from "@/components/user-avatar";
 
@@ -67,25 +67,7 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
   const { workspace, me } = useWorkspace();
   const { openCreateIssue, openPalette } = useShortcuts();
   const router = useRouter();
-  const [unread, setUnread] = useState(initialUnread);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    setUnread(initialUnread);
-  }, [initialUnread, pathname]);
-
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const r = await fetch("/api/notifications/count");
-        if (r.ok) {
-          const d = await r.json();
-          setUnread(d.count);
-        }
-      } catch {}
-    }, 20000);
-    return () => clearInterval(t);
-  }, []);
+  const { data: unread = initialUnread } = useUnreadCount(initialUnread);
 
   async function logout() {
     await authClient.signOut();

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { createIssue } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
+import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   AssigneePicker,
   CyclePicker,
@@ -28,7 +29,7 @@ export function CreateIssueDialog({
   defaultStatusId?: string;
 }) {
   const { workspace, statuses } = useWorkspace();
-  const router = useRouter();
+  const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
   const fallbackStatus =
@@ -78,7 +79,7 @@ export function CreateIssueDialog({
         });
         toast.success(`${identifier} created`);
         onOpenChange(false);
-        router.refresh();
+        await invalidateAfterIssueChange(qc);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to create issue");
       }

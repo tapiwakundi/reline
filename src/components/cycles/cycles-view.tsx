@@ -37,20 +37,12 @@ import {
   deleteCycle,
   startCycle,
 } from "@/lib/actions/cycles";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCycles } from "@/lib/hooks/queries";
+import { invalidateAfterCycleChange } from "@/lib/invalidate";
+import type { CycleListItem } from "@/lib/types";
 
-type CycleItem = {
-  id: string;
-  number: number;
-  name: string;
-  startDate: string;
-  endDate: string;
-  status: "planned" | "active" | "completed";
-  total: number;
-  done: number;
-  started: number;
-  estimateTotal: number;
-  estimateDone: number;
-};
+type CycleItem = CycleListItem;
 
 type ListEntry =
   | { kind: "cycle"; cycle: CycleItem }
@@ -274,12 +266,14 @@ function CycleChart({ cycle }: { cycle: CycleItem }) {
   );
 }
 
-export function CyclesView({ cycles }: { cycles: CycleItem[] }) {
+export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const router = useRouter();
+  const qc = useQueryClient();
+  const { data: cycles = initialCycles } = useCycles(initialCycles);
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(
-    () => cycles.find((c) => c.status === "active")?.id ?? null
+    () => initialCycles.find((c) => c.status === "active")?.id ?? null
   );
   const defaults = defaultDates();
 
@@ -312,7 +306,7 @@ export function CyclesView({ cycles }: { cycles: CycleItem[] }) {
       });
       setOpen(false);
       toast.success("Cycle created");
-      router.refresh();
+      await invalidateAfterCycleChange(qc);
     });
   }
 
@@ -320,7 +314,7 @@ export function CyclesView({ cycles }: { cycles: CycleItem[] }) {
     startTransition(async () => {
       await fn();
       toast.success(msg);
-      router.refresh();
+      await invalidateAfterCycleChange(qc);
     });
 
   return (

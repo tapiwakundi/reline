@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition, type ReactElement } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   CirclePlayIcon,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/context-menu";
 import { deleteIssue, updateIssue } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
+import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import { PRIORITIES } from "@/lib/defaults";
 import type { IssueListItem } from "@/lib/types";
 import { StatusIcon } from "@/components/status-icon";
@@ -51,6 +53,7 @@ export function IssueContextMenu({
   onOptimisticDelete?: () => void;
 }) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [, startTransition] = useTransition();
   const { statuses, members, labels, cycles } = useWorkspace();
 
@@ -60,7 +63,7 @@ export function IssueContextMenu({
     onOptimisticUpdate?.(p);
     startTransition(async () => {
       await updateIssue(issue.id, p);
-      router.refresh();
+      await invalidateAfterIssueChange(qc);
     });
   }
 
@@ -82,7 +85,7 @@ export function IssueContextMenu({
     startTransition(async () => {
       await deleteIssue(issue.id);
       toast.success(`${issue.identifier} deleted`);
-      router.refresh();
+      await invalidateAfterIssueChange(qc);
     });
   }
 

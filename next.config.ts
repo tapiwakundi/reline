@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "110mb",
     },
     proxyClientMaxBodySize: "110mb",
+    // Keep dynamic RSC payloads briefly so tab switches feel instant.
+    staleTimes: {
+      dynamic: 30,
+    },
   },
 };
 

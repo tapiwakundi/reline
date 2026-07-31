@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckCheckIcon, InboxIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -9,18 +10,10 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/actions/notifications";
-import type { Member } from "@/lib/types";
+import { useInbox } from "@/lib/hooks/queries";
+import { invalidateAfterNotificationChange } from "@/lib/invalidate";
+import type { InboxItem } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
-
-type InboxItem = {
-  id: string;
-  type: string;
-  payload: Record<string, string>;
-  readAt: string | null;
-  createdAt: string;
-  issue: { identifier: string; title: string };
-  actor: Member | null;
-};
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -47,16 +40,26 @@ function describe(n: InboxItem) {
   }
 }
 
-export function InboxList({ notifications }: { notifications: InboxItem[] }) {
+export function InboxList({
+  notifications: initialNotifications,
+}: {
+  notifications: InboxItem[];
+}) {
   const router = useRouter();
+  const qc = useQueryClient();
+  const { data: notifications = initialNotifications } = useInbox(
+    initialNotifications
+  );
   const [pending, startTransition] = useTransition();
   const unread = notifications.filter((n) => !n.readAt).length;
 
   function open(n: InboxItem) {
     startTransition(async () => {
-      if (!n.readAt) await markNotificationRead(n.id);
+      if (!n.readAt) {
+        await markNotificationRead(n.id);
+        await invalidateAfterNotificationChange(qc);
+      }
       router.push(`/issue/${n.issue.identifier}`);
-      router.refresh();
     });
   }
 
@@ -75,7 +78,7 @@ export function InboxList({ notifications }: { notifications: InboxItem[] }) {
           onClick={() =>
             startTransition(async () => {
               await markAllNotificationsRead();
-              router.refresh();
+              await invalidateAfterNotificationChange(qc);
             })
           }
         >

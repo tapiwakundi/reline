@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   DragOverlay,
@@ -35,6 +36,8 @@ import {
 } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useShortcuts } from "@/components/global-shortcuts";
+import { useBoardIssues } from "@/lib/hooks/queries";
+import { queryKeys } from "@/lib/query-keys";
 import type { IssueListItem } from "@/lib/types";
 import {
   applyFilters,
@@ -223,7 +226,7 @@ function orderKey(list: IssueListItem[]) {
 }
 
 export function Board({
-  issues: serverIssues,
+  issues: initialIssues,
   prefs: serverPrefs,
 }: {
   issues: IssueListItem[];
@@ -232,9 +235,22 @@ export function Board({
   const { statuses, members, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
+  const qc = useQueryClient();
 
-  const [issues, setIssues] = useState(serverIssues);
   const [prefs, setPrefs] = useState(serverPrefs);
+  const boardOpts = {
+    completed: prefs.completed,
+    showBacklog: prefs.showBacklog,
+  };
+  const initialMatchesPrefs =
+    prefs.completed === serverPrefs.completed &&
+    prefs.showBacklog === serverPrefs.showBacklog;
+  const { data: queryIssues = initialIssues } = useBoardIssues(
+    boardOpts,
+    initialMatchesPrefs ? initialIssues : undefined
+  );
+
+  const [issues, setIssues] = useState(queryIssues);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
@@ -253,21 +269,21 @@ export function Board({
     setPrefs(serverPrefs);
   }
 
-  // Ignore server props briefly after an optimistic move so a slow
-  // revalidation can't yank the card back to its old column.
+  // Ignore query updates briefly after an optimistic move so a slow
+  // refetch can't yank the card back to its old column.
   const suppressServerSyncUntil = useRef(0);
-  const lastServerKey = useRef(orderKey(serverIssues));
+  const lastQueryKey = useRef(orderKey(queryIssues));
 
   useEffect(() => {
     if (activeId) return;
     if (Date.now() < suppressServerSyncUntil.current) return;
 
-    const key = orderKey(serverIssues);
-    if (key === lastServerKey.current && key === orderKey(issues)) return;
-    lastServerKey.current = key;
-    setIssues(serverIssues);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from server props only
-  }, [serverIssues, activeId]);
+    const key = orderKey(queryIssues);
+    if (key === lastQueryKey.current && key === orderKey(issues)) return;
+    lastQueryKey.current = key;
+    setIssues(queryIssues);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from query cache only
+  }, [queryIssues, activeId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -346,8 +362,8 @@ export function Board({
   const [columns, setColumns] = useState<Record<string, string[]>>(() => {
     const next: Record<string, string[]> = {};
     for (const c of boardColumns) {
-      next[c.key] = serverIssues
-        .filter((i) => groupKeyOf(i, serverPrefs.columns) === c.key)
+      next[c.key] = initialIssues
+        .filter((i) => groupKeyOf(i, prefs.columns) === c.key)
         .sort((a, b) => a.boardOrder - b.boardOrder)
         .map((i) => i.id);
     }
@@ -539,13 +555,20 @@ export function Board({
       boardOrder = Date.now();
     }
 
-    setIssues((prevIssues) =>
-      prevIssues.map((i) =>
+    setIssues((prevIssues) => {
+      const next = prevIssues.map((i) =>
         i.id === issueId
           ? { ...applyGroupToIssue(i, prefs.columns, overContainer), boardOrder }
           : i
-      )
-    );
+      );
+      qc.setQueryData(queryKeys.issues.board(boardOpts), next);
+      qc.setQueryData(queryKeys.issues.list(), (old: IssueListItem[] | undefined) => {
+        if (!old) return old;
+        const byId = new Map(next.map((i) => [i.id, i]));
+        return old.map((i) => byId.get(i.id) ?? i);
+      });
+      return next;
+    });
 
     suppressServerSyncUntil.current = Date.now() + 4000;
     setActiveId(null);

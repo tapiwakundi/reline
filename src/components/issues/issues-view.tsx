@@ -6,6 +6,7 @@ import { PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useShortcuts } from "@/components/global-shortcuts";
+import { useIssuesList } from "@/lib/hooks/queries";
 import type { IssueListItem } from "@/lib/types";
 import {
   applyFilters,
@@ -18,7 +19,7 @@ import { StatusIcon } from "@/components/status-icon";
 import { IssueRow } from "@/components/issues/issue-row";
 
 export function IssuesView({
-  issues,
+  issues: initialIssues,
   title,
   fixedAssigneeId,
 }: {
@@ -29,6 +30,7 @@ export function IssuesView({
   const { statuses, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
+  const { data: issues = initialIssues } = useIssuesList(initialIssues);
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
   );

@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { updateIssue } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
+import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import type { IssueListItem } from "@/lib/types";
 import {
   AssigneePicker,
@@ -20,7 +21,7 @@ function formatDate(iso: string) {
 
 export function IssueRow({ issue }: { issue: IssueListItem }) {
   const { labels } = useWorkspace();
-  const router = useRouter();
+  const qc = useQueryClient();
   const [, startTransition] = useTransition();
 
   const issueLabels = labels.filter((l) => issue.labelIds.includes(l.id));
@@ -28,7 +29,7 @@ export function IssueRow({ issue }: { issue: IssueListItem }) {
   function patch(p: Parameters<typeof updateIssue>[1]) {
     startTransition(async () => {
       await updateIssue(issue.id, p);
-      router.refresh();
+      await invalidateAfterIssueChange(qc);
     });
   }
 

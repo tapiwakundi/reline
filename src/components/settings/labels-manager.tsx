@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PlusIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,9 @@ import {
 import { cn } from "@/lib/utils";
 import { createLabel, deleteLabel, updateLabel } from "@/lib/actions/labels";
 import { LABEL_COLORS } from "@/lib/defaults";
-import type { LabelRow } from "@/lib/types";
+import { useWorkspaceSettings } from "@/lib/hooks/queries";
+import { invalidateAfterLabelChange } from "@/lib/invalidate";
+import type { WorkspaceSettings } from "@/lib/types";
 
 function ColorDot({
   color,
@@ -50,8 +52,14 @@ function ColorDot({
   );
 }
 
-export function LabelsManager({ labels }: { labels: LabelRow[] }) {
-  const router = useRouter();
+export function LabelsManager({
+  initialData,
+}: {
+  initialData: WorkspaceSettings;
+}) {
+  const qc = useQueryClient();
+  const { data = initialData } = useWorkspaceSettings(initialData);
+  const labels = data.labels;
   const [pending, startTransition] = useTransition();
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(LABEL_COLORS[0]);
@@ -65,7 +73,7 @@ export function LabelsManager({ labels }: { labels: LabelRow[] }) {
         return;
       }
       setNewName("");
-      router.refresh();
+      await invalidateAfterLabelChange(qc);
     });
   }
 
@@ -111,7 +119,7 @@ export function LabelsManager({ labels }: { labels: LabelRow[] }) {
                 onPick={(c) =>
                   startTransition(async () => {
                     await updateLabel(l.id, l.name, c);
-                    router.refresh();
+                    await invalidateAfterLabelChange(qc);
                   })
                 }
               />
@@ -123,7 +131,7 @@ export function LabelsManager({ labels }: { labels: LabelRow[] }) {
                 onClick={() =>
                   startTransition(async () => {
                     await deleteLabel(l.id);
-                    router.refresh();
+                    await invalidateAfterLabelChange(qc);
                   })
                 }
               >

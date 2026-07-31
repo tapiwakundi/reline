@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronRightIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,13 @@ import {
   type AttachmentInput,
 } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
-import type { Member } from "@/lib/types";
+import { useIssueDetail } from "@/lib/hooks/queries";
+import { invalidateAfterIssueChange } from "@/lib/invalidate";
+import type {
+  ActivityItem,
+  IssueDetailData,
+  Member,
+} from "@/lib/types";
 import {
   AssigneePicker,
   CyclePicker,
@@ -28,41 +35,8 @@ import { UserAvatar } from "@/components/user-avatar";
 import { CommentBody } from "@/components/comment-body";
 import { CommentComposer } from "@/components/comment-composer";
 import { AttachButton } from "@/components/attachments/attach-button";
-import {
-  AttachmentThumbnails,
-  type SavedAttachment,
-} from "@/components/attachments/attachment-thumbnails";
+import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
-
-type DetailIssue = {
-  id: string;
-  identifier: string;
-  title: string;
-  description: string;
-  priority: number;
-  statusId: string;
-  assigneeId: string | null;
-  cycleId: string | null;
-  labelIds: string[];
-  createdAt: string;
-  attachments: SavedAttachment[];
-};
-
-type CommentItem = {
-  id: string;
-  body: string;
-  createdAt: string;
-  author: Member | null;
-  attachments: SavedAttachment[];
-};
-
-type ActivityItem = {
-  id: string;
-  type: string;
-  data: Record<string, string | null>;
-  createdAt: string;
-  actor: Member | null;
-};
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -90,22 +64,45 @@ function activityText(a: ActivityItem, members: Member[]) {
 }
 
 export function IssueDetail({
-  issue,
-  comments,
-  activities,
+  initialData,
 }: {
-  issue: DetailIssue;
-  comments: CommentItem[];
-  activities: ActivityItem[];
+  initialData: IssueDetailData;
 }) {
+  const key = initialData.issue.identifier;
+  const { data = initialData } = useIssueDetail(key, initialData);
+  const { issue, comments, activities } = data;
+
   const { members } = useWorkspace();
   const router = useRouter();
+  const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
   const [title, setTitle] = useState(issue.title);
   const [description, setDescription] = useState(issue.description);
+  const [syncedFrom, setSyncedFrom] = useState({
+    id: issue.id,
+    title: issue.title,
+    description: issue.description,
+  });
+  if (
+    syncedFrom.id !== issue.id ||
+    syncedFrom.title !== issue.title ||
+    syncedFrom.description !== issue.description
+  ) {
+    setSyncedFrom({
+      id: issue.id,
+      title: issue.title,
+      description: issue.description,
+    });
+    setTitle(issue.title);
+    setDescription(issue.description);
+  }
   const uploads = useAttachmentUploads();
   const persisted = useRef(new Set<string>());
+
+  async function refreshDetail() {
+    await invalidateAfterIssueChange(qc);
+  }
 
   // Persist issue-level uploads as soon as each finishes.
   useEffect(() => {
@@ -123,15 +120,16 @@ export function IssueDetail({
       startTransition(async () => {
         await attachToIssue(issue.id, [input]);
         uploads.remove(localId);
-        router.refresh();
+        await refreshDetail();
       });
     }
-  }, [uploads, issue.id, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- persist each finished upload once
+  }, [uploads, issue.id]);
 
   function patch(p: Parameters<typeof updateIssue>[1]) {
     startTransition(async () => {
       await updateIssue(issue.id, p);
-      router.refresh();
+      await refreshDetail();
     });
   }
 
@@ -144,14 +142,14 @@ export function IssueDetail({
   function submitComment(body: string, attachments: AttachmentInput[]) {
     startTransition(async () => {
       await addComment(issue.id, body, attachments);
-      router.refresh();
+      await refreshDetail();
     });
   }
 
   function onDeleteAttachment(id: string) {
     startTransition(async () => {
       await deleteAttachment(id);
-      router.refresh();
+      await refreshDetail();
     });
   }
 
@@ -159,8 +157,8 @@ export function IssueDetail({
     startTransition(async () => {
       await deleteIssue(issue.id);
       toast.success(`${issue.identifier} deleted`);
+      await invalidateAfterIssueChange(qc);
       router.push("/issues");
-      router.refresh();
     });
   }
 

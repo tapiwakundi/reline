@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -23,6 +24,7 @@ import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
 import { createLabel } from "@/lib/actions/labels";
+import { invalidateAfterLabelChange } from "@/lib/invalidate";
 import { LABEL_COLORS, PRIORITIES } from "@/lib/defaults";
 
 const chipClass = cn(
@@ -192,6 +194,7 @@ export function LabelPicker({
   compact?: boolean;
 }) {
   const { labels, addLabel } = useWorkspace();
+  const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
@@ -226,6 +229,7 @@ export function LabelPicker({
           addLabel(label);
           onChange([...value, label.id]);
           setQuery("");
+          await invalidateAfterLabelChange(qc);
           return;
         }
         const existing = labels.find(

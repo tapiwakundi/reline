@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { FileUpIcon, GlobeIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   importJiraCsv,
   type ImportReport,
 } from "@/lib/actions/import";
+import { invalidateAfterImport } from "@/lib/invalidate";
 
 function Report({ report }: { report: ImportReport }) {
   return (
@@ -49,7 +50,7 @@ function Report({ report }: { report: ImportReport }) {
 }
 
 export function ImportPanel() {
-  const router = useRouter();
+  const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
   const [report, setReport] = useState<ImportReport | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -68,7 +69,7 @@ export function ImportPanel() {
         const r = await importJiraCsv(fd);
         setReport(r);
         toast.success(`Imported ${r.created} issues`);
-        router.refresh();
+        await invalidateAfterImport(qc);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Import failed");
       }
@@ -88,7 +89,7 @@ export function ImportPanel() {
         });
         setReport(r);
         toast.success(`Imported ${r.created} issues`);
-        router.refresh();
+        await invalidateAfterImport(qc);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Import failed");
       }

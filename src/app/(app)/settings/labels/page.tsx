@@ -1,15 +1,14 @@
-import { asc, eq } from "drizzle-orm";
-import { db } from "@/db";
-import { labels } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
+import { getWorkspaceSettings } from "@/lib/queries";
 import { LabelsManager } from "@/components/settings/labels-manager";
 
 export default async function LabelsPage() {
-  const { workspace } = await requireWorkspace();
-  const rows = await db.query.labels.findMany({
-    where: eq(labels.workspaceId, workspace.id),
-    orderBy: asc(labels.name),
-  });
+  const { workspace, membership, user } = await requireWorkspace();
+  const initialData = await getWorkspaceSettings(
+    workspace,
+    membership.role,
+    user.id
+  );
 
-  return <LabelsManager labels={rows} />;
+  return <LabelsManager initialData={initialData} />;
 }

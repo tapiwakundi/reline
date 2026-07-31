@@ -1,6 +1,7 @@
 import { requireWorkspace } from "@/lib/session";
 import { getUnreadCount, getWorkspaceData } from "@/lib/queries";
 import { WorkspaceProvider } from "@/lib/workspace-context";
+import { QueryProvider } from "@/components/query-provider";
 import { GlobalShortcuts } from "@/components/global-shortcuts";
 import { AppSidebar } from "@/components/app-sidebar";
 
@@ -19,15 +20,17 @@ export default async function AppLayout({
   ]);
 
   return (
-    <WorkspaceProvider value={data}>
-      <GlobalShortcuts>
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar initialUnread={unread} />
-          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            {children}
-          </main>
-        </div>
-      </GlobalShortcuts>
-    </WorkspaceProvider>
+    <QueryProvider>
+      <WorkspaceProvider value={data}>
+        <GlobalShortcuts>
+          <div className="flex h-screen overflow-hidden">
+            <AppSidebar initialUnread={unread} />
+            <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+              {children}
+            </main>
+          </div>
+        </GlobalShortcuts>
+      </WorkspaceProvider>
+    </QueryProvider>
   );
 }

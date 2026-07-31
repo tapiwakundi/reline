@@ -1,33 +1,32 @@
-import { eq, desc } from "drizzle-orm";
-import { db } from "@/db";
-import { issues, memberships, workspaces } from "@/db/schema";
-import { getSession } from "@/lib/session";
+import { requireApiWorkspace } from "@/lib/api-auth";
+import { getIssues } from "@/lib/queries";
+import {
+  COMPLETED_OPTIONS,
+  type BoardCompletedWindow,
+} from "@/lib/board-display";
 
-export async function GET() {
-  const session = await getSession();
-  if (!session) return Response.json({ issues: [] }, { status: 401 });
+const COMPLETED_VALUES = new Set(
+  COMPLETED_OPTIONS.map((o) => o.value as string)
+);
 
-  const membership = await db.query.memberships.findFirst({
-    where: eq(memberships.userId, session.user.id),
+export async function GET(request: Request) {
+  const ctx = await requireApiWorkspace();
+  if ("error" in ctx) return ctx.error;
+
+  const url = new URL(request.url);
+  const completedRaw = url.searchParams.get("completed");
+  const completed =
+    completedRaw && COMPLETED_VALUES.has(completedRaw)
+      ? (completedRaw as BoardCompletedWindow)
+      : undefined;
+  const showBacklogParam = url.searchParams.get("showBacklog");
+  const showBacklog =
+    showBacklogParam === null ? undefined : showBacklogParam !== "0";
+
+  const issues = await getIssues(ctx.workspace.id, ctx.workspace.prefix, {
+    completed,
+    showBacklog,
   });
-  if (!membership) return Response.json({ issues: [] });
 
-  const workspace = await db.query.workspaces.findFirst({
-    where: eq(workspaces.id, membership.workspaceId),
-  });
-
-  const rows = await db.query.issues.findMany({
-    where: eq(issues.workspaceId, membership.workspaceId),
-    orderBy: desc(issues.updatedAt),
-    limit: 200,
-    columns: { id: true, number: true, title: true },
-  });
-
-  return Response.json({
-    issues: rows.map((i) => ({
-      id: i.id,
-      identifier: `${workspace?.prefix}-${i.number}`,
-      title: i.title,
-    })),
-  });
+  return Response.json({ issues });
 }
