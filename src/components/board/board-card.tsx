@@ -11,6 +11,10 @@ import type { BoardCardProperty } from "@/lib/board-display";
 import { PriorityIcon } from "@/components/priority-icon";
 import { StatusIcon } from "@/components/status-icon";
 import { UserAvatar } from "@/components/user-avatar";
+import {
+  IssueContextMenu,
+  type IssuePatch,
+} from "@/components/issues/issue-context-menu";
 
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -28,7 +32,7 @@ export function BoardCardContent({
   properties: BoardCardProperty[];
   className?: string;
 }) {
-  const { labels, members, statuses } = useWorkspace();
+  const { labels, members, statuses, cycles } = useWorkspace();
   const show = (p: BoardCardProperty) => properties.includes(p);
 
   const issueLabels = show("labels")
@@ -40,12 +44,17 @@ export function BoardCardContent({
   const status = show("status")
     ? (statuses.find((s) => s.id === issue.statusId) ?? null)
     : null;
+  const cycle =
+    show("cycle") && issue.cycleId
+      ? (cycles.find((c) => c.id === issue.cycleId) ?? null)
+      : null;
 
   const showHeader = show("id") || !!assignee;
   const showFooter =
     show("priority") ||
     !!status ||
     issueLabels.length > 0 ||
+    !!cycle ||
     (show("estimate") && issue.estimate != null) ||
     show("created") ||
     show("updated");
@@ -90,6 +99,11 @@ export function BoardCardContent({
               {l.name}
             </span>
           ))}
+          {cycle && (
+            <span className="inline-flex items-center rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground">
+              {cycle.name}
+            </span>
+          )}
           {show("estimate") && issue.estimate != null && (
             <span className="inline-flex items-center rounded border border-border px-1 text-[10px] text-muted-foreground">
               {issue.estimate}
@@ -120,9 +134,13 @@ export function BoardCardContent({
 export function BoardCard({
   issue,
   properties,
+  onOptimisticUpdate,
+  onOptimisticDelete,
 }: {
   issue: IssueListItem;
   properties: BoardCardProperty[];
+  onOptimisticUpdate?: (patch: IssuePatch) => void;
+  onOptimisticDelete?: () => void;
 }) {
   const router = useRouter();
   const dragged = useRef(false);
@@ -142,34 +160,40 @@ export function BoardCard({
   if (isDragging) dragged.current = true;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Transform.toString(transform),
-        // Disable transition while dragging so the ghost doesn't lag behind
-        transition: isDragging ? undefined : transition,
-      }}
-      {...attributes}
-      {...listeners}
-      onClick={() => {
-        // Ignore the click that fires right after a drag release
-        if (dragged.current) {
-          dragged.current = false;
-          return;
-        }
-        router.push(`/issue/${issue.identifier}`);
-      }}
-      className={cn(isDragging && "pointer-events-none")}
+    <IssueContextMenu
+      issue={issue}
+      onOptimisticUpdate={onOptimisticUpdate}
+      onOptimisticDelete={onOptimisticDelete}
     >
-      {isDragging ? (
-        // Card-sized drop slot (not a full-column highlight)
-        <div
-          aria-hidden
-          className="min-h-[72px] rounded-lg border border-dashed border-primary/45 bg-primary/10"
-        />
-      ) : (
-        <BoardCardContent issue={issue} properties={properties} />
-      )}
-    </div>
+      <div
+        ref={setNodeRef}
+        style={{
+          transform: CSS.Transform.toString(transform),
+          // Disable transition while dragging so the ghost doesn't lag behind
+          transition: isDragging ? undefined : transition,
+        }}
+        {...attributes}
+        {...listeners}
+        onClick={() => {
+          // Ignore the click that fires right after a drag release
+          if (dragged.current) {
+            dragged.current = false;
+            return;
+          }
+          router.push(`/issue/${issue.identifier}`);
+        }}
+        className={cn(isDragging && "pointer-events-none")}
+      >
+        {isDragging ? (
+          // Card-sized drop slot (not a full-column highlight)
+          <div
+            aria-hidden
+            className="min-h-[72px] rounded-lg border border-dashed border-primary/45 bg-primary/10"
+          />
+        ) : (
+          <BoardCardContent issue={issue} properties={properties} />
+        )}
+      </div>
+    </IssueContextMenu>
   );
 }

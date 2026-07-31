@@ -11,6 +11,7 @@ import {
   PriorityPicker,
   StatusPicker,
 } from "@/components/pickers";
+import { IssueContextMenu } from "@/components/issues/issue-context-menu";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -32,45 +33,47 @@ export function IssueRow({ issue }: { issue: IssueListItem }) {
   }
 
   return (
-    <div className="group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-accent/40">
-      <PriorityPicker
-        value={issue.priority}
-        onChange={(priority) => patch({ priority })}
-        compact
-      />
-      <span className="w-16 shrink-0 text-xs text-muted-foreground">
-        {issue.identifier}
-      </span>
-      <StatusPicker
-        value={issue.statusId}
-        onChange={(statusId) => patch({ statusId })}
-        compact
-      />
-      <Link
-        href={`/issue/${issue.identifier}`}
-        className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground hover:text-foreground"
-      >
-        {issue.title}
-      </Link>
-      <div className="hidden items-center gap-1 md:flex">
-        {issueLabels.slice(0, 3).map((l) => (
-          <span
-            key={l.id}
-            className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground"
-          >
-            <span className="size-2 rounded-full" style={{ background: l.color }} />
-            {l.name}
-          </span>
-        ))}
+    <IssueContextMenu issue={issue}>
+      <div className="group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-accent/40">
+        <PriorityPicker
+          value={issue.priority}
+          onChange={(priority) => patch({ priority })}
+          compact
+        />
+        <span className="w-16 shrink-0 text-xs text-muted-foreground">
+          {issue.identifier}
+        </span>
+        <StatusPicker
+          value={issue.statusId}
+          onChange={(statusId) => patch({ statusId })}
+          compact
+        />
+        <Link
+          href={`/issue/${issue.identifier}`}
+          className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground hover:text-foreground"
+        >
+          {issue.title}
+        </Link>
+        <div className="hidden items-center gap-1 md:flex">
+          {issueLabels.slice(0, 3).map((l) => (
+            <span
+              key={l.id}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground"
+            >
+              <span className="size-2 rounded-full" style={{ background: l.color }} />
+              {l.name}
+            </span>
+          ))}
+        </div>
+        <span className="hidden w-10 shrink-0 text-right text-[11px] text-muted-foreground sm:block">
+          {formatDate(issue.createdAt)}
+        </span>
+        <AssigneePicker
+          value={issue.assigneeId}
+          onChange={(assigneeId) => patch({ assigneeId })}
+          compact
+        />
       </div>
-      <span className="hidden w-10 shrink-0 text-right text-[11px] text-muted-foreground sm:block">
-        {formatDate(issue.createdAt)}
-      </span>
-      <AssigneePicker
-        value={issue.assigneeId}
-        onChange={(assigneeId) => patch({ assigneeId })}
-        compact
-      />
-    </div>
+    </IssueContextMenu>
   );
 }

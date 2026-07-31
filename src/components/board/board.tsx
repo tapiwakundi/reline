@@ -142,12 +142,16 @@ function Column({
   dragging,
   onNewIssue,
   properties,
+  onIssuePatch,
+  onIssueDelete,
 }: {
   column: BoardColumnDef;
   issues: IssueListItem[];
   dragging: boolean;
   onNewIssue: () => void;
   properties: BoardCardProperty[];
+  onIssuePatch: (issueId: string, patch: Partial<IssueListItem>) => void;
+  onIssueDelete: (issueId: string) => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: `col-${column.key}`,
@@ -179,7 +183,13 @@ function Column({
           className="flex min-h-[calc(100vh-10rem)] flex-1 flex-col gap-2 rounded-lg p-1.5"
         >
           {issues.map((issue) => (
-            <BoardCard key={issue.id} issue={issue} properties={properties} />
+            <BoardCard
+              key={issue.id}
+              issue={issue}
+              properties={properties}
+              onOptimisticUpdate={(patch) => onIssuePatch(issue.id, patch)}
+              onOptimisticDelete={() => onIssueDelete(issue.id)}
+            />
           ))}
           {!dragging && (
             <button
@@ -598,6 +608,16 @@ export function Board({
                   dragging={!!activeId}
                   onNewIssue={() => openCreateIssue(c.statusId)}
                   properties={prefs.properties}
+                  onIssuePatch={(issueId, patch) => {
+                    setIssues((prev) =>
+                      prev.map((i) =>
+                        i.id === issueId ? { ...i, ...patch } : i
+                      )
+                    );
+                  }}
+                  onIssueDelete={(issueId) => {
+                    setIssues((prev) => prev.filter((i) => i.id !== issueId));
+                  }}
                 />
               ))}
           </div>

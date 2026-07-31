@@ -7,14 +7,15 @@ export type BoardColumnsGroup = "status" | "assignee" | "priority" | "cycle";
 export type BoardOrdering = "manual" | "priority" | "created" | "updated" | "title";
 
 export type BoardCardProperty =
-  | "id"
-  | "priority"
-  | "status"
-  | "assignee"
-  | "labels"
-  | "estimate"
-  | "created"
-  | "updated";
+    | "id"
+    | "priority"
+    | "status"
+    | "assignee"
+    | "labels"
+    | "cycle"
+    | "estimate"
+    | "created"
+    | "updated";
 
 export type BoardDisplayPrefs = {
   columns: BoardColumnsGroup;
@@ -72,6 +73,7 @@ export const CARD_PROPERTY_OPTIONS: {
   { value: "status", label: "Status" },
   { value: "assignee", label: "Assignee" },
   { value: "labels", label: "Labels" },
+  { value: "cycle", label: "Cycle" },
   { value: "estimate", label: "Estimate" },
   { value: "created", label: "Created" },
   { value: "updated", label: "Updated" },
