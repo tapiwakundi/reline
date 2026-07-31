@@ -14,6 +14,7 @@ import { useInbox } from "@/lib/hooks/queries";
 import { invalidateAfterNotificationChange } from "@/lib/invalidate";
 import type { InboxItem } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
+import { InboxSkeleton } from "@/components/skeletons/page-skeletons";
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -47,11 +48,14 @@ export function InboxList({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { data: notifications = initialNotifications } = useInbox(
-    initialNotifications
-  );
+  const { data: notifications, isPending } = useInbox(initialNotifications);
+  const list = notifications ?? initialNotifications;
   const [pending, startTransition] = useTransition();
-  const unread = notifications.filter((n) => !n.readAt).length;
+  const unread = list.filter((n) => !n.readAt).length;
+
+  if (isPending && !notifications) {
+    return <InboxSkeleton />;
+  }
 
   function open(n: InboxItem) {
     startTransition(async () => {
@@ -87,7 +91,7 @@ export function InboxList({
         </Button>
       </header>
       <div className="flex-1 overflow-y-auto">
-        {notifications.length === 0 ? (
+        {list.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <InboxIcon className="size-8 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">
@@ -95,7 +99,7 @@ export function InboxList({
             </p>
           </div>
         ) : (
-          notifications.map((n) => (
+          list.map((n) => (
             <button
               key={n.id}
               onClick={() => open(n)}

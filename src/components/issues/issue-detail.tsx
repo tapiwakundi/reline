@@ -37,6 +37,7 @@ import { CommentComposer } from "@/components/comment-composer";
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
+import { IssueDetailSkeleton } from "@/components/skeletons/page-skeletons";
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -69,8 +70,9 @@ export function IssueDetail({
   initialData: IssueDetailData;
 }) {
   const key = initialData.issue.identifier;
-  const { data = initialData } = useIssueDetail(key, initialData);
-  const { issue, comments, activities } = data;
+  const { data, isPending } = useIssueDetail(key, initialData);
+  const detail = data ?? initialData;
+  const { issue, comments, activities } = detail;
   const { members } = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();
@@ -165,6 +167,10 @@ export function IssueDetail({
     ...activities.map((a) => ({ kind: "activity" as const, at: a.createdAt, a })),
     ...comments.map((c) => ({ kind: "comment" as const, at: c.createdAt, c })),
   ].sort((x, y) => new Date(x.at).getTime() - new Date(y.at).getTime());
+
+  if (isPending && !data) {
+    return <IssueDetailSkeleton />;
+  }
 
   return (
     <div className="flex h-full">

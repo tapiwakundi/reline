@@ -5,6 +5,7 @@ import { useWorkspaceSettings } from "@/lib/hooks/queries";
 import type { WorkspaceSettings } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
 import { InviteButton } from "@/components/settings/invite-button";
+import { SettingsContentSkeleton } from "@/components/skeletons/page-skeletons";
 
 export function SettingsMembers({
   initialData,
@@ -12,7 +13,9 @@ export function SettingsMembers({
   initialData: WorkspaceSettings;
 }) {
   const { me } = useWorkspace();
-  const { data = initialData } = useWorkspaceSettings(initialData);
+  const { data, isPending } = useWorkspaceSettings(initialData);
+  if (isPending && !data) return <SettingsContentSkeleton />;
+  const settings = data ?? initialData;
 
   return (
     <div className="flex flex-col gap-6">
@@ -26,7 +29,7 @@ export function SettingsMembers({
         <InviteButton />
       </div>
       <div className="divide-y divide-border rounded-lg border border-border bg-card">
-        {data.members.map((m) => (
+        {settings.members.map((m) => (
           <div key={m.id} className="flex items-center gap-3 px-4 py-3">
             <UserAvatar user={m} className="size-7" />
             <div className="min-w-0 flex-1">
@@ -43,7 +46,7 @@ export function SettingsMembers({
               </div>
             </div>
             <span className="text-xs capitalize text-muted-foreground">
-              {m.id === me.id ? data.role : "member"}
+              {m.id === me.id ? settings.role : "member"}
             </span>
           </div>
         ))}

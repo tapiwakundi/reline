@@ -258,7 +258,9 @@ async function runImport(rows: ImportRow[]): Promise<ImportReport> {
         }
       }
 
-      const currentSprint = pickCurrentSprint(row.sprints);
+      // Backlog issues stay out of cycles even if Jira still lists a sprint.
+      const currentSprint =
+        status.type === "backlog" ? null : pickCurrentSprint(row.sprints);
       const cycleId = currentSprint
         ? (cycleIdBySprintKey.get(currentSprint.key) ?? null)
         : null;

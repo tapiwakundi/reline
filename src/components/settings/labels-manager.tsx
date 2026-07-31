@@ -17,6 +17,7 @@ import { LABEL_COLORS } from "@/lib/defaults";
 import { useWorkspaceSettings } from "@/lib/hooks/queries";
 import { invalidateAfterLabelChange } from "@/lib/invalidate";
 import type { WorkspaceSettings } from "@/lib/types";
+import { SettingsContentSkeleton } from "@/components/skeletons/page-skeletons";
 
 function ColorDot({
   color,
@@ -58,11 +59,15 @@ export function LabelsManager({
   initialData: WorkspaceSettings;
 }) {
   const qc = useQueryClient();
-  const { data = initialData } = useWorkspaceSettings(initialData);
-  const labels = data.labels;
+  const { data, isPending } = useWorkspaceSettings(initialData);
+  const labels = (data ?? initialData).labels;
   const [pending, startTransition] = useTransition();
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(LABEL_COLORS[0]);
+
+  if (isPending && !data) {
+    return <SettingsContentSkeleton />;
+  }
 
   function add() {
     if (!newName.trim()) return;

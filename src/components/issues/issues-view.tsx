@@ -17,6 +17,7 @@ import {
 import { FiltersBar } from "@/components/filters-bar";
 import { StatusIcon } from "@/components/status-icon";
 import { IssueRow } from "@/components/issues/issue-row";
+import { IssuesListSkeleton } from "@/components/skeletons/page-skeletons";
 
 export function IssuesView({
   issues: initialIssues,
@@ -33,10 +34,11 @@ export function IssuesView({
   const { statuses, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
-  const { data: issues = initialIssues } = useIssuesList(initialIssues);
+  const { data: issues, isPending } = useIssuesList(initialIssues);
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
   );
+  const list = issues ?? initialIssues;
 
   const scopedStatuses = useMemo(
     () =>
@@ -58,14 +60,14 @@ export function IssuesView({
   }
 
   const visible = useMemo(() => {
-    let list = applyFilters(issues, filters, cycles);
-    if (fixedAssigneeId) list = list.filter((i) => i.assigneeId === fixedAssigneeId);
+    let rows = applyFilters(list, filters, cycles);
+    if (fixedAssigneeId) rows = rows.filter((i) => i.assigneeId === fixedAssigneeId);
     if (fixedStatusType) {
       const ids = new Set(scopedStatuses.map((s) => s.id));
-      list = list.filter((i) => ids.has(i.statusId));
+      rows = rows.filter((i) => ids.has(i.statusId));
     }
-    return list;
-  }, [issues, filters, cycles, fixedAssigneeId, fixedStatusType, scopedStatuses]);
+    return rows;
+  }, [list, filters, cycles, fixedAssigneeId, fixedStatusType, scopedStatuses]);
 
   const groups = scopedStatuses
     .map((s) => ({
@@ -75,6 +77,10 @@ export function IssuesView({
         .sort((a, b) => a.priority - b.priority || b.number - a.number),
     }))
     .filter((g) => g.items.length > 0);
+
+  if (isPending && !issues) {
+    return <IssuesListSkeleton />;
+  }
 
   return (
     <div className="flex h-full flex-col">

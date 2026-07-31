@@ -52,6 +52,7 @@ import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
 import { BoardCard, BoardCardContent } from "@/components/board/board-card";
 import { BoardDisplayMenu } from "@/components/board/board-display-menu";
+import { BoardSkeleton } from "@/components/skeletons/page-skeletons";
 import type {
   BoardCardProperty,
   BoardColumnsGroup,
@@ -245,12 +246,14 @@ export function Board({
   const initialMatchesPrefs =
     prefs.completed === serverPrefs.completed &&
     prefs.showBacklog === serverPrefs.showBacklog;
-  const { data: queryIssues = initialIssues } = useBoardIssues(
+  const { data: queryIssues, isPending: boardPending } = useBoardIssues(
     boardOpts,
     initialMatchesPrefs ? initialIssues : undefined
   );
+  const resolvedQueryIssues =
+    queryIssues ?? (initialMatchesPrefs ? initialIssues : undefined);
 
-  const [issues, setIssues] = useState(queryIssues);
+  const [issues, setIssues] = useState(initialIssues);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
@@ -272,18 +275,18 @@ export function Board({
   // Ignore query updates briefly after an optimistic move so a slow
   // refetch can't yank the card back to its old column.
   const suppressServerSyncUntil = useRef(0);
-  const lastQueryKey = useRef(orderKey(queryIssues));
+  const lastQueryKey = useRef(orderKey(initialIssues));
 
   useEffect(() => {
-    if (activeId) return;
+    if (activeId || !resolvedQueryIssues) return;
     if (Date.now() < suppressServerSyncUntil.current) return;
 
-    const key = orderKey(queryIssues);
+    const key = orderKey(resolvedQueryIssues);
     if (key === lastQueryKey.current && key === orderKey(issues)) return;
     lastQueryKey.current = key;
-    setIssues(queryIssues);
+    setIssues(resolvedQueryIssues);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from query cache only
-  }, [queryIssues, activeId]);
+  }, [resolvedQueryIssues, activeId]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -596,6 +599,10 @@ export function Board({
           : applyGroupToIssue(issue, prefs.columns, columnKey);
       })
       .filter((i): i is IssueListItem => !!i);
+  }
+
+  if (boardPending && !resolvedQueryIssues) {
+    return <BoardSkeleton />;
   }
 
   return (

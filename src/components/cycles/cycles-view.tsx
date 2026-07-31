@@ -41,6 +41,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCycles } from "@/lib/hooks/queries";
 import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
+import { CyclesSkeleton } from "@/components/skeletons/page-skeletons";
 
 type CycleItem = CycleListItem;
 
@@ -269,7 +270,8 @@ function CycleChart({ cycle }: { cycle: CycleItem }) {
 export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const { data: cycles = initialCycles } = useCycles(initialCycles);
+  const { data: cycles, isPending } = useCycles(initialCycles);
+  const list = cycles ?? initialCycles;
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(
@@ -278,7 +280,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const defaults = defaultDates();
 
   const entries = useMemo((): ListEntry[] => {
-    const sorted = [...cycles].sort(
+    const sorted = [...list].sort(
       (a, b) =>
         new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
     );
@@ -295,7 +297,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       if (gap > 3) out.push({ kind: "paused" });
     }
     return out;
-  }, [cycles]);
+  }, [list]);
 
   function create(form: FormData) {
     startTransition(async () => {
@@ -317,6 +319,10 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       await invalidateAfterCycleChange(qc);
     });
 
+  if (isPending && !cycles) {
+    return <CyclesSkeleton />;
+  }
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -332,7 +338,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        {cycles.length === 0 ? (
+        {list.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <RefreshCwIcon className="size-8 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">
@@ -564,7 +570,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
               <Input
                 id="cycle-name"
                 name="name"
-                placeholder={`Cycle ${cycles.length + 1}`}
+                placeholder={`Cycle ${list.length + 1}`}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

@@ -3,14 +3,16 @@
 import { useWorkspaceSettings } from "@/lib/hooks/queries";
 import type { WorkspaceSettings } from "@/lib/types";
 import { DeleteWorkspace } from "@/components/settings/delete-workspace";
+import { SettingsContentSkeleton } from "@/components/skeletons/page-skeletons";
 
 export function SettingsGeneral({
   initialData,
 }: {
   initialData: WorkspaceSettings;
 }) {
-  const { data = initialData } = useWorkspaceSettings(initialData);
-  const { workspace, role } = data;
+  const { data, isPending } = useWorkspaceSettings(initialData);
+  if (isPending && !data) return <SettingsContentSkeleton />;
+  const { workspace, role } = data ?? initialData;
 
   return (
     <div className="flex flex-col gap-6">
