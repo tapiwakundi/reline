@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { CheckIcon } from "lucide-react";
+import { useState, useTransition } from "react";
+import { CheckIcon, PlusIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
   Popover,
   PopoverContent,
@@ -21,7 +22,8 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
-import { PRIORITIES } from "@/lib/defaults";
+import { createLabel } from "@/lib/actions/labels";
+import { LABEL_COLORS, PRIORITIES } from "@/lib/defaults";
 
 const chipClass = cn(
   "inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-transparent px-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-accent"
@@ -189,12 +191,66 @@ export function LabelPicker({
   onChange: (ids: string[]) => void;
   compact?: boolean;
 }) {
-  const { labels } = useWorkspace();
+  const { labels, addLabel } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [pending, startTransition] = useTransition();
   const selected = labels.filter((l) => value.includes(l.id));
+  const trimmed = query.trim();
+  const filtered = trimmed
+    ? labels.filter((l) =>
+        l.name.toLowerCase().includes(trimmed.toLowerCase())
+      )
+    : labels;
+  const exactMatch = labels.some(
+    (l) => l.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  const canCreate = trimmed.length > 0 && !exactMatch;
+
+  function toggle(id: string) {
+    onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+  }
+
+  function create(name: string) {
+    if (pending) return;
+    const color = LABEL_COLORS[labels.length % LABEL_COLORS.length];
+    startTransition(async () => {
+      try {
+        const created = await createLabel(name, color);
+        if (created) {
+          const label = {
+            id: created.id,
+            name: created.name,
+            color: created.color,
+          };
+          addLabel(label);
+          onChange([...value, label.id]);
+          setQuery("");
+          return;
+        }
+        const existing = labels.find(
+          (l) => l.name.toLowerCase() === name.toLowerCase()
+        );
+        if (existing) {
+          if (!value.includes(existing.id)) onChange([...value, existing.id]);
+          setQuery("");
+          return;
+        }
+        toast.error("A label with that name already exists");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to create label");
+      }
+    });
+  }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
       <PopoverTrigger className={chipClass}>
           {selected.length === 0 ? (
             <>
@@ -223,24 +279,24 @@ export function LabelPicker({
           )}
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Add labels…" />
+        <Command shouldFilter={false}>
+          <CommandInput
+            placeholder="Add labels…"
+            value={query}
+            onValueChange={setQuery}
+          />
           <CommandList>
-            <CommandEmpty>No labels. Create them in Settings.</CommandEmpty>
+            {!canCreate && filtered.length === 0 && (
+              <CommandEmpty>Type a name to create a label.</CommandEmpty>
+            )}
             <CommandGroup>
-              {labels.map((l) => {
+              {filtered.map((l) => {
                 const active = value.includes(l.id);
                 return (
                   <CommandItem
                     key={l.id}
                     value={l.name}
-                    onSelect={() => {
-                      onChange(
-                        active
-                          ? value.filter((id) => id !== l.id)
-                          : [...value, l.id]
-                      );
-                    }}
+                    onSelect={() => toggle(l.id)}
                   >
                     <span
                       className="size-2.5 rounded-full"
@@ -251,6 +307,16 @@ export function LabelPicker({
                   </CommandItem>
                 );
               })}
+              {canCreate && (
+                <CommandItem
+                  value={`create-${trimmed}`}
+                  disabled={pending}
+                  onSelect={() => create(trimmed)}
+                >
+                  <PlusIcon className="size-3.5 text-muted-foreground" />
+                  Create “{trimmed}”
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>
