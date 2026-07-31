@@ -26,7 +26,7 @@ export function IssuesView({
   title: string;
   fixedAssigneeId?: string;
 }) {
-  const { statuses } = useWorkspace();
+  const { statuses, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
   const [filters, setFilters] = useState<IssueFilters>(() =>
@@ -40,10 +40,10 @@ export function IssuesView({
   }
 
   const visible = useMemo(() => {
-    let list = applyFilters(issues, filters);
+    let list = applyFilters(issues, filters, cycles);
     if (fixedAssigneeId) list = list.filter((i) => i.assigneeId === fixedAssigneeId);
     return list;
-  }, [issues, filters, fixedAssigneeId]);
+  }, [issues, filters, cycles, fixedAssigneeId]);
 
   const groups = statuses
     .map((s) => ({
@@ -59,12 +59,12 @@ export function IssuesView({
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <h1 className="text-sm font-semibold">{title}</h1>
         <span className="text-xs text-muted-foreground">{visible.length}</span>
+        <FiltersBar
+          filters={filters}
+          onChange={onFiltersChange}
+          hideAssignee={!!fixedAssigneeId}
+        />
         <div className="ml-auto flex items-center gap-2">
-          <FiltersBar
-            filters={filters}
-            onChange={onFiltersChange}
-            hideAssignee={!!fixedAssigneeId}
-          />
           <Button size="sm" className="h-7 gap-1 text-xs" onClick={() => openCreateIssue()}>
             <PlusIcon className="size-3.5" />
             New issue

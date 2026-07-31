@@ -36,7 +36,13 @@ import {
 import { useWorkspace } from "@/lib/workspace-context";
 import { useShortcuts } from "@/components/global-shortcuts";
 import type { IssueListItem } from "@/lib/types";
-import { applyFilters, parseFilters } from "@/lib/filtering";
+import {
+  applyFilters,
+  parseFilters,
+  serializeBoardFilters,
+  type IssueFilters,
+} from "@/lib/filtering";
+import { FiltersBar } from "@/components/filters-bar";
 import { PRIORITIES } from "@/lib/defaults";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
@@ -230,10 +236,15 @@ export function Board({
   const [issues, setIssues] = useState(serverIssues);
   const [prefs, setPrefs] = useState(serverPrefs);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const filters = useMemo(
-    () => parseFilters(new URLSearchParams(searchParams.toString())),
-    [searchParams]
+  const [filters, setFilters] = useState<IssueFilters>(() =>
+    parseFilters(new URLSearchParams(searchParams.toString()))
   );
+
+  function onFiltersChange(f: IssueFilters) {
+    setFilters(f);
+    const qs = serializeBoardFilters(f).toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
+  }
 
   // Adopt server prefs when they change (e.g. cookie updated in another tab).
   const [prevServerPrefs, setPrevServerPrefs] = useState(serverPrefs);
@@ -263,8 +274,8 @@ export function Board({
   );
 
   const visible = useMemo(
-    () => applyFilters(issues, filters),
-    [issues, filters]
+    () => applyFilters(issues, filters, cycles),
+    [issues, filters, cycles]
   );
 
   const boardColumns = useMemo((): BoardColumnDef[] => {
@@ -569,6 +580,7 @@ export function Board({
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
         <h1 className="text-sm font-semibold">Board</h1>
         <span className="text-xs text-muted-foreground">{visible.length}</span>
+        <FiltersBar filters={filters} onChange={onFiltersChange} />
         <div className="ml-auto flex items-center gap-2">
           <BoardDisplayMenu prefs={prefs} onChange={setPrefs} />
           <Button

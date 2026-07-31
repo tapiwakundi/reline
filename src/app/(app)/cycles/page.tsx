@@ -2,42 +2,8 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issues, statuses } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
+import { resolveCycleStatuses } from "@/lib/cycle-status";
 import { CyclesView } from "@/components/cycles/cycles-view";
-
-type CycleRow = {
-  id: string;
-  status: "planned" | "active" | "completed";
-  startDate: Date;
-  endDate: Date;
-};
-
-/**
- * Derive the status to display from the cycle's dates (Linear-style), so
- * cycles whose stored status is stale (e.g. imported sprints) still render
- * correctly: past cycles are Completed, the one containing today is Current.
- */
-function resolveStatuses<T extends CycleRow>(rows: T[]) {
-  const now = new Date();
-  const storedActive = rows.find(
-    (c) => c.status === "active" && c.endDate >= now
-  );
-  // Without an explicitly active cycle, treat the latest cycle whose window
-  // contains today as current.
-  const dateCurrent = storedActive
-    ? null
-    : rows
-        .filter(
-          (c) =>
-            c.status === "planned" && c.startDate <= now && c.endDate >= now
-        )
-        .sort((a, b) => b.startDate.getTime() - a.startDate.getTime())[0];
-
-  return (c: T): "planned" | "active" | "completed" => {
-    if (c.status === "completed" || c.endDate < now) return "completed";
-    if (c.status === "active" || c.id === dateCurrent?.id) return "active";
-    return "planned";
-  };
-}
 
 export default async function CyclesPage() {
   const { workspace } = await requireWorkspace();
@@ -57,7 +23,7 @@ export default async function CyclesPage() {
   ]);
 
   const statusType = new Map(statusRows.map((s) => [s.id, s.type]));
-  const statusOf = resolveStatuses(cycleRows);
+  const statusOf = resolveCycleStatuses(cycleRows);
 
   return (
     <CyclesView
