@@ -278,6 +278,69 @@ export async function moveIssueOnBoard(
   }
 }
 
+export type BoardMoveTarget =
+  | { kind: "status"; statusId: string }
+  | { kind: "assignee"; assigneeId: string | null }
+  | { kind: "priority"; priority: number }
+  | { kind: "cycle"; cycleId: string | null };
+
+/**
+ * Board drop handler for non-status column groupings (assignee, priority,
+ * cycle). Status-grouped boards keep using moveIssueOnBoard so status-change
+ * notifications stay in one place.
+ */
+export async function moveIssueOnBoardGrouped(
+  issueId: string,
+  target: BoardMoveTarget,
+  boardOrder: number
+) {
+  if (target.kind === "status") {
+    return moveIssueOnBoard(issueId, target.statusId, boardOrder);
+  }
+
+  const { workspace, user } = await requireWorkspace();
+  const before = await ownedIssue(issueId, workspace.id);
+
+  const fields: Partial<{
+    assigneeId: string | null;
+    priority: number;
+    cycleId: string | null;
+  }> =
+    target.kind === "assignee"
+      ? { assigneeId: target.assigneeId }
+      : target.kind === "priority"
+        ? { priority: target.priority }
+        : { cycleId: target.cycleId };
+
+  await db
+    .update(issues)
+    .set({ ...fields, boardOrder, updatedAt: new Date() })
+    .where(eq(issues.id, issueId));
+
+  // Skip revalidating /board — the board already updated optimistically.
+  if (
+    target.kind === "assignee" &&
+    target.assigneeId &&
+    target.assigneeId !== before.assigneeId
+  ) {
+    await recordActivity({
+      issueId,
+      actorId: user.id,
+      type: "assigned",
+      data: { assigneeId: target.assigneeId },
+    });
+    await notifyIssueEvent({
+      issueId,
+      workspaceId: workspace.id,
+      actorId: user.id,
+      type: "assigned",
+    });
+    revalidatePath("/inbox");
+    revalidatePath("/issues");
+    revalidatePath("/my-issues");
+  }
+}
+
 export async function deleteIssue(issueId: string) {
   const { workspace } = await requireWorkspace();
   await ownedIssue(issueId, workspace.id);

@@ -37,6 +37,7 @@ export type IssueListItem = {
   statusId: string;
   assigneeId: string | null;
   cycleId: string | null;
+  estimate: number | null;
   boardOrder: number;
   createdAt: string;
   updatedAt: string;

@@ -13,6 +13,7 @@ import {
   mapJiraPriority,
   mapJiraStatus,
   parseCsv,
+  parseJiraDate,
 } from "@/lib/jira/mapping";
 import type { Member, StatusRow } from "@/lib/types";
 
@@ -32,6 +33,7 @@ type ImportRow = {
   assignee: string;
   labels: string[];
   createdAt?: Date;
+  updatedAt?: Date;
 };
 
 async function runImport(rows: ImportRow[]): Promise<ImportReport> {
@@ -111,9 +113,12 @@ async function runImport(rows: ImportRow[]): Promise<ImportReport> {
           assigneeId: assignee?.id ?? null,
           creatorId: user.id,
           boardOrder: Date.now() + report.created,
-          ...(row.createdAt && !isNaN(row.createdAt.getTime())
-            ? { createdAt: row.createdAt }
-            : {}),
+          ...(row.createdAt ? { createdAt: row.createdAt } : {}),
+          ...(row.updatedAt
+            ? { updatedAt: row.updatedAt }
+            : row.createdAt
+              ? { updatedAt: row.createdAt }
+              : {}),
         })
         .returning();
 
@@ -170,6 +175,7 @@ export async function importJiraCsv(formData: FormData): Promise<ImportReport> {
   const priorityIdx = col("priority");
   const assigneeIdx = header.findIndex((h) => h === "assignee" || h === "assignee email");
   const createdIdx = col("created");
+  const updatedIdx = col("updated");
   // Jira exports repeat the "Labels" column for each label
   const labelIdxs = header
     .map((h, i) => (h === "labels" ? i : -1))
@@ -182,8 +188,8 @@ export async function importJiraCsv(formData: FormData): Promise<ImportReport> {
     priority: priorityIdx !== -1 ? (r[priorityIdx] ?? "") : "",
     assignee: assigneeIdx !== -1 ? (r[assigneeIdx] ?? "") : "",
     labels: labelIdxs.map((i) => r[i] ?? "").filter(Boolean),
-    createdAt:
-      createdIdx !== -1 && r[createdIdx] ? new Date(r[createdIdx]) : undefined,
+    createdAt: createdIdx !== -1 ? parseJiraDate(r[createdIdx]) : undefined,
+    updatedAt: updatedIdx !== -1 ? parseJiraDate(r[updatedIdx]) : undefined,
   }));
 
   return runImport(importRows);
@@ -198,6 +204,7 @@ type JiraApiIssue = {
     assignee?: { emailAddress?: string; displayName?: string } | null;
     labels?: string[];
     created?: string;
+    updated?: string;
   };
 };
 
@@ -219,7 +226,7 @@ export async function importJiraApi(input: {
     const params = new URLSearchParams({
       jql: `project = ${input.projectKey} ORDER BY created ASC`,
       maxResults: "100",
-      fields: "summary,description,status,priority,assignee,labels,created",
+      fields: "summary,description,status,priority,assignee,labels,created,updated",
     });
     if (nextPageToken) params.set("nextPageToken", nextPageToken);
 
@@ -253,7 +260,8 @@ export async function importJiraApi(input: {
     assignee:
       i.fields.assignee?.emailAddress ?? i.fields.assignee?.displayName ?? "",
     labels: i.fields.labels ?? [],
-    createdAt: i.fields.created ? new Date(i.fields.created) : undefined,
+    createdAt: parseJiraDate(i.fields.created),
+    updatedAt: parseJiraDate(i.fields.updated),
   }));
 
   return runImport(rows);

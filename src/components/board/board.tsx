@@ -26,21 +26,107 @@ import {
   arrayMove,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { PlusIcon } from "lucide-react";
+import { CircleDashedIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { moveIssueOnBoard } from "@/lib/actions/issues";
+import {
+  moveIssueOnBoard,
+  moveIssueOnBoardGrouped,
+  type BoardMoveTarget,
+} from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useShortcuts } from "@/components/global-shortcuts";
-import type { IssueListItem, StatusRow } from "@/lib/types";
-import {
-  applyFilters,
-  parseFilters,
-  serializeFilters,
-  type IssueFilters,
-} from "@/lib/filtering";
-import { FiltersBar } from "@/components/filters-bar";
+import type { IssueListItem } from "@/lib/types";
+import { applyFilters, parseFilters } from "@/lib/filtering";
+import { PRIORITIES } from "@/lib/defaults";
 import { StatusIcon } from "@/components/status-icon";
+import { PriorityIcon } from "@/components/priority-icon";
+import { UserAvatar } from "@/components/user-avatar";
 import { BoardCard, BoardCardContent } from "@/components/board/board-card";
+import { BoardDisplayMenu } from "@/components/board/board-display-menu";
+import type {
+  BoardCardProperty,
+  BoardColumnsGroup,
+  BoardDisplayPrefs,
+  BoardOrdering,
+} from "@/lib/board-display";
+
+type BoardColumnDef = {
+  key: string;
+  title: string;
+  icon: React.ReactNode;
+  /** Set when grouping by status; used as the create-issue default. */
+  statusId?: string;
+  /** Done/canceled columns, for "order completed by recency". */
+  isCompleted?: boolean;
+};
+
+function groupKeyOf(issue: IssueListItem, group: BoardColumnsGroup): string {
+  switch (group) {
+    case "status":
+      return issue.statusId;
+    case "assignee":
+      return issue.assigneeId ?? "none";
+    case "priority":
+      return String(issue.priority);
+    case "cycle":
+      return issue.cycleId ?? "none";
+  }
+}
+
+function applyGroupToIssue(
+  issue: IssueListItem,
+  group: BoardColumnsGroup,
+  key: string
+): IssueListItem {
+  switch (group) {
+    case "status":
+      return { ...issue, statusId: key };
+    case "assignee":
+      return { ...issue, assigneeId: key === "none" ? null : key };
+    case "priority":
+      return { ...issue, priority: Number(key) };
+    case "cycle":
+      return { ...issue, cycleId: key === "none" ? null : key };
+  }
+}
+
+function moveTargetFor(group: BoardColumnsGroup, key: string): BoardMoveTarget {
+  switch (group) {
+    case "status":
+      return { kind: "status", statusId: key };
+    case "assignee":
+      return { kind: "assignee", assigneeId: key === "none" ? null : key };
+    case "priority":
+      return { kind: "priority", priority: Number(key) };
+    case "cycle":
+      return { kind: "cycle", cycleId: key === "none" ? null : key };
+  }
+}
+
+// Urgent > High > Medium > Low > No priority
+const priorityRank = (p: number) => (p === 0 ? 5 : p);
+
+function orderingComparator(
+  ordering: BoardOrdering
+): (a: IssueListItem, b: IssueListItem) => number {
+  switch (ordering) {
+    case "priority":
+      return (a, b) =>
+        priorityRank(a.priority) - priorityRank(b.priority) ||
+        a.boardOrder - b.boardOrder;
+    case "created":
+      return (a, b) => b.createdAt.localeCompare(a.createdAt);
+    case "updated":
+      return (a, b) => b.updatedAt.localeCompare(a.updatedAt);
+    case "title":
+      return (a, b) => a.title.localeCompare(b.title);
+    default:
+      return (a, b) => a.boardOrder - b.boardOrder;
+  }
+}
+
+const recencyComparator = (a: IssueListItem, b: IssueListItem) =>
+  b.updatedAt.localeCompare(a.updatedAt);
 
 const dropAnimation: DropAnimation = {
   duration: 120,
@@ -51,33 +137,35 @@ const dropAnimation: DropAnimation = {
 };
 
 function Column({
-  status,
+  column,
   issues,
   dragging,
   onNewIssue,
+  properties,
 }: {
-  status: StatusRow;
+  column: BoardColumnDef;
   issues: IssueListItem[];
   dragging: boolean;
   onNewIssue: () => void;
+  properties: BoardCardProperty[];
 }) {
   const { setNodeRef } = useDroppable({
-    id: `col-${status.id}`,
-    data: { statusId: status.id, type: "column" },
+    id: `col-${column.key}`,
+    data: { columnKey: column.key, type: "column" },
   });
 
   return (
     <div className="group/col flex w-[300px] shrink-0 flex-col">
       <div className="flex h-9 items-center gap-2 px-1.5">
-        <StatusIcon status={status} />
-        <span className="text-[13px] font-medium">{status.name}</span>
+        {column.icon}
+        <span className="text-[13px] font-medium">{column.title}</span>
         <span className="text-xs text-muted-foreground">{issues.length}</span>
         <Button
           variant="ghost"
           size="icon"
           className="ml-auto size-6 text-muted-foreground"
           onClick={onNewIssue}
-          title={`New issue in ${status.name}`}
+          title={`New issue in ${column.title}`}
         >
           <PlusIcon className="size-3.5" />
         </Button>
@@ -91,7 +179,7 @@ function Column({
           className="flex min-h-[calc(100vh-10rem)] flex-1 flex-col gap-2 rounded-lg p-1.5"
         >
           {issues.map((issue) => (
-            <BoardCard key={issue.id} issue={issue} />
+            <BoardCard key={issue.id} issue={issue} properties={properties} />
           ))}
           {!dragging && (
             <button
@@ -111,20 +199,38 @@ function Column({
 
 function orderKey(list: IssueListItem[]) {
   return list
-    .map((i) => `${i.id}:${i.statusId}:${i.boardOrder}`)
+    .map(
+      (i) =>
+        `${i.id}:${i.statusId}:${i.assigneeId}:${i.priority}:${i.cycleId}:${i.boardOrder}`
+    )
     .join("|");
 }
 
-export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
-  const { statuses } = useWorkspace();
+export function Board({
+  issues: serverIssues,
+  prefs: serverPrefs,
+}: {
+  issues: IssueListItem[];
+  prefs: BoardDisplayPrefs;
+}) {
+  const { statuses, members, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
 
   const [issues, setIssues] = useState(serverIssues);
+  const [prefs, setPrefs] = useState(serverPrefs);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<IssueFilters>(() =>
-    parseFilters(new URLSearchParams(searchParams.toString()))
+  const filters = useMemo(
+    () => parseFilters(new URLSearchParams(searchParams.toString())),
+    [searchParams]
   );
+
+  // Adopt server prefs when they change (e.g. cookie updated in another tab).
+  const [prevServerPrefs, setPrevServerPrefs] = useState(serverPrefs);
+  if (prevServerPrefs !== serverPrefs) {
+    setPrevServerPrefs(serverPrefs);
+    setPrefs(serverPrefs);
+  }
 
   // Ignore server props briefly after an optimistic move so a slow
   // revalidation can't yank the card back to its old column.
@@ -146,32 +252,81 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
   );
 
-  function onFiltersChange(f: IssueFilters) {
-    setFilters(f);
-    const qs = serializeFilters(f).toString();
-    window.history.replaceState(null, "", qs ? `?${qs}` : location.pathname);
-  }
-
   const visible = useMemo(
     () => applyFilters(issues, filters),
     [issues, filters]
   );
 
-  const byStatus = useMemo(() => {
+  const boardColumns = useMemo((): BoardColumnDef[] => {
+    switch (prefs.columns) {
+      case "assignee":
+        return [
+          ...members.map((m) => ({
+            key: m.id,
+            title: m.name,
+            icon: <UserAvatar user={m} className="size-4.5" />,
+          })),
+          {
+            key: "none",
+            title: "No assignee",
+            icon: <CircleDashedIcon className="size-4 text-muted-foreground" />,
+          },
+        ];
+      case "priority":
+        return [1, 2, 3, 4, 0].map((value) => ({
+          key: String(value),
+          title: PRIORITIES.find((p) => p.value === value)!.label,
+          icon: <PriorityIcon priority={value} />,
+        }));
+      case "cycle":
+        return [
+          ...cycles.map((c) => ({
+            key: c.id,
+            title: c.name,
+            icon: <CircleDashedIcon className="size-4 text-muted-foreground" />,
+          })),
+          {
+            key: "none",
+            title: "No cycle",
+            icon: <CircleDashedIcon className="size-4 text-muted-foreground" />,
+          },
+        ];
+      default:
+        return statuses
+          .filter((s) => prefs.showBacklog || s.type !== "backlog")
+          .map((s) => ({
+            key: s.id,
+            title: s.name,
+            icon: <StatusIcon status={s} />,
+            statusId: s.id,
+            isCompleted: s.type === "done" || s.type === "canceled",
+          }));
+    }
+  }, [prefs.columns, prefs.showBacklog, statuses, members, cycles]);
+
+  const byGroup = useMemo(() => {
     const map = new Map<string, IssueListItem[]>();
-    for (const s of statuses) map.set(s.id, []);
-    for (const i of visible) map.get(i.statusId)?.push(i);
-    for (const list of map.values()) {
-      list.sort((a, b) => a.boardOrder - b.boardOrder);
+    for (const c of boardColumns) map.set(c.key, []);
+    for (const i of visible) {
+      map.get(groupKeyOf(i, prefs.columns))?.push(i);
+    }
+    const compare = orderingComparator(prefs.ordering);
+    for (const c of boardColumns) {
+      const list = map.get(c.key)!;
+      list.sort(
+        c.isCompleted && prefs.orderCompletedByRecency
+          ? recencyComparator
+          : compare
+      );
     }
     return map;
-  }, [visible, statuses]);
+  }, [visible, boardColumns, prefs.columns, prefs.ordering, prefs.orderCompletedByRecency]);
 
   const [columns, setColumns] = useState<Record<string, string[]>>(() => {
     const next: Record<string, string[]> = {};
-    for (const s of statuses) {
-      next[s.id] = serverIssues
-        .filter((i) => i.statusId === s.id)
+    for (const c of boardColumns) {
+      next[c.key] = serverIssues
+        .filter((i) => groupKeyOf(i, serverPrefs.columns) === c.key)
         .sort((a, b) => a.boardOrder - b.boardOrder)
         .map((i) => i.id);
     }
@@ -183,11 +338,11 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
   useEffect(() => {
     if (activeId) return;
     const next: Record<string, string[]> = {};
-    for (const s of statuses) {
-      next[s.id] = (byStatus.get(s.id) ?? []).map((i) => i.id);
+    for (const c of boardColumns) {
+      next[c.key] = (byGroup.get(c.key) ?? []).map((i) => i.id);
     }
     setColumns(next);
-  }, [byStatus, statuses, activeId]);
+  }, [byGroup, boardColumns, activeId]);
 
   const issueMap = useMemo(() => {
     const m = new Map<string, IssueListItem>();
@@ -290,7 +445,9 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
 
     setIssues((prev) =>
       prev.map((i) =>
-        i.id === activeIssueId ? { ...i, statusId: overContainer } : i
+        i.id === activeIssueId
+          ? applyGroupToIssue(i, prefs.columns, overContainer)
+          : i
       )
     );
   }
@@ -364,7 +521,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     setIssues((prevIssues) =>
       prevIssues.map((i) =>
         i.id === issueId
-          ? { ...i, statusId: overContainer, boardOrder }
+          ? { ...applyGroupToIssue(i, prefs.columns, overContainer), boardOrder }
           : i
       )
     );
@@ -373,16 +530,26 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
     setActiveId(null);
     lastOverId.current = null;
 
-    void moveIssueOnBoard(issueId, overContainer, boardOrder);
+    if (prefs.columns === "status") {
+      void moveIssueOnBoard(issueId, overContainer, boardOrder);
+    } else {
+      void moveIssueOnBoardGrouped(
+        issueId,
+        moveTargetFor(prefs.columns, overContainer),
+        boardOrder
+      );
+    }
   }
 
-  function issuesForColumn(statusId: string): IssueListItem[] {
-    const ids = columns[statusId] ?? [];
+  function issuesForColumn(columnKey: string): IssueListItem[] {
+    const ids = columns[columnKey] ?? [];
     return ids
       .map((id) => {
         const issue = issueMap.get(id);
         if (!issue) return null;
-        return issue.statusId === statusId ? issue : { ...issue, statusId };
+        return groupKeyOf(issue, prefs.columns) === columnKey
+          ? issue
+          : applyGroupToIssue(issue, prefs.columns, columnKey);
       })
       .filter((i): i is IssueListItem => !!i);
   }
@@ -393,7 +560,7 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
         <h1 className="text-sm font-semibold">Board</h1>
         <span className="text-xs text-muted-foreground">{visible.length}</span>
         <div className="ml-auto flex items-center gap-2">
-          <FiltersBar filters={filters} onChange={onFiltersChange} />
+          <BoardDisplayMenu prefs={prefs} onChange={setPrefs} />
           <Button
             size="sm"
             className="h-7 gap-1 text-xs"
@@ -418,20 +585,27 @@ export function Board({ issues: serverIssues }: { issues: IssueListItem[] }) {
           }}
         >
           <div className="flex h-full gap-3 overflow-y-auto p-3">
-            {statuses.map((s) => (
-              <Column
-                key={s.id}
-                status={s}
-                issues={issuesForColumn(s.id)}
-                dragging={!!activeId}
-                onNewIssue={() => openCreateIssue(s.id)}
-              />
-            ))}
+            {boardColumns
+              .filter((c) => {
+                if (prefs.showEmptyColumns || activeId) return true;
+                return issuesForColumn(c.key).length > 0;
+              })
+              .map((c) => (
+                <Column
+                  key={c.key}
+                  column={c}
+                  issues={issuesForColumn(c.key)}
+                  dragging={!!activeId}
+                  onNewIssue={() => openCreateIssue(c.statusId)}
+                  properties={prefs.properties}
+                />
+              ))}
           </div>
           <DragOverlay dropAnimation={dropAnimation}>
             {activeIssue ? (
               <BoardCardContent
                 issue={activeIssue}
+                properties={prefs.properties}
                 className="drag-overlay-card cursor-grabbing"
               />
             ) : null}

@@ -15,6 +15,13 @@
       "when": 1785515480651,
       "tag": "0001_shiny_george_stacy",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785534421571,
+      "tag": "0002_board_display_prefs",
+      "breakpoints": true
     }
   ]
 }

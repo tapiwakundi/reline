@@ -112,6 +112,52 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
+const JIRA_MONTHS: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+
+/**
+ * Parse Jira CSV dates (`30/Jul/26 10:03 PM`) and API ISO timestamps.
+ * Returns undefined when the value is empty or unparseable.
+ */
+export function parseJiraDate(value: string | undefined | null): Date | undefined {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+
+  // CSV export: 30/Jul/26 10:03 PM  or  30/Jul/2026 10:03 AM
+  const csv = raw.match(
+    /^(\d{1,2})\/([A-Za-z]{3})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})\s*(AM|PM))?$/i
+  );
+  if (csv) {
+    const day = Number(csv[1]);
+    const month = JIRA_MONTHS[csv[2].toLowerCase()];
+    let year = Number(csv[3]);
+    if (year < 100) year += year >= 70 ? 1900 : 2000;
+    let hour = csv[4] ? Number(csv[4]) : 0;
+    const minute = csv[5] ? Number(csv[5]) : 0;
+    const ampm = csv[6]?.toUpperCase();
+    if (ampm === "PM" && hour < 12) hour += 12;
+    if (ampm === "AM" && hour === 12) hour = 0;
+    if (month == null || day < 1 || day > 31) return undefined;
+    const d = new Date(year, month, day, hour, minute);
+    return isNaN(d.getTime()) ? undefined : d;
+  }
+
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
 /** Extract plain text from Jira's ADF (Atlassian Document Format) tree. */
 export function adfToText(node: unknown): string {
   if (!node || typeof node !== "object") return "";

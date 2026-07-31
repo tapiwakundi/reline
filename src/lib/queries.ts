@@ -1,4 +1,4 @@
-import { and, asc, count, eq, isNull } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   cycles,
@@ -8,6 +8,10 @@ import {
   notifications,
   statuses,
 } from "@/db/schema";
+import {
+  completedToDays,
+  type BoardCompletedWindow,
+} from "@/lib/board-display";
 import type {
   CycleRow,
   IssueListItem,
@@ -68,10 +72,48 @@ export async function getWorkspaceData(
 
 export async function getIssues(
   workspaceId: string,
-  prefix: string
+  prefix: string,
+  options?: { completed?: BoardCompletedWindow; showBacklog?: boolean }
 ): Promise<IssueListItem[]> {
+  const days =
+    options?.completed != null ? completedToDays(options.completed) : null;
+  const hideBacklog = options?.showBacklog === false;
+
+  const conditions = [eq(issues.workspaceId, workspaceId)];
+
+  if (days !== null || hideBacklog) {
+    const statusRows = await db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspaceId),
+      columns: { id: true, type: true },
+    });
+
+    const completedIds = statusRows
+      .filter((s) => s.type === "done" || s.type === "canceled")
+      .map((s) => s.id);
+    if (days !== null && completedIds.length > 0) {
+      if (days === 0) {
+        conditions.push(notInArray(issues.statusId, completedIds));
+      } else {
+        const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+        conditions.push(
+          or(
+            notInArray(issues.statusId, completedIds),
+            gte(issues.updatedAt, cutoff)
+          )!
+        );
+      }
+    }
+
+    const backlogIds = statusRows
+      .filter((s) => s.type === "backlog")
+      .map((s) => s.id);
+    if (hideBacklog && backlogIds.length > 0) {
+      conditions.push(notInArray(issues.statusId, backlogIds));
+    }
+  }
+
   const rows = await db.query.issues.findMany({
-    where: eq(issues.workspaceId, workspaceId),
+    where: and(...conditions),
     with: { labels: true },
     orderBy: asc(issues.boardOrder),
   });
@@ -85,6 +127,7 @@ export async function getIssues(
     statusId: i.statusId,
     assigneeId: i.assigneeId,
     cycleId: i.cycleId,
+    estimate: i.estimate,
     boardOrder: i.boardOrder,
     createdAt: i.createdAt.toISOString(),
     updatedAt: i.updatedAt.toISOString(),

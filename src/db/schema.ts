@@ -103,6 +103,8 @@ export const memberships = pgTable(
     role: text("role", { enum: ["owner", "member"] })
       .notNull()
       .default("member"),
+    // Personal board display prefs (columns, completed window, card props, …)
+    boardDisplay: jsonb("board_display"),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),
