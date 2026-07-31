@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { comments, activities, issues } from "@/db/schema";
+import { comments, activities, issues, attachments } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
+import { publicUrl } from "@/lib/r2";
 import { IssueDetail } from "@/components/issues/issue-detail";
 
 export default async function IssuePage({
@@ -23,7 +24,7 @@ export default async function IssuePage({
   });
   if (!issue) notFound();
 
-  const [commentRows, activityRows] = await Promise.all([
+  const [commentRows, activityRows, attachmentRows] = await Promise.all([
     db.query.comments.findMany({
       where: eq(comments.issueId, issue.id),
       with: { author: true },
@@ -34,7 +35,28 @@ export default async function IssuePage({
       with: { actor: true },
       orderBy: asc(activities.createdAt),
     }),
+    db.query.attachments.findMany({
+      where: eq(attachments.issueId, issue.id),
+      orderBy: asc(attachments.createdAt),
+    }),
   ]);
+
+  const toSaved = (a: (typeof attachmentRows)[number]) => ({
+    id: a.id,
+    url: publicUrl(a.key),
+    filename: a.filename,
+    kind: a.kind,
+  });
+  const issueAttachments = attachmentRows
+    .filter((a) => a.commentId === null)
+    .map(toSaved);
+  const commentAttachments = new Map<string, ReturnType<typeof toSaved>[]>();
+  for (const a of attachmentRows) {
+    if (!a.commentId) continue;
+    const list = commentAttachments.get(a.commentId) ?? [];
+    list.push(toSaved(a));
+    commentAttachments.set(a.commentId, list);
+  }
 
   return (
     <IssueDetail
@@ -49,6 +71,7 @@ export default async function IssuePage({
         cycleId: issue.cycleId,
         labelIds: issue.labels.map((l) => l.labelId),
         createdAt: issue.createdAt.toISOString(),
+        attachments: issueAttachments,
       }}
       comments={commentRows.map((c) => ({
         id: c.id,
@@ -57,6 +80,7 @@ export default async function IssuePage({
         author: c.author
           ? { id: c.author.id, name: c.author.name, email: c.author.email, image: c.author.image ?? null }
           : null,
+        attachments: commentAttachments.get(c.id) ?? [],
       }))}
       activities={activityRows.map((a) => ({
         id: a.id,

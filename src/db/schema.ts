@@ -260,6 +260,38 @@ export const comments = pgTable(
   (t) => [index("comments_issue_idx").on(t.issueId)]
 );
 
+export const attachments = pgTable(
+  "attachments",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    // null = attached directly to the issue; set = attached to a comment
+    commentId: text("comment_id").references(() => comments.id, {
+      onDelete: "cascade",
+    }),
+    uploaderId: text("uploader_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    key: text("key").notNull(),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    kind: text("kind", { enum: ["image", "video"] }).notNull(),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    index("attachments_issue_idx").on(t.issueId),
+    index("attachments_comment_idx").on(t.commentId),
+  ]
+);
+
 export type NotificationType =
   | "assigned"
   | "commented"
@@ -327,6 +359,7 @@ export const issuesRelations = relations(issues, ({ one, many }) => ({
   labels: many(issueLabels),
   comments: many(comments),
   activities: many(activities),
+  attachments: many(attachments),
 }));
 
 export const issueLabelsRelations = relations(issueLabels, ({ one }) => ({
@@ -346,9 +379,25 @@ export const cyclesRelations = relations(cycles, ({ many }) => ({
   issues: many(issues),
 }));
 
-export const commentsRelations = relations(comments, ({ one }) => ({
+export const commentsRelations = relations(comments, ({ one, many }) => ({
   issue: one(issues, { fields: [comments.issueId], references: [issues.id] }),
   author: one(user, { fields: [comments.authorId], references: [user.id] }),
+  attachments: many(attachments),
+}));
+
+export const attachmentsRelations = relations(attachments, ({ one }) => ({
+  issue: one(issues, {
+    fields: [attachments.issueId],
+    references: [issues.id],
+  }),
+  comment: one(comments, {
+    fields: [attachments.commentId],
+    references: [comments.id],
+  }),
+  uploader: one(user, {
+    fields: [attachments.uploaderId],
+    references: [user.id],
+  }),
 }));
 
 export const activitiesRelations = relations(activities, ({ one }) => ({

@@ -8,6 +8,13 @@
       "when": 1785461508108,
       "tag": "0000_giant_terror",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785515480651,
+      "tag": "0001_shiny_george_stacy",
+      "breakpoints": true
     }
   ]
 }

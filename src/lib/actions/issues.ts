@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  attachments,
   comments,
   issueLabels,
   issues,
@@ -15,6 +16,43 @@ import { requireWorkspace } from "@/lib/session";
 import { getWorkspaceData } from "@/lib/queries";
 import { resolveMentions } from "@/lib/mentions";
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
+import { classifyContentType, deleteObjects, MAX_ATTACHMENTS } from "@/lib/r2";
+
+export type AttachmentInput = {
+  key: string;
+  filename: string;
+  contentType: string;
+  size: number;
+};
+
+async function insertAttachments(
+  input: AttachmentInput[],
+  ctx: {
+    workspaceId: string;
+    issueId: string;
+    commentId?: string;
+    uploaderId: string;
+  }
+) {
+  const rows = input.slice(0, MAX_ATTACHMENTS).flatMap((a) => {
+    const media = classifyContentType(a.contentType);
+    if (!media) return [];
+    return [
+      {
+        workspaceId: ctx.workspaceId,
+        issueId: ctx.issueId,
+        commentId: ctx.commentId ?? null,
+        uploaderId: ctx.uploaderId,
+        key: a.key,
+        filename: a.filename,
+        contentType: a.contentType,
+        size: a.size,
+        kind: media.kind,
+      },
+    ];
+  });
+  if (rows.length) await db.insert(attachments).values(rows);
+}
 
 function revalidateIssueViews() {
   revalidatePath("/board");
@@ -40,7 +78,12 @@ export async function createIssue(input: {
   assigneeId?: string | null;
   cycleId?: string | null;
   labelIds?: string[];
+  attachments?: AttachmentInput[];
 }) {
+  // #region agent log
+  fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'B',location:'issues.ts:createIssue:entry',message:'createIssue server entry',data:{titleLen:input.title?.trim().length??0,attachmentCount:input.attachments?.length??0,hasStatusId:!!input.statusId},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  try {
   const { workspace, user } = await requireWorkspace();
   const title = input.title.trim();
   if (!title) throw new Error("Title is required");
@@ -84,6 +127,14 @@ export async function createIssue(input: {
       .values(input.labelIds.map((labelId) => ({ issueId: issue.id, labelId })));
   }
 
+  if (input.attachments?.length) {
+    await insertAttachments(input.attachments, {
+      workspaceId: workspace.id,
+      issueId: issue.id,
+      uploaderId: user.id,
+    });
+  }
+
   await recordActivity({
     issueId: issue.id,
     actorId: user.id,
@@ -100,7 +151,16 @@ export async function createIssue(input: {
   }
 
   revalidateIssueViews();
+  // #region agent log
+  fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'C',location:'issues.ts:createIssue:exit',message:'createIssue server success',data:{id:issue.id,number:issue.number,prefix:workspace.prefix},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   return { id: issue.id, identifier: `${workspace.prefix}-${issue.number}` };
+  } catch (e) {
+    // #region agent log
+    fetch('http://127.0.0.1:7359/ingest/c6e924e4-96dd-46bf-962f-91fc58f5ca8b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'846e9b'},body:JSON.stringify({sessionId:'846e9b',runId:'pre-fix',hypothesisId:'B',location:'issues.ts:createIssue:error',message:'createIssue server error',data:{error:e instanceof Error?e.message:String(e)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw e;
+  }
 }
 
 export async function updateIssue(
@@ -221,17 +281,81 @@ export async function moveIssueOnBoard(
 export async function deleteIssue(issueId: string) {
   const { workspace } = await requireWorkspace();
   await ownedIssue(issueId, workspace.id);
+
+  const files = await db.query.attachments.findMany({
+    where: eq(attachments.issueId, issueId),
+    columns: { key: true },
+  });
+
   await db.delete(issues).where(eq(issues.id, issueId));
+
+  if (files.length) {
+    // Best-effort cleanup; DB rows are already gone via cascade.
+    await deleteObjects(files.map((f) => f.key));
+  }
+
   revalidateIssueViews();
 }
 
-export async function addComment(issueId: string, body: string) {
+export async function attachToIssue(
+  issueId: string,
+  input: AttachmentInput[]
+) {
+  const { workspace, user } = await requireWorkspace();
+  const issue = await ownedIssue(issueId, workspace.id);
+  if (!input.length) return;
+
+  await insertAttachments(input, {
+    workspaceId: workspace.id,
+    issueId,
+    uploaderId: user.id,
+  });
+
+  revalidatePath(`/issue/${workspace.prefix}-${issue.number}`);
+}
+
+export async function deleteAttachment(attachmentId: string) {
+  const { workspace } = await requireWorkspace();
+
+  const attachment = await db.query.attachments.findFirst({
+    where: and(
+      eq(attachments.id, attachmentId),
+      eq(attachments.workspaceId, workspace.id)
+    ),
+  });
+  if (!attachment) throw new Error("Attachment not found");
+
+  const issue = await ownedIssue(attachment.issueId, workspace.id);
+
+  await db.delete(attachments).where(eq(attachments.id, attachmentId));
+  await deleteObjects([attachment.key]);
+
+  revalidatePath(`/issue/${workspace.prefix}-${issue.number}`);
+}
+
+export async function addComment(
+  issueId: string,
+  body: string,
+  attachmentInput?: AttachmentInput[]
+) {
   const { workspace, user } = await requireWorkspace();
   const issue = await ownedIssue(issueId, workspace.id);
   const trimmed = body.trim();
-  if (!trimmed) return;
+  if (!trimmed && !attachmentInput?.length) return;
 
-  await db.insert(comments).values({ issueId, authorId: user.id, body: trimmed });
+  const [comment] = await db
+    .insert(comments)
+    .values({ issueId, authorId: user.id, body: trimmed })
+    .returning();
+
+  if (attachmentInput?.length) {
+    await insertAttachments(attachmentInput, {
+      workspaceId: workspace.id,
+      issueId,
+      commentId: comment.id,
+      uploaderId: user.id,
+    });
+  }
 
   const data = await getWorkspaceData(
     { id: workspace.id, name: workspace.name, prefix: workspace.prefix },
@@ -266,7 +390,7 @@ export async function addComment(issueId: string, body: string) {
     workspaceId: workspace.id,
     actorId: user.id,
     type: "commented",
-    payload: { preview: trimmed.slice(0, 80) },
+    payload: { preview: trimmed.slice(0, 80) || "Attached media" },
     extraRecipients: otherCommenters.map((c) => c.authorId),
     excludeRecipients: mentionedIds,
   });

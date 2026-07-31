@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { cn } from "@/lib/utils";
 import type { Member } from "@/lib/types";
+import type { AttachmentInput } from "@/lib/actions/issues";
+import { AttachButton } from "@/components/attachments/attach-button";
+import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
+import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 
 type MentionState = {
   query: string;
@@ -33,13 +37,14 @@ export function CommentComposer({
   pending,
 }: {
   members: Member[];
-  onSubmit: (body: string) => void;
+  onSubmit: (body: string, attachments: AttachmentInput[]) => void;
   pending?: boolean;
 }) {
   const [value, setValue] = useState("");
   const [mention, setMention] = useState<MentionState | null>(null);
   const [active, setActive] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const uploads = useAttachmentUploads();
 
   const matches = useMemo(() => {
     if (!mention) return [];
@@ -82,14 +87,27 @@ export function CommentComposer({
 
   function submit() {
     const trimmed = value.trim();
-    if (!trimmed || pending) return;
-    onSubmit(trimmed);
+    const attachments = uploads.toInput();
+    if ((!trimmed && attachments.length === 0) || pending || uploads.uploading)
+      return;
+    onSubmit(trimmed, attachments);
     setValue("");
     setMention(null);
+    uploads.clear();
   }
 
   return (
-    <div className="relative mt-6 rounded-lg border border-border bg-card">
+    <div
+      className="relative mt-6 rounded-lg border border-border bg-card"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        const files = mediaFiles(e.dataTransfer.files);
+        if (files.length) {
+          e.preventDefault();
+          uploads.addFiles(files);
+        }
+      }}
+    >
       {mention && matches.length > 0 && (
         <div className="absolute bottom-full left-0 z-20 mb-1 w-72 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
           <div className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -161,11 +179,24 @@ export function CommentComposer({
             submit();
           }
         }}
+        onPaste={(e) => {
+          const files = mediaFiles(e.clipboardData.files);
+          if (files.length) {
+            e.preventDefault();
+            uploads.addFiles(files);
+          }
+        }}
         placeholder="Leave a comment… Use @ to mention"
         rows={3}
         className="w-full resize-none bg-transparent p-3 text-[13px] outline-none placeholder:text-muted-foreground/50"
       />
+      <AttachmentThumbnails
+        pending={uploads.items}
+        onRemovePending={uploads.remove}
+        className="px-3 pb-2"
+      />
       <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
+        <AttachButton onFiles={uploads.addFiles} disabled={pending} />
         <span className="mr-auto text-[11px] text-muted-foreground">
           @ to mention · ⌘↵ to send
         </span>
@@ -173,7 +204,11 @@ export function CommentComposer({
           size="sm"
           className="h-7 text-xs"
           onClick={submit}
-          disabled={pending || !value.trim()}
+          disabled={
+            pending ||
+            uploads.uploading ||
+            (!value.trim() && uploads.toInput().length === 0)
+          }
         >
           Comment
         </Button>

@@ -15,6 +15,7 @@ import — free to run on Render + Neon.
 ## Features
 
 - Issues with priorities, statuses, assignees, labels, estimates
+- Image & video attachments on issues and comments (Cloudflare R2)
 - Kanban board (drag between columns) and grouped list views
 - Cycles: create, start, complete — unfinished issues return to the pool
 - Inbox notifications (assigned / commented / status changed) with unread badge
@@ -57,6 +58,46 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=....apps.googleusercontent.com  # same as GOOGLE_CL
 
 4. Restart the dev server. Login/signup will show **Continue with Google**.
 
+### Attachments (Cloudflare R2)
+
+Issues and comments support image (jpeg/png/gif/webp/avif, ≤10 MB) and video
+(mp4/webm/mov, ≤100 MB) attachments, stored in Cloudflare R2. Files upload
+straight from the browser via presigned URLs, so they never pass through the
+app server.
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **R2**
+   and create a bucket (e.g. `reline`).
+2. Add a CORS policy to the bucket (Settings → CORS policy) so the browser
+   can PUT to it:
+
+```json
+[
+  {
+    "AllowedOrigins": ["http://localhost:3100", "https://<your-app-domain>"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["content-type"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+3. Enable public access (Settings → Public access → allow the R2.dev
+   subdomain, or connect a custom domain) and note the public URL.
+4. Create an API token under **R2 → Manage R2 API Tokens** with
+   **Object Read & Write** scoped to the bucket.
+5. Fill in `.env`:
+
+```bash
+R2_ACCOUNT_ID=          # from the dashboard URL / R2 overview
+R2_ACCESS_KEY_ID=       # from the API token
+R2_SECRET_ACCESS_KEY=   # from the API token
+R2_BUCKET_NAME=reline
+R2_PUBLIC_URL=https://pub-xxxxxxxx.r2.dev
+```
+
+If the R2 vars are unset the app still runs — attachment uploads just fail
+with a clear error.
+
 ## Deploy (Render + Neon)
 
 1. **Neon**: create a project at [console.neon.tech](https://console.neon.tech),
@@ -65,10 +106,13 @@ NEXT_PUBLIC_GOOGLE_CLIENT_ID=....apps.googleusercontent.com  # same as GOOGLE_CL
    (Render reads `render.yaml`). Set the env vars when prompted:
    - `DATABASE_URL` — your Neon connection string
    - `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` — `https://<your-service>.onrender.com`
-   - `BETTER_AUTH_SECRET` is generated automatically
+   - `BETTER_AUTH_API_KEY` is generated automatically
    - Optional Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
      `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same as client id), and add
      `https://<your-service>.onrender.com/api/auth/callback/google` in Google Cloud
+   - Attachments: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+     `R2_BUCKET_NAME`, `R2_PUBLIC_URL` (see the R2 section above), and add your
+     Render URL to the bucket's CORS policy
 3. Deploy. Migrations run during build; the app binds to `0.0.0.0:$PORT` and
    health-checks at `/api/health`.
 

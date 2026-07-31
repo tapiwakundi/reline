@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -9,8 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   addComment,
+  attachToIssue,
+  deleteAttachment,
   deleteIssue,
   updateIssue,
+  type AttachmentInput,
 } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import type { Member } from "@/lib/types";
@@ -24,6 +27,12 @@ import {
 import { UserAvatar } from "@/components/user-avatar";
 import { CommentBody } from "@/components/comment-body";
 import { CommentComposer } from "@/components/comment-composer";
+import { AttachButton } from "@/components/attachments/attach-button";
+import {
+  AttachmentThumbnails,
+  type SavedAttachment,
+} from "@/components/attachments/attachment-thumbnails";
+import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 
 type DetailIssue = {
   id: string;
@@ -36,6 +45,7 @@ type DetailIssue = {
   cycleId: string | null;
   labelIds: string[];
   createdAt: string;
+  attachments: SavedAttachment[];
 };
 
 type CommentItem = {
@@ -43,6 +53,7 @@ type CommentItem = {
   body: string;
   createdAt: string;
   author: Member | null;
+  attachments: SavedAttachment[];
 };
 
 type ActivityItem = {
@@ -93,6 +104,29 @@ export function IssueDetail({
 
   const [title, setTitle] = useState(issue.title);
   const [description, setDescription] = useState(issue.description);
+  const uploads = useAttachmentUploads();
+  const persisted = useRef(new Set<string>());
+
+  // Persist issue-level uploads as soon as each finishes.
+  useEffect(() => {
+    for (const item of uploads.items) {
+      if (item.status !== "done" || !item.key) continue;
+      if (persisted.current.has(item.localId)) continue;
+      persisted.current.add(item.localId);
+      const input: AttachmentInput = {
+        key: item.key,
+        filename: item.filename,
+        contentType: item.contentType,
+        size: item.size,
+      };
+      const { localId } = item;
+      startTransition(async () => {
+        await attachToIssue(issue.id, [input]);
+        uploads.remove(localId);
+        router.refresh();
+      });
+    }
+  }, [uploads, issue.id, router]);
 
   function patch(p: Parameters<typeof updateIssue>[1]) {
     startTransition(async () => {
@@ -107,9 +141,16 @@ export function IssueDetail({
     }
   }
 
-  function submitComment(body: string) {
+  function submitComment(body: string, attachments: AttachmentInput[]) {
     startTransition(async () => {
-      await addComment(issue.id, body);
+      await addComment(issue.id, body, attachments);
+      router.refresh();
+    });
+  }
+
+  function onDeleteAttachment(id: string) {
+    startTransition(async () => {
+      await deleteAttachment(id);
       router.refresh();
     });
   }
@@ -162,10 +203,39 @@ export function IssueDetail({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onBlur={saveText}
+            onPaste={(e) => {
+              const files = mediaFiles(e.clipboardData.files);
+              if (files.length) {
+                e.preventDefault();
+                uploads.addFiles(files);
+              }
+            }}
             placeholder="Add description…"
             rows={Math.max(4, description.split("\n").length + 1)}
             className="mt-3 w-full resize-none bg-transparent text-sm leading-6 text-foreground/90 outline-none placeholder:text-muted-foreground/50"
           />
+
+          <div
+            className="mt-2 flex flex-col gap-2"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              const files = mediaFiles(e.dataTransfer.files);
+              if (files.length) {
+                e.preventDefault();
+                uploads.addFiles(files);
+              }
+            }}
+          >
+            <AttachmentThumbnails
+              saved={issue.attachments}
+              pending={uploads.items}
+              onDeleteSaved={onDeleteAttachment}
+              onRemovePending={uploads.remove}
+            />
+            <div>
+              <AttachButton onFiles={uploads.addFiles} disabled={pending} />
+            </div>
+          </div>
 
           <div className="mt-4 flex flex-wrap gap-1.5 lg:hidden">
             <StatusPicker value={issue.statusId} onChange={(statusId) => patch({ statusId })} />
@@ -192,6 +262,11 @@ export function IssueDetail({
                     </span>
                   </div>
                   <CommentBody body={item.c.body} members={members} />
+                  <AttachmentThumbnails
+                    saved={item.c.attachments}
+                    onDeleteSaved={onDeleteAttachment}
+                    className="mt-2"
+                  />
                 </div>
               ) : (
                 <div key={`a-${item.a.id}`} className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
