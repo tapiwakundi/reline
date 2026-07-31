@@ -182,7 +182,7 @@ export function BoardCard({
           }
           router.push(`/issue/${issue.identifier}`);
         }}
-        className={cn(isDragging && "pointer-events-none")}
+        className={cn("touch-manipulation", isDragging && "pointer-events-none")}
       >
         {isDragging ? (
           // Card-sized drop slot (not a full-column highlight)

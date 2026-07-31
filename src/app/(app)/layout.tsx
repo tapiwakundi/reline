@@ -23,7 +23,7 @@ export default async function AppLayout({
     <QueryProvider>
       <WorkspaceProvider value={data}>
         <GlobalShortcuts>
-          <div className="flex h-screen overflow-hidden">
+          <div className="flex h-dvh overflow-hidden">
             <AppSidebar initialUnread={unread} />
             <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
               {children}

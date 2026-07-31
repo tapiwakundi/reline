@@ -6,7 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCorners,
   pointerWithin,
   rectIntersection,
@@ -46,6 +47,7 @@ import {
   type IssueFilters,
 } from "@/lib/filtering";
 import { FiltersBar } from "@/components/filters-bar";
+import { MobileNavButton } from "@/components/mobile-nav";
 import { PRIORITIES } from "@/lib/defaults";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
@@ -190,7 +192,7 @@ function Column({
       >
         <div
           ref={setNodeRef}
-          className="flex min-h-[calc(100vh-10rem)] flex-1 flex-col gap-2 rounded-lg p-1.5"
+          className="flex min-h-[calc(100dvh-10rem)] flex-1 flex-col gap-2 rounded-lg p-1.5"
         >
           {issues.map((issue) => (
             <BoardCard
@@ -205,7 +207,7 @@ function Column({
             <button
               type="button"
               onClick={onNewIssue}
-              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-transparent text-xs text-muted-foreground opacity-0 transition-all duration-150 group-hover/col:border-border/80 group-hover/col:opacity-100 hover:border-primary/45 hover:bg-primary/5 hover:text-foreground"
+              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-transparent text-xs text-muted-foreground opacity-0 transition-all duration-150 group-hover/col:border-border/80 group-hover/col:opacity-100 hover:border-primary/45 hover:bg-primary/5 hover:text-foreground max-md:border-border/80 max-md:opacity-100"
             >
               <PlusIcon className="size-3.5" />
               Create new issue
@@ -288,8 +290,13 @@ export function Board({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync from query cache only
   }, [resolvedQueryIssues, activeId]);
 
+  // Mouse drags start after a small movement; touch drags need a long-press
+  // so cards don't hijack scrolling on phones.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    })
   );
 
   const visible = useMemo(
@@ -607,7 +614,8 @@ export function Board({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-4 py-1.5">
+        <MobileNavButton />
         <h1 className="text-sm font-semibold">Board</h1>
         <span className="text-xs text-muted-foreground">{visible.length}</span>
         <FiltersBar filters={filters} onChange={onFiltersChange} />

@@ -15,6 +15,7 @@ import {
   type IssueFilters,
 } from "@/lib/filtering";
 import { FiltersBar } from "@/components/filters-bar";
+import { MobileNavButton } from "@/components/mobile-nav";
 import { StatusIcon } from "@/components/status-icon";
 import { IssueRow } from "@/components/issues/issue-row";
 import { IssuesListSkeleton } from "@/components/skeletons/page-skeletons";
@@ -84,7 +85,8 @@ export function IssuesView({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-4 py-1.5">
+        <MobileNavButton />
         <h1 className="text-sm font-semibold">{title}</h1>
         <span className="text-xs text-muted-foreground">{visible.length}</span>
         <FiltersBar

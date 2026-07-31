@@ -42,6 +42,7 @@ import { useCycles } from "@/lib/hooks/queries";
 import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
 import { CyclesSkeleton } from "@/components/skeletons/page-skeletons";
+import { MobileNavButton } from "@/components/mobile-nav";
 
 type CycleItem = CycleListItem;
 
@@ -149,7 +150,7 @@ function CycleChart({ cycle }: { cycle: CycleItem }) {
   const idealEndY = padY + chartH;
 
   return (
-    <div className="px-4 pb-4 pl-[4.5rem]">
+    <div className="px-4 pb-4 md:pl-[4.5rem]">
       <div className="overflow-hidden rounded-lg border border-border/70 bg-card/40">
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -326,6 +327,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+        <MobileNavButton />
         <h1 className="text-sm font-semibold">Cycles</h1>
         <Button
           size="sm"
@@ -500,7 +502,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                                   variant: "ghost",
                                   size: "icon",
                                 }),
-                                "size-7 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 data-popup-open:opacity-100"
+                                "size-7 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 data-popup-open:opacity-100 max-md:opacity-100"
                               )}
                               disabled={pending}
                               onClick={(e) => e.stopPropagation()}
@@ -560,7 +562,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>New cycle</DialogTitle>
           </DialogHeader>

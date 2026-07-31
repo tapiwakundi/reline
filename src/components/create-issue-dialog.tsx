@@ -91,7 +91,7 @@ export function CreateIssueDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="top-[30%] max-w-2xl translate-y-0 gap-0 p-0"
+        className="top-[15%] max-w-[calc(100%-2rem)] translate-y-0 gap-0 p-0 sm:top-[30%] sm:max-w-2xl"
         showCloseButton={false}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {

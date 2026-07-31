@@ -37,17 +37,20 @@ function NavItem({
   icon,
   label,
   badge,
+  onNavigate,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
   badge?: number;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const active = pathname === href || pathname.startsWith(href + "/");
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={cn(
         "flex h-7 items-center gap-2 rounded-md px-2 text-[13px] font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         active && "bg-sidebar-accent text-sidebar-accent-foreground"
@@ -64,11 +67,17 @@ function NavItem({
   );
 }
 
-export function AppSidebar({ initialUnread }: { initialUnread: number }) {
+export function SidebarContent({
+  initialUnread,
+  onNavigate,
+}: {
+  initialUnread?: number;
+  onNavigate?: () => void;
+}) {
   const { workspace, me } = useWorkspace();
   const { openCreateIssue, openPalette } = useShortcuts();
   const router = useRouter();
-  const { data: unread = initialUnread } = useUnreadCount(initialUnread);
+  const { data: unread = initialUnread ?? 0 } = useUnreadCount(initialUnread);
 
   async function logout() {
     await authClient.signOut();
@@ -77,7 +86,7 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
   }
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-1 px-3 pt-3">
         <DropdownMenu>
           <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-sidebar-accent">
@@ -99,7 +108,10 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground"
-          onClick={() => openCreateIssue()}
+          onClick={() => {
+            onNavigate?.();
+            openCreateIssue();
+          }}
           title="New issue (C)"
         >
           <PenSquareIcon className="size-4" />
@@ -107,7 +119,10 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
       </div>
 
       <button
-        onClick={openPalette}
+        onClick={() => {
+          onNavigate?.();
+          openPalette();
+        }}
         className="mx-3 mt-3 flex h-7 items-center gap-2 rounded-md border border-sidebar-border px-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent"
       >
         <SearchIcon className="size-3.5" />
@@ -118,8 +133,19 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
       </button>
 
       <nav className="mt-4 flex flex-col gap-0.5 px-3">
-        <NavItem href="/inbox" icon={<InboxIcon />} label="Inbox" badge={unread} />
-        <NavItem href="/my-issues" icon={<UserIcon />} label="My issues" />
+        <NavItem
+          href="/inbox"
+          icon={<InboxIcon />}
+          label="Inbox"
+          badge={unread}
+          onNavigate={onNavigate}
+        />
+        <NavItem
+          href="/my-issues"
+          icon={<UserIcon />}
+          label="My issues"
+          onNavigate={onNavigate}
+        />
       </nav>
 
       <div className="mt-5 px-3">
@@ -127,14 +153,30 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
           Workspace
         </div>
         <nav className="flex flex-col gap-0.5">
-          <NavItem href="/board" icon={<KanbanSquareIcon />} label="Board" />
-          <NavItem href="/issues" icon={<ListIcon />} label="Issues" />
+          <NavItem
+            href="/board"
+            icon={<KanbanSquareIcon />}
+            label="Board"
+            onNavigate={onNavigate}
+          />
+          <NavItem
+            href="/issues"
+            icon={<ListIcon />}
+            label="Issues"
+            onNavigate={onNavigate}
+          />
           <NavItem
             href="/backlog"
             icon={<CircleDashedIcon />}
             label="Backlog"
+            onNavigate={onNavigate}
           />
-          <NavItem href="/cycles" icon={<RefreshCwIcon />} label="Cycles" />
+          <NavItem
+            href="/cycles"
+            icon={<RefreshCwIcon />}
+            label="Cycles"
+            onNavigate={onNavigate}
+          />
         </nav>
       </div>
 
@@ -178,6 +220,14 @@ export function AppSidebar({ initialUnread }: { initialUnread: number }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+    </div>
+  );
+}
+
+export function AppSidebar({ initialUnread }: { initialUnread: number }) {
+  return (
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <SidebarContent initialUnread={initialUnread} />
     </aside>
   );
 }

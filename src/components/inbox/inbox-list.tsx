@@ -15,6 +15,7 @@ import { invalidateAfterNotificationChange } from "@/lib/invalidate";
 import type { InboxItem } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
 import { InboxSkeleton } from "@/components/skeletons/page-skeletons";
+import { MobileNavButton } from "@/components/mobile-nav";
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -70,6 +71,7 @@ export function InboxList({
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+        <MobileNavButton />
         <h1 className="text-sm font-semibold">Inbox</h1>
         {unread > 0 && (
           <span className="text-xs text-muted-foreground">{unread} unread</span>

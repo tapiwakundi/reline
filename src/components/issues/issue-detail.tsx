@@ -38,6 +38,7 @@ import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 import { IssueDetailSkeleton } from "@/components/skeletons/page-skeletons";
+import { MobileNavButton } from "@/components/mobile-nav";
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -176,6 +177,7 @@ export function IssueDetail({
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-4 text-[13px]">
+          <MobileNavButton />
           <Link href="/issues" className="text-muted-foreground hover:text-foreground">
             Issues
           </Link>
@@ -193,7 +195,7 @@ export function IssueDetail({
           </Button>
         </header>
 
-        <div className="mx-auto w-full max-w-3xl px-6 py-6">
+        <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}

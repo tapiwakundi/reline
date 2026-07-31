@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
@@ -16,6 +16,14 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Reline",
   description: "Issue tracking for small teams",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Stops iOS Safari from zooming in when focusing our (sub-16px) inputs.
+  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
