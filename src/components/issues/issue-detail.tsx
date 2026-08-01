@@ -75,7 +75,7 @@ export function IssueDetail({
   const { data, isPending } = useIssueDetail(key, initialData);
   const detail = data ?? initialData;
   const { issue, comments, activities } = detail;
-  const { members } = useWorkspace();
+  const { members, labels } = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
@@ -102,6 +102,15 @@ export function IssueDetail({
   }
   const uploads = useAttachmentUploads();
   const persisted = useRef(new Set<string>());
+
+  // Auto-grow the title textarea so long titles wrap instead of clipping.
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [title]);
 
   async function refreshDetail() {
     await invalidateAfterIssueChange(qc);
@@ -194,9 +203,8 @@ export function IssueDetail({
   }
 
   return (
-    <div className="flex h-full">
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-4 text-[13px]">
+    <div className="flex h-full flex-col">
+      <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-4 text-[13px]">
           <MobileNavButton />
           <Link href="/issues" className="text-muted-foreground hover:text-foreground">
             Issues
@@ -213,15 +221,24 @@ export function IssueDetail({
           >
             <Trash2Icon className="size-4" />
           </Button>
-        </header>
+      </header>
 
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6">
-          <input
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex w-full max-w-5xl items-start md:pl-24">
+          <div className="w-full min-w-0 max-w-3xl flex-1 px-4 py-6 md:px-8">
+          <textarea
+            ref={titleRef}
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
             onBlur={saveText}
-            onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            className="w-full bg-transparent text-xl font-semibold outline-none placeholder:text-muted-foreground/50"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                (e.target as HTMLTextAreaElement).blur();
+              }
+            }}
+            rows={1}
+            className="w-full resize-none overflow-hidden bg-transparent text-xl font-semibold leading-snug outline-none placeholder:text-muted-foreground/50"
             placeholder="Issue title"
           />
           <textarea
@@ -359,43 +376,72 @@ export function IssueDetail({
             onSubmit={submitComment}
             pending={pending}
           />
+          </div>
+
+          <aside className="sticky top-0 hidden w-64 shrink-0 flex-col gap-6 px-5 py-6 lg:flex">
+        <div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">
+            Properties
+          </div>
+          <div className="-ml-2 flex flex-col items-start gap-0.5">
+            <StatusPicker
+              value={issue.statusId}
+              onChange={(statusId) => patch({ statusId })}
+              className={railPickerClass}
+            />
+            <PriorityPicker
+              value={issue.priority}
+              onChange={(priority) => patch({ priority })}
+              className={railPickerClass}
+            />
+            <AssigneePicker
+              value={issue.assigneeId}
+              onChange={(assigneeId) => patch({ assigneeId })}
+              className={railPickerClass}
+            />
+            <CyclePicker
+              value={issue.cycleId}
+              onChange={(cycleId) => patch({ cycleId })}
+              placeholder="Add to cycle"
+              className={railPickerClass}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 text-xs font-medium text-muted-foreground">
+            Labels
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {labels
+              .filter((l) => issue.labelIds.includes(l.id))
+              .map((l) => (
+                <span
+                  key={l.id}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs text-foreground/90"
+                >
+                  <span
+                    className="size-2.5 rounded-full"
+                    style={{ background: l.color }}
+                  />
+                  {l.name}
+                </span>
+              ))}
+            <LabelPicker
+              value={issue.labelIds}
+              onChange={(labelIds) => patch({ labelIds })}
+              plusOnly
+              className="size-6 justify-center rounded-full border-transparent p-0 text-muted-foreground"
+            />
+          </div>
+        </div>
+          </aside>
         </div>
       </div>
-
-      <aside className="hidden w-64 shrink-0 flex-col gap-5 overflow-y-auto border-l border-border px-4 py-5 lg:flex">
-        <PropertyRow label="Status">
-          <StatusPicker value={issue.statusId} onChange={(statusId) => patch({ statusId })} />
-        </PropertyRow>
-        <PropertyRow label="Priority">
-          <PriorityPicker value={issue.priority} onChange={(priority) => patch({ priority })} />
-        </PropertyRow>
-        <PropertyRow label="Assignee">
-          <AssigneePicker value={issue.assigneeId} onChange={(assigneeId) => patch({ assigneeId })} />
-        </PropertyRow>
-        <PropertyRow label="Labels">
-          <LabelPicker value={issue.labelIds} onChange={(labelIds) => patch({ labelIds })} />
-        </PropertyRow>
-        <PropertyRow label="Cycle">
-          <CyclePicker value={issue.cycleId} onChange={(cycleId) => patch({ cycleId })} />
-        </PropertyRow>
-      </aside>
     </div>
   );
 }
 
-function PropertyRow({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-        {label}
-      </span>
-      {children}
-    </div>
-  );
-}
+/** Borderless ghost rows for the right-hand properties rail. */
+const railPickerClass =
+  "border-transparent text-[13px] font-normal hover:border-transparent";

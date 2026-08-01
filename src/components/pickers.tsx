@@ -35,10 +35,12 @@ export function StatusPicker({
   value,
   onChange,
   compact,
+  className,
 }: {
   value: string;
   onChange: (id: string) => void;
   compact?: boolean;
+  className?: string;
 }) {
   const { statuses } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -46,7 +48,7 @@ export function StatusPicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={chipClass}>
+      <PopoverTrigger className={cn(chipClass, className)}>
           <StatusIcon status={current} />
           {!compact && current.name}
       </PopoverTrigger>
@@ -82,17 +84,19 @@ export function PriorityPicker({
   value,
   onChange,
   compact,
+  className,
 }: {
   value: number;
   onChange: (p: number) => void;
   compact?: boolean;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const current = PRIORITIES.find((p) => p.value === value) ?? PRIORITIES[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={chipClass}>
+      <PopoverTrigger className={cn(chipClass, className)}>
           <PriorityIcon priority={value} />
           {!compact && current.label}
       </PopoverTrigger>
@@ -130,10 +134,12 @@ export function AssigneePicker({
   value,
   onChange,
   compact,
+  className,
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
   compact?: boolean;
+  className?: string;
 }) {
   const { members } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -141,7 +147,7 @@ export function AssigneePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={chipClass}>
+      <PopoverTrigger className={cn(chipClass, className)}>
           <UserAvatar user={current} className="size-4" />
           {!compact && (current ? current.name : "Unassigned")}
       </PopoverTrigger>
@@ -188,10 +194,15 @@ export function LabelPicker({
   value,
   onChange,
   compact,
+  plusOnly,
+  className,
 }: {
   value: string[];
   onChange: (ids: string[]) => void;
   compact?: boolean;
+  /** Render the trigger as a bare "+" button (chips shown by the parent). */
+  plusOnly?: boolean;
+  className?: string;
 }) {
   const { labels, addLabel } = useWorkspace();
   const qc = useQueryClient();
@@ -255,8 +266,10 @@ export function LabelPicker({
         if (!next) setQuery("");
       }}
     >
-      <PopoverTrigger className={chipClass}>
-          {selected.length === 0 ? (
+      <PopoverTrigger className={cn(chipClass, className)}>
+          {plusOnly ? (
+            <PlusIcon className="size-3.5" />
+          ) : selected.length === 0 ? (
             <>
               <svg viewBox="0 0 16 16" className="size-3.5 text-muted-foreground" fill="currentColor">
                 <path d="M2 3.5A1.5 1.5 0 0 1 3.5 2h4.09c.4 0 .78.16 1.06.44l5.4 5.4a1.5 1.5 0 0 1 0 2.13l-4.08 4.09a1.5 1.5 0 0 1-2.13 0l-5.4-5.4A1.5 1.5 0 0 1 2 7.58V3.5Zm3.25 3a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5Z" />
@@ -333,10 +346,15 @@ export function CyclePicker({
   value,
   onChange,
   compact,
+  className,
+  placeholder = "No cycle",
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
   compact?: boolean;
+  className?: string;
+  /** Trigger text when no cycle is selected. */
+  placeholder?: string;
 }) {
   const { cycles } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -345,12 +363,12 @@ export function CyclePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={chipClass}>
+      <PopoverTrigger className={cn(chipClass, className)}>
           <svg viewBox="0 0 16 16" className="size-3.5 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5">
             <path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89" strokeLinecap="round" />
             <path d="M13.5 1.5v3h-3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {!compact && (current ? current.name : "No cycle")}
+          {!compact && (current ? current.name : placeholder)}
           {current?.status === "active" && (
             <Badge variant="secondary" className="h-4 px-1 text-[10px]">
               Active
