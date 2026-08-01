@@ -40,6 +40,7 @@ import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbn
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 import { IssueDetailSkeleton } from "@/components/skeletons/page-skeletons";
 import { MobileNavButton } from "@/components/mobile-nav";
+import { cn } from "@/lib/utils";
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -283,6 +284,7 @@ export function IssueDetail({
             <StatusPicker value={issue.statusId} onChange={(statusId) => patch({ statusId })} />
             <PriorityPicker value={issue.priority} onChange={(priority) => patch({ priority })} />
             <AssigneePicker value={issue.assigneeId} onChange={(assigneeId) => patch({ assigneeId })} />
+            <ReporterRow creator={issue.creator} />
             <LabelPicker value={issue.labelIds} onChange={(labelIds) => patch({ labelIds })} />
             <CyclePicker value={issue.cycleId} onChange={(cycleId) => patch({ cycleId })} />
           </div>
@@ -399,6 +401,7 @@ export function IssueDetail({
               onChange={(assigneeId) => patch({ assigneeId })}
               className={railPickerClass}
             />
+            <ReporterRow creator={issue.creator} className={railPickerClass} />
             <CyclePicker
               value={issue.cycleId}
               onChange={(cycleId) => patch({ cycleId })}
@@ -445,3 +448,24 @@ export function IssueDetail({
 /** Borderless ghost rows for the right-hand properties rail. */
 const railPickerClass =
   "border-transparent text-[13px] font-normal hover:border-transparent";
+
+function ReporterRow({
+  creator,
+  className,
+}: {
+  creator: Member | null;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium text-foreground/90",
+        className
+      )}
+    >
+      <UserAvatar user={creator} className="size-4" />
+      <span className="text-muted-foreground">Reporter</span>
+      <span>{creator ? creator.name : "Unknown"}</span>
+    </div>
+  );
+}

@@ -68,6 +68,7 @@ export type DetailIssue = {
   priority: number;
   statusId: string;
   assigneeId: string | null;
+  creator: Member | null;
   cycleId: string | null;
   labelIds: string[];
   createdAt: string;

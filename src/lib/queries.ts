@@ -217,7 +217,7 @@ export async function getIssueDetail(
 
   const issue = await db.query.issues.findFirst({
     where: and(eq(issues.workspaceId, workspaceId), eq(issues.number, number)),
-    with: { labels: true },
+    with: { labels: true, creator: true },
   });
   if (!issue) return null;
 
@@ -264,6 +264,14 @@ export async function getIssueDetail(
       priority: issue.priority,
       statusId: issue.statusId,
       assigneeId: issue.assigneeId,
+      creator: issue.creator
+        ? {
+            id: issue.creator.id,
+            name: issue.creator.name,
+            email: issue.creator.email,
+            image: issue.creator.image ?? null,
+          }
+        : null,
       cycleId: issue.cycleId,
       labelIds: issue.labels.map((l) => l.labelId),
       createdAt: issue.createdAt.toISOString(),
