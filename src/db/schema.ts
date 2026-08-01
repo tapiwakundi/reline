@@ -82,6 +82,8 @@ export const verification = pgTable("verification", {
 export const workspaces = pgTable("workspaces", {
   id: id(),
   name: text("name").notNull(),
+  // URL segment, e.g. "acme-corp" -> /acme-corp/board
+  slug: text("slug").notNull().unique(),
   // Issue identifier prefix, e.g. "REL" -> REL-123
   prefix: text("prefix").notNull().default("REL"),
   issueCounter: integer("issue_counter").notNull().default(0),

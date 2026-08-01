@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { attachToIssue, type AttachmentInput } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import { useIssueDetail } from "@/lib/hooks/queries";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
@@ -75,7 +76,7 @@ export function IssueDetail({
   const { data, isPending } = useIssueDetail(key, initialData);
   const detail = data ?? initialData;
   const { issue, comments, activities } = detail;
-  const { members, labels, statuses, me } = useWorkspace();
+  const { workspace, members, labels, statuses, me } = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
@@ -113,7 +114,7 @@ export function IssueDetail({
   }, [title]);
 
   async function refreshDetail() {
-    await invalidateAfterIssueChange(qc);
+    await invalidateAfterIssueChange(qc, workspace.id);
   }
 
   // Persist issue-level uploads as soon as each finishes.
@@ -142,6 +143,7 @@ export function IssueDetail({
     startTransition(async () => {
       await optimisticUpdateIssue(
         qc,
+        workspace.id,
         {
           id: issue.id,
           identifier: issue.identifier,
@@ -170,6 +172,7 @@ export function IssueDetail({
     startTransition(async () => {
       await optimisticAddComment(
         qc,
+        workspace.id,
         { id: issue.id, identifier: issue.identifier },
         body,
         me,
@@ -183,6 +186,7 @@ export function IssueDetail({
     startTransition(async () => {
       await optimisticDeleteAttachment(
         qc,
+        workspace.id,
         { identifier: issue.identifier },
         id
       );
@@ -191,11 +195,11 @@ export function IssueDetail({
 
   function onDelete() {
     startTransition(async () => {
-      await optimisticDeleteIssue(qc, {
+      await optimisticDeleteIssue(qc, workspace.id, {
         id: issue.id,
         identifier: issue.identifier,
       });
-      router.push("/issues");
+      router.push(wsPath(workspace.slug, "/issues"));
     });
   }
 
@@ -224,7 +228,10 @@ export function IssueDetail({
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-4 text-[13px]">
           <MobileNavButton />
-          <Link href="/issues" className="text-muted-foreground hover:text-foreground">
+          <Link
+            href={wsPath(workspace.slug, "/issues")}
+            className="text-muted-foreground hover:text-foreground"
+          >
             Issues
           </Link>
           <ChevronRightIcon className="size-3.5 text-muted-foreground/60" />

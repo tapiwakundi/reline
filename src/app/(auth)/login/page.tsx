@@ -30,7 +30,7 @@ export default function LoginPage() {
       toast.error(error.message ?? "Invalid email or password");
       return;
     }
-    router.push("/board");
+    router.push("/");
     router.refresh();
   }
 
@@ -39,7 +39,7 @@ export default function LoginPage() {
       <Logo className="size-12 rounded-xl" />
       <h1 className="text-lg font-medium">Log in to Reline</h1>
       <div className="flex w-full flex-col gap-3">
-        <GoogleSignInButton callbackURL="/board" />
+        <GoogleSignInButton callbackURL="/" />
         <AuthDivider />
         <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
           <Input

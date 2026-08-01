@@ -1,9 +1,9 @@
-import { getSession } from "@/lib/session";
+import { requireApiWorkspace } from "@/lib/api-auth";
 import { getUnreadCount } from "@/lib/queries";
 
-export async function GET() {
-  const session = await getSession();
-  if (!session) return Response.json({ count: 0 }, { status: 401 });
-  const count = await getUnreadCount(session.user.id);
+export async function GET(request: Request) {
+  const ctx = await requireApiWorkspace(request);
+  if ("error" in ctx) return ctx.error;
+  const count = await getUnreadCount(ctx.user.id, ctx.workspace.id);
   return Response.json({ count });
 }

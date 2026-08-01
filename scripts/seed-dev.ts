@@ -28,7 +28,7 @@ async function main() {
 
   const [ws] = await db
     .insert(workspaces)
-    .values({ name: "Endurance Labs", prefix: "END" })
+    .values({ name: "Endurance Labs", slug: "endurance-labs", prefix: "END" })
     .returning();
 
   await db

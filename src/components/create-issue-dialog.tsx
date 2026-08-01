@@ -97,7 +97,7 @@ export function CreateIssueDialog({
         });
         toast.success(`${identifier} created`);
         onOpenChange(false);
-        void invalidateAfterIssueChange(qc);
+        void invalidateAfterIssueChange(qc, workspace.id);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to create issue");
       }

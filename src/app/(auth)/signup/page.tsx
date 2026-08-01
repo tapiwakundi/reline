@@ -18,7 +18,7 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const invite = searchParams.get("invite");
   const [loading, setLoading] = useState(false);
-  const googleCallback = invite ? `/invite/${invite}` : "/board";
+  const googleCallback = invite ? `/invite/${invite}` : "/";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

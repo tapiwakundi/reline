@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { memberships } from "@/db/schema";
-import { requireSession } from "@/lib/session";
+import {
+  requireSession,
+  homeBoardPath,
+  getUserWorkspaces,
+} from "@/lib/session";
 import { createWorkspace } from "@/lib/actions/workspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +12,8 @@ import { Logo } from "@/components/logo";
 
 export default async function OnboardingPage() {
   const session = await requireSession();
-  const existing = await db.query.memberships.findFirst({
-    where: eq(memberships.userId, session.user.id),
-  });
-  if (existing) redirect("/board");
+  const existing = await getUserWorkspaces(session.user.id);
+  if (existing.length) redirect(await homeBoardPath(session.user.id));
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">

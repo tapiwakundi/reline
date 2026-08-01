@@ -1,17 +1,16 @@
 import { notFound } from "next/navigation";
-import { requireWorkspace } from "@/lib/session";
+import { requireWorkspaceBySlug } from "@/lib/session";
 import { getIssueDetail } from "@/lib/queries";
 import { IssueDetail } from "@/components/issues/issue-detail";
 
 export default async function IssuePage({
   params,
 }: {
-  params: Promise<{ key: string }>;
+  params: Promise<{ workspaceSlug: string; key: string }>;
 }) {
-  const { key } = await params;
-  const { workspace } = await requireWorkspace();
+  const { workspaceSlug, key } = await params;
+  const { workspace } = await requireWorkspaceBySlug(workspaceSlug);
   const data = await getIssueDetail(workspace.id, workspace.prefix, key);
   if (!data) notFound();
-
   return <IssueDetail initialData={data} />;
 }

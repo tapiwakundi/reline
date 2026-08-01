@@ -2,10 +2,10 @@ import { requireApiWorkspace } from "@/lib/api-auth";
 import { getIssueDetail } from "@/lib/queries";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ key: string }> }
 ) {
-  const ctx = await requireApiWorkspace();
+  const ctx = await requireApiWorkspace(request);
   if ("error" in ctx) return ctx.error;
 
   const { key } = await params;

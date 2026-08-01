@@ -11,6 +11,8 @@ import {
   markNotificationRead,
 } from "@/lib/actions/notifications";
 import { useInbox } from "@/lib/hooks/queries";
+import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import { invalidateAfterNotificationChange } from "@/lib/invalidate";
 import type { InboxItem } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";
@@ -49,6 +51,7 @@ export function InboxList({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const { workspace } = useWorkspace();
   const { data: notifications, isPending } = useInbox(initialNotifications);
   const list = notifications ?? initialNotifications;
   const [pending, startTransition] = useTransition();
@@ -62,9 +65,9 @@ export function InboxList({
     startTransition(async () => {
       if (!n.readAt) {
         await markNotificationRead(n.id);
-        await invalidateAfterNotificationChange(qc);
+        await invalidateAfterNotificationChange(qc, workspace.id);
       }
-      router.push(`/issue/${n.issue.identifier}`);
+      router.push(wsPath(workspace.slug, `/issue/${n.issue.identifier}`));
     });
   }
 
@@ -84,7 +87,7 @@ export function InboxList({
           onClick={() =>
             startTransition(async () => {
               await markAllNotificationsRead();
-              await invalidateAfterNotificationChange(qc);
+              await invalidateAfterNotificationChange(qc, workspace.id);
             })
           }
         >

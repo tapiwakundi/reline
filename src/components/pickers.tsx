@@ -204,7 +204,7 @@ export function LabelPicker({
   plusOnly?: boolean;
   className?: string;
 }) {
-  const { labels, addLabel } = useWorkspace();
+  const { workspace, labels, addLabel } = useWorkspace();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -240,7 +240,7 @@ export function LabelPicker({
           addLabel(label);
           onChange([...value, label.id]);
           setQuery("");
-          await invalidateAfterLabelChange(qc);
+          await invalidateAfterLabelChange(qc, workspace.id);
           return;
         }
         const existing = labels.find(

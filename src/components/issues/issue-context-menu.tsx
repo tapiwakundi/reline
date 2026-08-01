@@ -30,6 +30,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import {
   optimisticDeleteIssue,
   optimisticUpdateIssue,
@@ -59,7 +60,7 @@ export function IssueContextMenu({
   const router = useRouter();
   const qc = useQueryClient();
   const [, startTransition] = useTransition();
-  const { statuses, members, labels, cycles } = useWorkspace();
+  const { workspace, statuses, members, labels, cycles } = useWorkspace();
 
   const currentStatus = statuses.find((s) => s.id === issue.statusId);
 
@@ -69,6 +70,7 @@ export function IssueContextMenu({
     startTransition(async () => {
       await optimisticUpdateIssue(
         qc,
+        workspace.id,
         {
           id: issue.id,
           identifier: issue.identifier,
@@ -81,7 +83,7 @@ export function IssueContextMenu({
   }
 
   function openIssue() {
-    router.push(`/issue/${issue.identifier}`);
+    router.push(wsPath(workspace.slug, `/issue/${issue.identifier}`));
   }
 
   async function copyText(value: string, label: string) {
@@ -96,7 +98,7 @@ export function IssueContextMenu({
   function onDelete() {
     onOptimisticDelete?.();
     startTransition(async () => {
-      await optimisticDeleteIssue(qc, {
+      await optimisticDeleteIssue(qc, workspace.id, {
         id: issue.id,
         identifier: issue.identifier,
       });
@@ -273,7 +275,7 @@ export function IssueContextMenu({
             <ContextMenuItem
               onClick={() =>
                 copyText(
-                  `${window.location.origin}/issue/${issue.identifier}`,
+                  `${window.location.origin}${wsPath(workspace.slug, `/issue/${issue.identifier}`)}`,
                   "Link"
                 )
               }

@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import { MobileNavButton } from "@/components/mobile-nav";
 
-const tabs = [
-  { href: "/settings", label: "General" },
-  { href: "/settings/members", label: "Members" },
-  { href: "/settings/labels", label: "Labels" },
-  { href: "/settings/import", label: "Import" },
+const tabDefs = [
+  { path: "/settings", label: "General" },
+  { path: "/settings/members", label: "Members" },
+  { path: "/settings/labels", label: "Labels" },
+  { path: "/settings/import", label: "Import" },
 ];
 
 export default function SettingsLayout({
@@ -18,6 +20,12 @@ export default function SettingsLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { workspace } = useWorkspace();
+  const tabs = tabDefs.map((t) => ({
+    href: wsPath(workspace.slug, t.path),
+    label: t.label,
+  }));
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">

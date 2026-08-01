@@ -7,6 +7,7 @@ import { cycles, issueLabels, issues, labels, workspaces } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
 import { getWorkspaceData } from "@/lib/queries";
 import { LABEL_COLORS } from "@/lib/defaults";
+import { wsPath } from "@/lib/workspace-slug";
 import {
   adfToText,
   mapJiraAssignee,
@@ -202,7 +203,12 @@ async function ensureCyclesFromSprints(
 async function runImport(rows: ImportRow[]): Promise<ImportReport> {
   const { workspace, user } = await requireWorkspace();
   const data = await getWorkspaceData(
-    { id: workspace.id, name: workspace.name, prefix: workspace.prefix },
+    {
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      prefix: workspace.prefix,
+    },
     user.id
   );
 
@@ -309,9 +315,9 @@ async function runImport(rows: ImportRow[]): Promise<ImportReport> {
     }
   }
 
-  revalidatePath("/board");
-  revalidatePath("/issues");
-  revalidatePath("/cycles");
+  revalidatePath(wsPath(workspace.slug, "/board"));
+  revalidatePath(wsPath(workspace.slug, "/issues"));
+  revalidatePath(wsPath(workspace.slug, "/cycles"));
   return report;
 }
 

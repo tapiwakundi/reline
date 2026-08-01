@@ -249,7 +249,7 @@ export function Board({
   issues: IssueListItem[];
   prefs: BoardDisplayPrefs;
 }) {
-  const { statuses, members, cycles } = useWorkspace();
+  const { workspace, statuses, members, cycles } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
@@ -594,12 +594,15 @@ export function Board({
             }
           : i
       );
-      qc.setQueryData(queryKeys.issues.board(boardOpts), next);
-      qc.setQueryData(queryKeys.issues.list(), (old: IssueListItem[] | undefined) => {
-        if (!old) return old;
-        const byId = new Map(next.map((i) => [i.id, i]));
-        return old.map((i) => byId.get(i.id) ?? i);
-      });
+      qc.setQueryData(queryKeys.issues.board(workspace.id, boardOpts), next);
+      qc.setQueryData(
+        queryKeys.issues.list(workspace.id),
+        (old: IssueListItem[] | undefined) => {
+          if (!old) return old;
+          const byId = new Map(next.map((i) => [i.id, i]));
+          return old.map((i) => byId.get(i.id) ?? i);
+        }
+      );
       return next;
     });
 

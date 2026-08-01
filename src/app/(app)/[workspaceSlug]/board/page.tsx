@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { requireWorkspace } from "@/lib/session";
+import { requireWorkspaceBySlug } from "@/lib/session";
 import { getIssues } from "@/lib/queries";
 import { db } from "@/db";
 import { cycles, memberships } from "@/db/schema";
@@ -12,17 +12,22 @@ import {
   normalizeBoardDisplayPrefs,
 } from "@/lib/board-display";
 import { Board } from "@/components/board/board";
+import { wsPath } from "@/lib/workspace-slug";
 
 export default async function BoardPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ workspaceSlug: string }>;
   searchParams: Promise<{ cycle?: string | string[] }>;
 }) {
-  const { workspace, membership } = await requireWorkspace();
-  const params = await searchParams;
+  const { workspaceSlug } = await params;
+  const { workspace, membership } =
+    await requireWorkspaceBySlug(workspaceSlug);
+  const sp = await searchParams;
 
   // Default the board to the current cycle. `cycle=all` opts out.
-  if (params.cycle === undefined) {
+  if (sp.cycle === undefined) {
     const cycleRows = await db.query.cycles.findMany({
       where: eq(cycles.workspaceId, workspace.id),
       columns: {
@@ -32,7 +37,9 @@ export default async function BoardPage({
         endDate: true,
       },
     });
-    if (currentCycleId(cycleRows)) redirect("/board?cycle=current");
+    if (currentCycleId(cycleRows)) {
+      redirect(`${wsPath(workspace.slug, "/board")}?cycle=current`);
+    }
   }
 
   // Prefer DB prefs; one-time migrate from the old cookie if present.

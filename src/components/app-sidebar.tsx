@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  CheckIcon,
   ChevronDownIcon,
   CircleDashedIcon,
   InboxIcon,
@@ -11,6 +14,7 @@ import {
   LogOutIcon,
   MoreHorizontalIcon,
   PenSquareIcon,
+  PlusIcon,
   RefreshCwIcon,
   SearchIcon,
   SettingsIcon,
@@ -28,9 +32,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import { useUnreadCount } from "@/lib/hooks/queries";
 import { useShortcuts } from "@/components/global-shortcuts";
 import { UserAvatar } from "@/components/user-avatar";
+import { CreateWorkspaceDialog } from "@/components/create-workspace-dialog";
 
 function NavItem({
   href,
@@ -74,10 +80,28 @@ export function SidebarContent({
   initialUnread?: number;
   onNavigate?: () => void;
 }) {
-  const { workspace, me } = useWorkspace();
+  const { workspace, workspaces, me } = useWorkspace();
   const { openCreateIssue, openPalette } = useShortcuts();
   const router = useRouter();
+  const pathname = usePathname();
+  const qc = useQueryClient();
   const { data: unread = initialUnread ?? 0 } = useUnreadCount(initialUnread);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  function pathSuffix() {
+    const prefix = `/${workspace.slug}`;
+    if (pathname === prefix || pathname.startsWith(prefix + "/")) {
+      return pathname.slice(prefix.length) || "/board";
+    }
+    return "/board";
+  }
+
+  function switchTo(slug: string) {
+    if (slug === workspace.slug) return;
+    qc.clear();
+    router.push(`/${slug}${pathSuffix()}`);
+    onNavigate?.();
+  }
 
   async function logout() {
     await authClient.signOut();
@@ -98,9 +122,37 @@ export function SidebarContent({
             </span>
             <ChevronDownIcon className="size-3.5 shrink-0 text-muted-foreground" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuItem onClick={() => router.push("/settings/members")}>
+          <DropdownMenuContent align="start" className="w-64">
+            {workspaces.map((ws) => (
+              <DropdownMenuItem
+                key={ws.id}
+                onClick={() => switchTo(ws.slug)}
+                className="gap-2"
+              >
+                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/15 text-[11px] font-bold text-foreground">
+                  {ws.name[0]?.toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{ws.name}</span>
+                {ws.id === workspace.id && (
+                  <CheckIcon className="size-3.5 shrink-0 text-primary" />
+                )}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+              <PlusIcon /> Create workspace
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                router.push(wsPath(workspace.slug, "/settings/members"))
+              }
+            >
               <UsersIcon /> Invite teammates
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => router.push(wsPath(workspace.slug, "/settings"))}
+            >
+              <SettingsIcon /> Settings
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -134,14 +186,14 @@ export function SidebarContent({
 
       <nav className="mt-4 flex flex-col gap-0.5 px-3">
         <NavItem
-          href="/inbox"
+          href={wsPath(workspace.slug, "/inbox")}
           icon={<InboxIcon />}
           label="Inbox"
           badge={unread}
           onNavigate={onNavigate}
         />
         <NavItem
-          href="/my-issues"
+          href={wsPath(workspace.slug, "/my-issues")}
           icon={<UserIcon />}
           label="My issues"
           onNavigate={onNavigate}
@@ -154,25 +206,25 @@ export function SidebarContent({
         </div>
         <nav className="flex flex-col gap-0.5">
           <NavItem
-            href="/board"
+            href={wsPath(workspace.slug, "/board")}
             icon={<KanbanSquareIcon />}
             label="Board"
             onNavigate={onNavigate}
           />
           <NavItem
-            href="/issues"
+            href={wsPath(workspace.slug, "/issues")}
             icon={<ListIcon />}
             label="Issues"
             onNavigate={onNavigate}
           />
           <NavItem
-            href="/backlog"
+            href={wsPath(workspace.slug, "/backlog")}
             icon={<CircleDashedIcon />}
             label="Backlog"
             onNavigate={onNavigate}
           />
           <NavItem
-            href="/cycles"
+            href={wsPath(workspace.slug, "/cycles")}
             icon={<RefreshCwIcon />}
             label="Cycles"
             onNavigate={onNavigate}
@@ -207,10 +259,16 @@ export function SidebarContent({
               </div>
             </div>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
+            <DropdownMenuItem
+              onClick={() => router.push(wsPath(workspace.slug, "/settings"))}
+            >
               <SettingsIcon /> Settings
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/settings/members")}>
+            <DropdownMenuItem
+              onClick={() =>
+                router.push(wsPath(workspace.slug, "/settings/members"))
+              }
+            >
               <UsersIcon /> Invite teammates
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -220,6 +278,8 @@ export function SidebarContent({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <CreateWorkspaceDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
 }

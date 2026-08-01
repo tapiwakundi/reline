@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { labels } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
+import { wsPath } from "@/lib/workspace-slug";
 
 export async function createLabel(name: string, color: string) {
   const { workspace } = await requireWorkspace();
@@ -15,9 +16,9 @@ export async function createLabel(name: string, color: string) {
     .values({ workspaceId: workspace.id, name: trimmed, color })
     .onConflictDoNothing()
     .returning();
-  revalidatePath("/settings/labels");
-  revalidatePath("/board");
-  revalidatePath("/issues");
+  revalidatePath(wsPath(workspace.slug, "/settings/labels"));
+  revalidatePath(wsPath(workspace.slug, "/board"));
+  revalidatePath(wsPath(workspace.slug, "/issues"));
   return label ?? null;
 }
 
@@ -27,7 +28,7 @@ export async function updateLabel(id: string, name: string, color: string) {
     .update(labels)
     .set({ name: name.trim(), color })
     .where(and(eq(labels.id, id), eq(labels.workspaceId, workspace.id)));
-  revalidatePath("/settings/labels");
+  revalidatePath(wsPath(workspace.slug, "/settings/labels"));
 }
 
 export async function deleteLabel(id: string) {
@@ -35,5 +36,5 @@ export async function deleteLabel(id: string) {
   await db
     .delete(labels)
     .where(and(eq(labels.id, id), eq(labels.workspaceId, workspace.id)));
-  revalidatePath("/settings/labels");
+  revalidatePath(wsPath(workspace.slug, "/settings/labels"));
 }

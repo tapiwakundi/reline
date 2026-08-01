@@ -44,8 +44,16 @@ export type IssueListItem = {
   labelIds: string[];
 };
 
+export type WorkspaceSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  prefix: string;
+};
+
 export type WorkspaceData = {
-  workspace: { id: string; name: string; prefix: string };
+  workspace: WorkspaceSummary;
+  workspaces: WorkspaceSummary[];
   me: Member;
   members: Member[];
   statuses: StatusRow[];

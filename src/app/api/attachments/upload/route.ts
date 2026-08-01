@@ -1,7 +1,4 @@
-import { eq } from "drizzle-orm";
-import { db } from "@/db";
-import { memberships } from "@/db/schema";
-import { getSession } from "@/lib/session";
+import { requireApiWorkspace } from "@/lib/api-auth";
 import {
   classifyContentType,
   maxBytesFor,
@@ -13,14 +10,8 @@ import {
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
-
-  const membership = await db.query.memberships.findFirst({
-    where: eq(memberships.userId, session.user.id),
-  });
-  if (!membership)
-    return Response.json({ error: "No workspace" }, { status: 403 });
+  const ctx = await requireApiWorkspace(req);
+  if ("error" in ctx) return ctx.error;
 
   const form = await req.formData();
   const file = form.get("file");
@@ -51,7 +42,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const key = objectKey(membership.workspaceId, media.ext);
+  const key = objectKey(ctx.workspace.id, media.ext);
   const bytes = Buffer.from(await file.arrayBuffer());
 
   try {

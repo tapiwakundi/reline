@@ -21,6 +21,8 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command";
+import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 
 type PaletteIssue = { id: string; identifier: string; title: string };
 
@@ -34,15 +36,18 @@ export function CommandPalette({
   onCreateIssue: () => void;
 }) {
   const router = useRouter();
+  const { workspace } = useWorkspace();
   const [issues, setIssues] = useState<PaletteIssue[]>([]);
 
   useEffect(() => {
     if (!open) return;
-    fetch("/api/issues")
+    fetch("/api/issues", {
+      headers: { "x-workspace-slug": workspace.slug },
+    })
       .then((r) => r.json())
       .then((d) => setIssues(d.issues ?? []))
       .catch(() => {});
-  }, [open]);
+  }, [open, workspace.slug]);
 
   function go(path: string) {
     onOpenChange(false);
@@ -68,25 +73,25 @@ export function CommandPalette({
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Navigate">
-          <CommandItem onSelect={() => go("/inbox")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/inbox"))}>
             <InboxIcon /> Inbox
           </CommandItem>
-          <CommandItem onSelect={() => go("/my-issues")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/my-issues"))}>
             <UserIcon /> My issues
           </CommandItem>
-          <CommandItem onSelect={() => go("/board")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/board"))}>
             <KanbanSquareIcon /> Board
           </CommandItem>
-          <CommandItem onSelect={() => go("/issues")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/issues"))}>
             <ListIcon /> All issues
           </CommandItem>
-          <CommandItem onSelect={() => go("/backlog")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/backlog"))}>
             <CircleDashedIcon /> Backlog
           </CommandItem>
-          <CommandItem onSelect={() => go("/cycles")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/cycles"))}>
             <RefreshCwIcon /> Cycles
           </CommandItem>
-          <CommandItem onSelect={() => go("/settings")}>
+          <CommandItem onSelect={() => go(wsPath(workspace.slug, "/settings"))}>
             <SettingsIcon /> Settings
           </CommandItem>
         </CommandGroup>
@@ -98,7 +103,9 @@ export function CommandPalette({
                 <CommandItem
                   key={i.id}
                   value={`${i.identifier} ${i.title}`}
-                  onSelect={() => go(`/issue/${i.identifier}`)}
+                  onSelect={() =>
+                    go(wsPath(workspace.slug, `/issue/${i.identifier}`))
+                  }
                 >
                   <span className="text-xs text-muted-foreground">
                     {i.identifier}

@@ -31,7 +31,7 @@ function GoogleIcon() {
 }
 
 export function GoogleSignInButton({
-  callbackURL = "/board",
+  callbackURL = "/",
   label = "Continue with Google",
 }: {
   callbackURL?: string;

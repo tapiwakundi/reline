@@ -6,6 +6,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import type { IssueListItem } from "@/lib/types";
 import type { BoardCardProperty } from "@/lib/board-display";
 import { PriorityIcon } from "@/components/priority-icon";
@@ -143,6 +144,7 @@ export function BoardCard({
   onOptimisticDelete?: () => void;
 }) {
   const router = useRouter();
+  const { workspace } = useWorkspace();
   const dragged = useRef(false);
   const {
     attributes,
@@ -180,7 +182,7 @@ export function BoardCard({
             dragged.current = false;
             return;
           }
-          router.push(`/issue/${issue.identifier}`);
+          router.push(wsPath(workspace.slug, `/issue/${issue.identifier}`));
         }}
         className={cn("touch-manipulation", isDragging && "pointer-events-none")}
       >

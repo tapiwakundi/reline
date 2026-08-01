@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import {
   optimisticUpdateIssue,
   type IssuePatch,
@@ -22,7 +23,7 @@ function formatDate(iso: string) {
 }
 
 export function IssueRow({ issue }: { issue: IssueListItem }) {
-  const { labels, statuses } = useWorkspace();
+  const { workspace, labels, statuses } = useWorkspace();
   const qc = useQueryClient();
   const [, startTransition] = useTransition();
 
@@ -32,6 +33,7 @@ export function IssueRow({ issue }: { issue: IssueListItem }) {
     startTransition(async () => {
       await optimisticUpdateIssue(
         qc,
+        workspace.id,
         {
           id: issue.id,
           identifier: issue.identifier,
@@ -60,7 +62,7 @@ export function IssueRow({ issue }: { issue: IssueListItem }) {
           compact
         />
         <Link
-          href={`/issue/${issue.identifier}`}
+          href={wsPath(workspace.slug, `/issue/${issue.identifier}`)}
           className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground hover:text-foreground"
         >
           {issue.title}

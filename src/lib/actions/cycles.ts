@@ -5,11 +5,12 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issues, statuses, workspaces } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
+import { wsPath } from "@/lib/workspace-slug";
 
-function revalidateCycleViews() {
-  revalidatePath("/cycles");
-  revalidatePath("/board");
-  revalidatePath("/issues");
+function revalidateCycleViews(slug: string) {
+  revalidatePath(wsPath(slug, "/cycles"));
+  revalidatePath(wsPath(slug, "/board"));
+  revalidatePath(wsPath(slug, "/issues"));
 }
 
 export async function createCycle(input: {
@@ -33,7 +34,7 @@ export async function createCycle(input: {
     endDate: new Date(input.endDate),
   });
 
-  revalidateCycleViews();
+  revalidateCycleViews(workspace.slug);
 }
 
 export async function startCycle(cycleId: string) {
@@ -53,7 +54,7 @@ export async function startCycle(cycleId: string) {
     .update(cycles)
     .set({ status: "active" })
     .where(and(eq(cycles.id, cycleId), eq(cycles.workspaceId, workspace.id)));
-  revalidateCycleViews();
+  revalidateCycleViews(workspace.slug);
 }
 
 /**
@@ -91,7 +92,7 @@ export async function completeCycle(cycleId: string) {
     .set({ status: "completed" })
     .where(and(eq(cycles.id, cycleId), eq(cycles.workspaceId, workspace.id)));
 
-  revalidateCycleViews();
+  revalidateCycleViews(workspace.slug);
 }
 
 export async function deleteCycle(cycleId: string) {
@@ -99,5 +100,5 @@ export async function deleteCycle(cycleId: string) {
   await db
     .delete(cycles)
     .where(and(eq(cycles.id, cycleId), eq(cycles.workspaceId, workspace.id)));
-  revalidateCycleViews();
+  revalidateCycleViews(workspace.slug);
 }

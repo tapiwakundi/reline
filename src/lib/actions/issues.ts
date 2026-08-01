@@ -18,6 +18,8 @@ import { resolveMentions } from "@/lib/mentions";
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
 import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { classifyContentType, deleteObjects, MAX_ATTACHMENTS } from "@/lib/r2";
+import { revalidateWorkspaceLists } from "@/lib/revalidate";
+import { wsPath } from "@/lib/workspace-slug";
 
 export type AttachmentInput = {
   key: string;
@@ -55,12 +57,8 @@ async function insertAttachments(
   if (rows.length) await db.insert(attachments).values(rows);
 }
 
-function revalidateIssueViews() {
-  revalidatePath("/board");
-  revalidatePath("/issues");
-  revalidatePath("/my-issues");
-  revalidatePath("/inbox");
-  revalidatePath("/cycles");
+function revalidateIssueViews(slug: string) {
+  revalidateWorkspaceLists(slug);
 }
 
 async function ownedIssue(issueId: string, workspaceId: string) {
@@ -173,7 +171,7 @@ export async function createIssue(input: {
     });
   }
 
-  revalidateIssueViews();
+  revalidateIssueViews(workspace.slug);
   return { id: issue.id, identifier: `${workspace.prefix}-${issue.number}` };
 }
 
@@ -263,8 +261,8 @@ export async function updateIssue(
     });
   }
 
-  revalidateIssueViews();
-  revalidatePath(`/issue/${workspace.prefix}-${before.number}`);
+  revalidateIssueViews(workspace.slug);
+  revalidatePath(wsPath(workspace.slug, `/issue/${workspace.prefix}-${before.number}`));
 }
 
 export async function moveIssueOnBoard(
@@ -298,9 +296,7 @@ export async function moveIssueOnBoard(
       type: "status_changed",
       payload: { to: to?.name ?? "" },
     });
-    revalidatePath("/inbox");
-    revalidatePath("/issues");
-    revalidatePath("/my-issues");
+    revalidateWorkspaceLists(workspace.slug);
   }
 }
 
@@ -371,9 +367,7 @@ export async function moveIssueOnBoardGrouped(
       actorId: user.id,
       type: "assigned",
     });
-    revalidatePath("/inbox");
-    revalidatePath("/issues");
-    revalidatePath("/my-issues");
+    revalidateWorkspaceLists(workspace.slug);
   }
 
   if (fields.statusId && fields.statusId !== before.statusId) {
@@ -393,9 +387,7 @@ export async function moveIssueOnBoardGrouped(
       type: "status_changed",
       payload: { to: to?.name ?? "" },
     });
-    revalidatePath("/inbox");
-    revalidatePath("/issues");
-    revalidatePath("/my-issues");
+    revalidateWorkspaceLists(workspace.slug);
   }
 }
 
@@ -415,7 +407,7 @@ export async function deleteIssue(issueId: string) {
     await deleteObjects(files.map((f) => f.key));
   }
 
-  revalidateIssueViews();
+  revalidateIssueViews(workspace.slug);
 }
 
 export async function attachToIssue(
@@ -432,7 +424,7 @@ export async function attachToIssue(
     uploaderId: user.id,
   });
 
-  revalidatePath(`/issue/${workspace.prefix}-${issue.number}`);
+  revalidatePath(wsPath(workspace.slug, `/issue/${workspace.prefix}-${issue.number}`));
 }
 
 export async function deleteAttachment(attachmentId: string) {
@@ -451,7 +443,7 @@ export async function deleteAttachment(attachmentId: string) {
   await db.delete(attachments).where(eq(attachments.id, attachmentId));
   await deleteObjects([attachment.key]);
 
-  revalidatePath(`/issue/${workspace.prefix}-${issue.number}`);
+  revalidatePath(wsPath(workspace.slug, `/issue/${workspace.prefix}-${issue.number}`));
 }
 
 export async function addComment(
@@ -490,7 +482,12 @@ export async function addComment(
   }
 
   const data = await getWorkspaceData(
-    { id: workspace.id, name: workspace.name, prefix: workspace.prefix },
+    {
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      prefix: workspace.prefix,
+    },
     user.id
   );
   const mentioned = resolveMentions(trimmed, data.members).filter(
@@ -527,6 +524,6 @@ export async function addComment(
     excludeRecipients: mentionedIds,
   });
 
-  revalidatePath(`/issue/${workspace.prefix}-${issue.number}`);
-  revalidatePath("/inbox");
+  revalidatePath(wsPath(workspace.slug, `/issue/${workspace.prefix}-${issue.number}`));
+  revalidatePath(wsPath(workspace.slug, "/inbox"));
 }

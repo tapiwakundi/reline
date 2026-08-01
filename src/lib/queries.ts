@@ -31,9 +31,9 @@ import type {
 } from "@/lib/types";
 
 export async function getWorkspaceData(
-  workspace: { id: string; name: string; prefix: string },
+  workspace: { id: string; name: string; slug: string; prefix: string },
   meId: string
-): Promise<WorkspaceData> {
+): Promise<Omit<WorkspaceData, "workspaces">> {
   const [memberRows, statusRows, labelRows, cycleRows] = await Promise.all([
     db.query.memberships.findMany({
       where: eq(memberships.workspaceId, workspace.id),
@@ -144,11 +144,20 @@ export async function getIssues(
   }));
 }
 
-export async function getUnreadCount(userId: string): Promise<number> {
+export async function getUnreadCount(
+  userId: string,
+  workspaceId: string
+): Promise<number> {
   const [row] = await db
     .select({ value: count() })
     .from(notifications)
-    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+    .where(
+      and(
+        eq(notifications.userId, userId),
+        eq(notifications.workspaceId, workspaceId),
+        isNull(notifications.readAt)
+      )
+    );
   return row?.value ?? 0;
 }
 
@@ -311,33 +320,37 @@ export async function getIssueDetail(
 
 export async function getInbox(
   userId: string,
+  workspaceId: string,
   prefix: string
 ): Promise<InboxItem[]> {
   const rows = await db.query.notifications.findMany({
-    where: eq(notifications.userId, userId),
+    where: and(
+      eq(notifications.userId, userId),
+      eq(notifications.workspaceId, workspaceId)
+    ),
     with: { issue: true, actor: true },
     orderBy: desc(notifications.createdAt),
     limit: 100,
   });
 
   return rows.map((n) => ({
-    id: n.id,
-    type: n.type,
-    payload: (n.payload ?? {}) as Record<string, string>,
-    readAt: n.readAt?.toISOString() ?? null,
-    createdAt: n.createdAt.toISOString(),
-    issue: {
-      identifier: `${prefix}-${n.issue.number}`,
-      title: n.issue.title,
-    },
-    actor: n.actor
-      ? {
-          id: n.actor.id,
-          name: n.actor.name,
-          email: n.actor.email,
-          image: n.actor.image ?? null,
-        }
-      : null,
+      id: n.id,
+      type: n.type,
+      payload: (n.payload ?? {}) as Record<string, string>,
+      readAt: n.readAt?.toISOString() ?? null,
+      createdAt: n.createdAt.toISOString(),
+      issue: {
+        identifier: `${prefix}-${n.issue.number}`,
+        title: n.issue.title,
+      },
+      actor: n.actor
+        ? {
+            id: n.actor.id,
+            name: n.actor.name,
+            email: n.actor.email,
+            image: n.actor.image ?? null,
+          }
+        : null,
   }));
 }
 
@@ -345,6 +358,7 @@ export async function getWorkspaceSettings(
   workspace: {
     id: string;
     name: string;
+    slug: string;
     prefix: string;
     createdAt: Date;
   },
@@ -352,7 +366,12 @@ export async function getWorkspaceSettings(
   meId: string
 ): Promise<WorkspaceSettings> {
   const data = await getWorkspaceData(
-    { id: workspace.id, name: workspace.name, prefix: workspace.prefix },
+    {
+      id: workspace.id,
+      name: workspace.name,
+      slug: workspace.slug,
+      prefix: workspace.prefix,
+    },
     meId
   );
   return {

@@ -13,6 +13,7 @@ import {
   importJiraCsv,
   type ImportReport,
 } from "@/lib/actions/import";
+import { useWorkspace } from "@/lib/workspace-context";
 import { invalidateAfterImport } from "@/lib/invalidate";
 
 function Report({ report }: { report: ImportReport }) {
@@ -51,6 +52,7 @@ function Report({ report }: { report: ImportReport }) {
 
 export function ImportPanel() {
   const qc = useQueryClient();
+  const { workspace } = useWorkspace();
   const [pending, startTransition] = useTransition();
   const [report, setReport] = useState<ImportReport | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -69,7 +71,7 @@ export function ImportPanel() {
         const r = await importJiraCsv(fd);
         setReport(r);
         toast.success(`Imported ${r.created} issues`);
-        await invalidateAfterImport(qc);
+        await invalidateAfterImport(qc, workspace.id);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Import failed");
       }
@@ -89,7 +91,7 @@ export function ImportPanel() {
         });
         setReport(r);
         toast.success(`Imported ${r.created} issues`);
-        await invalidateAfterImport(qc);
+        await invalidateAfterImport(qc, workspace.id);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Import failed");
       }

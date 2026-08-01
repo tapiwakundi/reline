@@ -39,6 +39,8 @@ import {
 } from "@/lib/actions/cycles";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCycles } from "@/lib/hooks/queries";
+import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-slug";
 import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
 import { CyclesSkeleton } from "@/components/skeletons/page-skeletons";
@@ -271,6 +273,7 @@ function CycleChart({ cycle }: { cycle: CycleItem }) {
 export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const { workspace } = useWorkspace();
   const { data: cycles, isPending } = useCycles(initialCycles);
   const list = cycles ?? initialCycles;
   const [pending, startTransition] = useTransition();
@@ -309,7 +312,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       });
       setOpen(false);
       toast.success("Cycle created");
-      await invalidateAfterCycleChange(qc);
+      await invalidateAfterCycleChange(qc, workspace.id);
     });
   }
 
@@ -317,7 +320,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
     startTransition(async () => {
       await fn();
       toast.success(msg);
-      await invalidateAfterCycleChange(qc);
+      await invalidateAfterCycleChange(qc, workspace.id);
     });
 
   if (isPending && !cycles) {
@@ -442,7 +445,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                             )}
                           />
                           <Link
-                            href={`/board?cycle=${c.id}`}
+                            href={`${wsPath(workspace.slug, "/board")}?cycle=${c.id}`}
                             onClick={(e) => e.stopPropagation()}
                             className="truncate text-[13px] font-medium hover:text-foreground"
                           >
@@ -532,7 +535,9 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                               )}
                               <DropdownMenuItem
                                 onClick={() =>
-                                  router.push(`/board?cycle=${c.id}`)
+                                  router.push(
+                                    `${wsPath(workspace.slug, "/board")}?cycle=${c.id}`
+                                  )
                                 }
                               >
                                 <CirclePlayIcon /> Open on board

@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { AttachmentInput } from "@/lib/actions/issues";
+import { useWorkspace } from "@/lib/workspace-context";
 
 export type AttachmentKind = "image" | "video";
 
@@ -32,6 +33,7 @@ export function mediaFiles(list: FileList | File[] | null | undefined) {
 /** Same-origin upload to our API (avoids R2 CORS). */
 function uploadWithProgress(
   file: File,
+  workspaceSlug: string,
   onProgress: (fraction: number) => void
 ) {
   return new Promise<{
@@ -41,6 +43,7 @@ function uploadWithProgress(
   }>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/attachments/upload");
+    xhr.setRequestHeader("x-workspace-slug", workspaceSlug);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress(e.loaded / e.total);
     };
@@ -78,6 +81,7 @@ function uploadWithProgress(
  * Used by the create dialog, comment composer, and issue detail.
  */
 export function useAttachmentUploads() {
+  const { workspace } = useWorkspace();
   const [items, setItems] = useState<PendingAttachment[]>([]);
   const counter = useRef(0);
 
@@ -110,6 +114,7 @@ export function useAttachmentUploads() {
         (async () => {
           const { key, publicUrl, kind } = await uploadWithProgress(
             file,
+            workspace.slug,
             (fraction) => patch(localId, { progress: fraction })
           );
           patch(localId, {
@@ -127,7 +132,7 @@ export function useAttachmentUploads() {
         });
       }
     },
-    [patch]
+    [patch, workspace.slug]
   );
 
   const remove = useCallback((localId: string) => {

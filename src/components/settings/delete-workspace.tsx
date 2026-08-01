@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +15,6 @@ import {
 import { deleteWorkspace } from "@/lib/actions/workspace";
 
 export function DeleteWorkspace({ workspaceName }: { workspaceName: string }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [confirmName, setConfirmName] = useState("");
   const [pending, startTransition] = useTransition();
@@ -33,7 +31,7 @@ export function DeleteWorkspace({ workspaceName }: { workspaceName: string }) {
     startTransition(async () => {
       try {
         await deleteWorkspace(confirmName);
-        router.replace("/onboarding");
+        // Server action redirects to another workspace or /onboarding.
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to delete workspace");
       }

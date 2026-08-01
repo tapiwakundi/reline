@@ -78,8 +78,8 @@ function isIssueListCache(
 }
 
 /** Snapshot every issues.* query so we can roll back on failure. */
-function snapshotIssueQueries(qc: QueryClient) {
-  return qc.getQueriesData({ queryKey: queryKeys.issues.all });
+function snapshotIssueQueries(qc: QueryClient, workspaceId: string) {
+  return qc.getQueriesData({ queryKey: queryKeys.issues.all(workspaceId) });
 }
 
 function restoreIssueQueries(
@@ -93,11 +93,12 @@ function restoreIssueQueries(
 
 export function applyIssuePatchToCaches(
   qc: QueryClient,
+  workspaceId: string,
   issue: { id: string; identifier: string },
   patch: IssuePatch
 ) {
   qc.setQueriesData(
-    { queryKey: queryKeys.issues.all },
+    { queryKey: queryKeys.issues.all(workspaceId) },
     (old: unknown) => {
       if (!isIssueListCache(old)) return old;
       return old.map((i) =>
@@ -107,7 +108,7 @@ export function applyIssuePatchToCaches(
   );
 
   qc.setQueryData<IssueDetailData>(
-    queryKeys.issues.detail(issue.identifier),
+    queryKeys.issues.detail(workspaceId, issue.identifier),
     (old) => {
       if (!old) return old;
       return { ...old, issue: patchDetailIssue(old.issue, patch) };
@@ -117,28 +118,32 @@ export function applyIssuePatchToCaches(
 
 export function removeIssueFromCaches(
   qc: QueryClient,
+  workspaceId: string,
   issue: { id: string; identifier: string }
 ) {
   qc.setQueriesData(
-    { queryKey: queryKeys.issues.all },
+    { queryKey: queryKeys.issues.all(workspaceId) },
     (old: unknown) => {
       if (!isIssueListCache(old)) return old;
       return old.filter((i) => i.id !== issue.id);
     }
   );
-  qc.removeQueries({ queryKey: queryKeys.issues.detail(issue.identifier) });
+  qc.removeQueries({
+    queryKey: queryKeys.issues.detail(workspaceId, issue.identifier),
+  });
 }
 
 export async function optimisticUpdateIssue(
   qc: QueryClient,
+  workspaceId: string,
   issue: { id: string; identifier: string; statusId: string },
   patch: IssuePatch,
   statuses: StatusRow[]
 ) {
   const resolved = resolveIssuePatch(patch, issue.statusId, statuses);
-  await qc.cancelQueries({ queryKey: queryKeys.issues.all });
-  const snapshot = snapshotIssueQueries(qc);
-  applyIssuePatchToCaches(qc, issue, resolved);
+  await qc.cancelQueries({ queryKey: queryKeys.issues.all(workspaceId) });
+  const snapshot = snapshotIssueQueries(qc, workspaceId);
+  applyIssuePatchToCaches(qc, workspaceId, issue, resolved);
 
   try {
     await updateIssue(issue.id, resolved);
@@ -150,16 +155,17 @@ export async function optimisticUpdateIssue(
     throw e;
   }
 
-  void invalidateAfterIssueChange(qc);
+  void invalidateAfterIssueChange(qc, workspaceId);
 }
 
 export async function optimisticDeleteIssue(
   qc: QueryClient,
+  workspaceId: string,
   issue: { id: string; identifier: string }
 ) {
-  await qc.cancelQueries({ queryKey: queryKeys.issues.all });
-  const snapshot = snapshotIssueQueries(qc);
-  removeIssueFromCaches(qc, issue);
+  await qc.cancelQueries({ queryKey: queryKeys.issues.all(workspaceId) });
+  const snapshot = snapshotIssueQueries(qc, workspaceId);
+  removeIssueFromCaches(qc, workspaceId, issue);
 
   try {
     await deleteIssue(issue.id);
@@ -172,11 +178,12 @@ export async function optimisticDeleteIssue(
     throw e;
   }
 
-  void invalidateAfterIssueChange(qc);
+  void invalidateAfterIssueChange(qc, workspaceId);
 }
 
 export async function optimisticAddComment(
   qc: QueryClient,
+  workspaceId: string,
   issue: { id: string; identifier: string },
   body: string,
   author: Member,
@@ -186,7 +193,7 @@ export async function optimisticAddComment(
   // Attachments need server URLs — wait for the real response.
   if (attachments.length > 0) {
     await addComment(issue.id, body, attachments, parentId ?? null);
-    await invalidateAfterIssueChange(qc);
+    await invalidateAfterIssueChange(qc, workspaceId);
     return;
   }
 
@@ -201,14 +208,14 @@ export async function optimisticAddComment(
   };
 
   await qc.cancelQueries({
-    queryKey: queryKeys.issues.detail(issue.identifier),
+    queryKey: queryKeys.issues.detail(workspaceId, issue.identifier),
   });
   const previous = qc.getQueryData<IssueDetailData>(
-    queryKeys.issues.detail(issue.identifier)
+    queryKeys.issues.detail(workspaceId, issue.identifier)
   );
 
   qc.setQueryData<IssueDetailData>(
-    queryKeys.issues.detail(issue.identifier),
+    queryKeys.issues.detail(workspaceId, issue.identifier),
     (old) => {
       if (!old) return old;
       return { ...old, comments: [...old.comments, temp] };
@@ -218,31 +225,35 @@ export async function optimisticAddComment(
   try {
     await addComment(issue.id, body, [], parentId ?? null);
   } catch (e) {
-    qc.setQueryData(queryKeys.issues.detail(issue.identifier), previous);
+    qc.setQueryData(
+      queryKeys.issues.detail(workspaceId, issue.identifier),
+      previous
+    );
     toast.error(
       e instanceof Error ? e.message : "Couldn't post comment"
     );
     throw e;
   }
 
-  void invalidateAfterIssueChange(qc);
+  void invalidateAfterIssueChange(qc, workspaceId);
 }
 
 export async function optimisticDeleteAttachment(
   qc: QueryClient,
+  workspaceId: string,
   issue: { identifier: string },
   attachmentId: string,
   deleteFn: (id: string) => Promise<void> = deleteAttachment
 ) {
   await qc.cancelQueries({
-    queryKey: queryKeys.issues.detail(issue.identifier),
+    queryKey: queryKeys.issues.detail(workspaceId, issue.identifier),
   });
   const previous = qc.getQueryData<IssueDetailData>(
-    queryKeys.issues.detail(issue.identifier)
+    queryKeys.issues.detail(workspaceId, issue.identifier)
   );
 
   qc.setQueryData<IssueDetailData>(
-    queryKeys.issues.detail(issue.identifier),
+    queryKeys.issues.detail(workspaceId, issue.identifier),
     (old) => {
       if (!old) return old;
       return {
@@ -264,12 +275,15 @@ export async function optimisticDeleteAttachment(
   try {
     await deleteFn(attachmentId);
   } catch (e) {
-    qc.setQueryData(queryKeys.issues.detail(issue.identifier), previous);
+    qc.setQueryData(
+      queryKeys.issues.detail(workspaceId, issue.identifier),
+      previous
+    );
     toast.error(
       e instanceof Error ? e.message : "Couldn't delete attachment"
     );
     throw e;
   }
 
-  void invalidateAfterIssueChange(qc);
+  void invalidateAfterIssueChange(qc, workspaceId);
 }

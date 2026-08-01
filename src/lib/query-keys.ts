@@ -2,25 +2,38 @@ import type { BoardCompletedWindow } from "@/lib/board-display";
 
 export const queryKeys = {
   issues: {
-    all: ["issues"] as const,
-    list: () => ["issues", "list"] as const,
-    board: (opts: {
-      completed: BoardCompletedWindow;
-      showBacklog: boolean;
-    }) => ["issues", "board", opts.completed, opts.showBacklog] as const,
-    detail: (key: string) => ["issues", "detail", key] as const,
+    all: (workspaceId: string) => ["issues", workspaceId] as const,
+    list: (workspaceId: string) => ["issues", workspaceId, "list"] as const,
+    board: (
+      workspaceId: string,
+      opts: {
+        completed: BoardCompletedWindow;
+        showBacklog: boolean;
+      }
+    ) =>
+      [
+        "issues",
+        workspaceId,
+        "board",
+        opts.completed,
+        opts.showBacklog,
+      ] as const,
+    detail: (workspaceId: string, key: string) =>
+      ["issues", workspaceId, "detail", key] as const,
   },
   cycles: {
-    all: ["cycles"] as const,
-    list: () => ["cycles", "list"] as const,
+    all: (workspaceId: string) => ["cycles", workspaceId] as const,
+    list: (workspaceId: string) => ["cycles", workspaceId, "list"] as const,
   },
   inbox: {
-    all: ["inbox"] as const,
-    list: () => ["inbox", "list"] as const,
-    unread: () => ["inbox", "unread"] as const,
+    all: (workspaceId: string) => ["inbox", workspaceId] as const,
+    list: (workspaceId: string) => ["inbox", workspaceId, "list"] as const,
+    unread: (workspaceId: string) =>
+      ["inbox", workspaceId, "unread"] as const,
   },
   workspace: {
-    all: ["workspace"] as const,
-    settings: () => ["workspace", "settings"] as const,
+    all: (workspaceId: string) => ["workspace", workspaceId] as const,
+    settings: (workspaceId: string) =>
+      ["workspace", workspaceId, "settings"] as const,
   },
 };

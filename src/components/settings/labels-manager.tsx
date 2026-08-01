@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { createLabel, deleteLabel, updateLabel } from "@/lib/actions/labels";
 import { LABEL_COLORS } from "@/lib/defaults";
 import { useWorkspaceSettings } from "@/lib/hooks/queries";
+import { useWorkspace } from "@/lib/workspace-context";
 import { invalidateAfterLabelChange } from "@/lib/invalidate";
 import type { WorkspaceSettings } from "@/lib/types";
 import { SettingsContentSkeleton } from "@/components/skeletons/page-skeletons";
@@ -59,6 +60,7 @@ export function LabelsManager({
   initialData: WorkspaceSettings;
 }) {
   const qc = useQueryClient();
+  const { workspace } = useWorkspace();
   const { data, isPending } = useWorkspaceSettings(initialData);
   const labels = (data ?? initialData).labels;
   const [pending, startTransition] = useTransition();
@@ -78,7 +80,7 @@ export function LabelsManager({
         return;
       }
       setNewName("");
-      await invalidateAfterLabelChange(qc);
+      await invalidateAfterLabelChange(qc, workspace.id);
     });
   }
 
@@ -124,7 +126,7 @@ export function LabelsManager({
                 onPick={(c) =>
                   startTransition(async () => {
                     await updateLabel(l.id, l.name, c);
-                    await invalidateAfterLabelChange(qc);
+                    await invalidateAfterLabelChange(qc, workspace.id);
                   })
                 }
               />
@@ -136,7 +138,7 @@ export function LabelsManager({
                 onClick={() =>
                   startTransition(async () => {
                     await deleteLabel(l.id);
-                    await invalidateAfterLabelChange(qc);
+                    await invalidateAfterLabelChange(qc, workspace.id);
                   })
                 }
               >

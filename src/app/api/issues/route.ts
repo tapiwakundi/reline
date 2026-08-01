@@ -10,7 +10,7 @@ const COMPLETED_VALUES = new Set(
 );
 
 export async function GET(request: Request) {
-  const ctx = await requireApiWorkspace();
+  const ctx = await requireApiWorkspace(request);
   if ("error" in ctx) return ctx.error;
 
   const url = new URL(request.url);

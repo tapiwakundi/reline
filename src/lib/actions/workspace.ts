@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -11,9 +12,23 @@ import {
   statuses,
   workspaces,
 } from "@/db/schema";
-import { requireSession, requireWorkspace } from "@/lib/session";
+import { requireSession, requireWorkspace, getUserWorkspaces } from "@/lib/session";
 import { DEFAULT_STATUSES } from "@/lib/defaults";
 import { deleteObjects } from "@/lib/r2";
+import {
+  allocateUniqueSlug,
+  WORKSPACE_SLUG_COOKIE,
+  wsPath,
+} from "@/lib/workspace-slug";
+
+async function setWorkspaceCookie(slug: string) {
+  const cookieStore = await cookies();
+  cookieStore.set(WORKSPACE_SLUG_COOKIE, slug, {
+    path: "/",
+    sameSite: "lax",
+    httpOnly: true,
+  });
+}
 
 export async function createWorkspace(formData: FormData) {
   const session = await requireSession();
@@ -25,14 +40,11 @@ export async function createWorkspace(formData: FormData) {
     ""
   );
 
-  const existing = await db.query.memberships.findFirst({
-    where: eq(memberships.userId, session.user.id),
-  });
-  if (existing) redirect("/board");
+  const slug = await allocateUniqueSlug(name);
 
   const [ws] = await db
     .insert(workspaces)
-    .values({ name, prefix: prefix || "REL" })
+    .values({ name, slug, prefix: prefix || "REL" })
     .returning();
 
   await db.insert(memberships).values({
@@ -45,7 +57,8 @@ export async function createWorkspace(formData: FormData) {
     .insert(statuses)
     .values(DEFAULT_STATUSES.map((s) => ({ ...s, workspaceId: ws.id })));
 
-  redirect("/board");
+  await setWorkspaceCookie(ws.slug);
+  redirect(wsPath(ws.slug, "/board"));
 }
 
 export async function createInvite() {
@@ -58,7 +71,7 @@ export async function createInvite() {
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     })
     .returning();
-  revalidatePath("/settings");
+  revalidatePath(wsPath(workspace.slug, "/settings"));
   return { token: invite.token };
 }
 
@@ -91,7 +104,13 @@ export async function acceptInvite(token: string) {
       .where(eq(invites.id, invite.id));
   }
 
-  redirect("/board");
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, invite.workspaceId),
+  });
+  if (!workspace) redirect("/onboarding");
+
+  await setWorkspaceCookie(workspace.slug);
+  redirect(wsPath(workspace.slug, "/board"));
 }
 
 /**
@@ -99,7 +118,7 @@ export async function acceptInvite(token: string) {
  * Owner-only; `confirmName` must match the workspace name exactly.
  */
 export async function deleteWorkspace(confirmName: string) {
-  const { workspace, membership } = await requireWorkspace();
+  const { workspace, membership, user } = await requireWorkspace();
 
   if (membership.role !== "owner") {
     throw new Error("Only the workspace owner can delete it");
@@ -118,4 +137,14 @@ export async function deleteWorkspace(confirmName: string) {
   if (files.length) {
     await deleteObjects(files.map((f) => f.key));
   }
+
+  const remaining = await getUserWorkspaces(user.id);
+  if (!remaining.length) {
+    const cookieStore = await cookies();
+    cookieStore.delete(WORKSPACE_SLUG_COOKIE);
+    redirect("/onboarding");
+  }
+
+  await setWorkspaceCookie(remaining[0].slug);
+  redirect(wsPath(remaining[0].slug, "/board"));
 }
