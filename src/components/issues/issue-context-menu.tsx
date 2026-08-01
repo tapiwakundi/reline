@@ -30,6 +30,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { deleteIssue, updateIssue } from "@/lib/actions/issues";
+import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { useWorkspace } from "@/lib/workspace-context";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import { PRIORITIES } from "@/lib/defaults";
@@ -227,9 +228,18 @@ export function IssueContextMenu({
             <ContextMenuSubContent className="w-52">
               <ContextMenuRadioGroup
                 value={issue.cycleId ?? "none"}
-                onValueChange={(v) =>
-                  patch({ cycleId: v === "none" ? null : v })
-                }
+                onValueChange={(v) => {
+                  const cycleId = v === "none" ? null : v;
+                  const statusId = todoStatusIdForCycleEntry(
+                    statuses,
+                    issue.statusId,
+                    cycleId
+                  );
+                  patch({
+                    cycleId,
+                    ...(statusId ? { statusId } : {}),
+                  });
+                }}
               >
                 <ContextMenuLabel>Change cycle…</ContextMenuLabel>
                 <ContextMenuRadioItem value="none">

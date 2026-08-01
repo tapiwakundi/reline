@@ -18,6 +18,7 @@ import {
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
+import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 
 export function CreateIssueDialog({
   open,
@@ -54,13 +55,25 @@ export function CreateIssueDialog({
     if (!open) return;
     setTitle("");
     setDescription("");
-    setStatusId(defaultStatusId ?? fallbackStatus);
+    const initialCycleId = defaultCycleId ?? null;
+    const initialStatusId = defaultStatusId ?? fallbackStatus;
+    setStatusId(
+      todoStatusIdForCycleEntry(statuses, initialStatusId, initialCycleId) ??
+        initialStatusId
+    );
     setPriority(0);
     setAssigneeId(null);
-    setCycleId(defaultCycleId ?? null);
+    setCycleId(initialCycleId);
     setLabelIds([]);
     clearUploads();
-  }, [open, defaultStatusId, defaultCycleId, fallbackStatus, clearUploads]);
+  }, [
+    open,
+    defaultStatusId,
+    defaultCycleId,
+    fallbackStatus,
+    statuses,
+    clearUploads,
+  ]);
 
   function submit() {
     if (!title.trim() || uploads.uploading) {
@@ -151,7 +164,18 @@ export function CreateIssueDialog({
           <PriorityPicker value={priority} onChange={setPriority} />
           <AssigneePicker value={assigneeId} onChange={setAssigneeId} />
           <LabelPicker value={labelIds} onChange={setLabelIds} />
-          <CyclePicker value={cycleId} onChange={setCycleId} />
+          <CyclePicker
+            value={cycleId}
+            onChange={(next) => {
+              setCycleId(next);
+              const promoted = todoStatusIdForCycleEntry(
+                statuses,
+                statusId,
+                next
+              );
+              if (promoted) setStatusId(promoted);
+            }}
+          />
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
           <AttachButton onFiles={uploads.addFiles} disabled={pending} />

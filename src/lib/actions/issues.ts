@@ -16,6 +16,7 @@ import { requireWorkspace } from "@/lib/session";
 import { getWorkspaceData } from "@/lib/queries";
 import { resolveMentions } from "@/lib/mentions";
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
+import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { classifyContentType, deleteObjects, MAX_ATTACHMENTS } from "@/lib/r2";
 
 export type AttachmentInput = {
@@ -70,6 +71,24 @@ async function ownedIssue(issueId: string, workspaceId: string) {
   return issue;
 }
 
+/** Promote Backlog → Todo when assigning a cycle. */
+async function statusIdWhenEnteringCycle(
+  workspaceId: string,
+  currentStatusId: string,
+  cycleId: string | null | undefined
+): Promise<string | undefined> {
+  if (!cycleId) return undefined;
+  const workspaceStatuses = await db.query.statuses.findMany({
+    where: eq(statuses.workspaceId, workspaceId),
+    columns: { id: true, type: true },
+  });
+  return todoStatusIdForCycleEntry(
+    workspaceStatuses,
+    currentStatusId,
+    cycleId
+  );
+}
+
 export async function createIssue(input: {
   title: string;
   description?: string;
@@ -101,6 +120,14 @@ export async function createIssue(input: {
     statusId = backlog!.id;
   }
 
+  const cycleId = input.cycleId ?? null;
+  const promoted = await statusIdWhenEnteringCycle(
+    workspace.id,
+    statusId,
+    cycleId
+  );
+  if (promoted) statusId = promoted;
+
   const [issue] = await db
     .insert(issues)
     .values({
@@ -111,7 +138,7 @@ export async function createIssue(input: {
       priority: input.priority ?? 0,
       statusId,
       assigneeId: input.assigneeId ?? null,
-      cycleId: input.cycleId ?? null,
+      cycleId,
       creatorId: user.id,
       boardOrder: Date.now(),
     })
@@ -168,6 +195,17 @@ export async function updateIssue(
 
   const { labelIds, ...fields } = patch;
 
+  // Moving a backlog issue into a cycle promotes it to Todo, unless the
+  // caller is already setting an explicit status.
+  if (fields.cycleId && !fields.statusId) {
+    const promoted = await statusIdWhenEnteringCycle(
+      workspace.id,
+      before.statusId,
+      fields.cycleId
+    );
+    if (promoted) fields.statusId = promoted;
+  }
+
   if (Object.keys(fields).length > 0) {
     await db
       .update(issues)
@@ -185,10 +223,11 @@ export async function updateIssue(
   }
 
   // Notifications + activity for meaningful transitions
-  if (patch.statusId && patch.statusId !== before.statusId) {
+  const nextStatusId = fields.statusId;
+  if (nextStatusId && nextStatusId !== before.statusId) {
     const [from, to] = await Promise.all([
       db.query.statuses.findFirst({ where: eq(statuses.id, before.statusId) }),
-      db.query.statuses.findFirst({ where: eq(statuses.id, patch.statusId) }),
+      db.query.statuses.findFirst({ where: eq(statuses.id, nextStatusId) }),
     ]);
     await recordActivity({
       issueId,
@@ -292,12 +331,22 @@ export async function moveIssueOnBoardGrouped(
     assigneeId: string | null;
     priority: number;
     cycleId: string | null;
+    statusId: string;
   }> =
     target.kind === "assignee"
       ? { assigneeId: target.assigneeId }
       : target.kind === "priority"
         ? { priority: target.priority }
         : { cycleId: target.cycleId };
+
+  if (target.kind === "cycle" && target.cycleId) {
+    const promoted = await statusIdWhenEnteringCycle(
+      workspace.id,
+      before.statusId,
+      target.cycleId
+    );
+    if (promoted) fields.statusId = promoted;
+  }
 
   await db
     .update(issues)
@@ -321,6 +370,28 @@ export async function moveIssueOnBoardGrouped(
       workspaceId: workspace.id,
       actorId: user.id,
       type: "assigned",
+    });
+    revalidatePath("/inbox");
+    revalidatePath("/issues");
+    revalidatePath("/my-issues");
+  }
+
+  if (fields.statusId && fields.statusId !== before.statusId) {
+    const to = await db.query.statuses.findFirst({
+      where: eq(statuses.id, fields.statusId),
+    });
+    await recordActivity({
+      issueId,
+      actorId: user.id,
+      type: "status_changed",
+      data: { to: to?.name ?? null },
+    });
+    await notifyIssueEvent({
+      issueId,
+      workspaceId: workspace.id,
+      actorId: user.id,
+      type: "status_changed",
+      payload: { to: to?.name ?? "" },
     });
     revalidatePath("/inbox");
     revalidatePath("/issues");
