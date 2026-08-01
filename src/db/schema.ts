@@ -9,6 +9,7 @@ import {
   primaryKey,
   index,
   uniqueIndex,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { nanoid } from "nanoid";
@@ -254,12 +255,19 @@ export const comments = pgTable(
     authorId: text("author_id").references(() => user.id, {
       onDelete: "set null",
     }),
+    // Set when the comment is a reply to another (top-level) comment
+    parentId: text("parent_id").references((): AnyPgColumn => comments.id, {
+      onDelete: "cascade",
+    }),
     body: text("body").notNull(),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),
   },
-  (t) => [index("comments_issue_idx").on(t.issueId)]
+  (t) => [
+    index("comments_issue_idx").on(t.issueId),
+    index("comments_parent_idx").on(t.parentId),
+  ]
 );
 
 export const attachments = pgTable(

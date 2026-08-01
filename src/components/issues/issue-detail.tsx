@@ -21,6 +21,7 @@ import { useIssueDetail } from "@/lib/hooks/queries";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import type {
   ActivityItem,
+  CommentItem,
   IssueDetailData,
   Member,
 } from "@/lib/types";
@@ -141,9 +142,16 @@ export function IssueDetail({
     }
   }
 
-  function submitComment(body: string, attachments: AttachmentInput[]) {
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+
+  function submitComment(
+    body: string,
+    attachments: AttachmentInput[],
+    parentId?: string
+  ) {
     startTransition(async () => {
-      await addComment(issue.id, body, attachments);
+      await addComment(issue.id, body, attachments, parentId ?? null);
+      setReplyingTo(null);
       await refreshDetail();
     });
   }
@@ -164,9 +172,21 @@ export function IssueDetail({
     });
   }
 
+  // Replies render nested under their root comment; only top-level comments
+  // appear in the chronological feed.
+  const repliesByParent = new Map<string, CommentItem[]>();
+  for (const c of comments) {
+    if (!c.parentId) continue;
+    const list = repliesByParent.get(c.parentId) ?? [];
+    list.push(c);
+    repliesByParent.set(c.parentId, list);
+  }
+
   const feed = [
     ...activities.map((a) => ({ kind: "activity" as const, at: a.createdAt, a })),
-    ...comments.map((c) => ({ kind: "comment" as const, at: c.createdAt, c })),
+    ...comments
+      .filter((c) => !c.parentId)
+      .map((c) => ({ kind: "comment" as const, at: c.createdAt, c })),
   ].sort((x, y) => new Date(x.at).getTime() - new Date(y.at).getTime());
 
   if (isPending && !data) {
@@ -272,6 +292,52 @@ export function IssueDetail({
                     onDeleteSaved={onDeleteAttachment}
                     className="mt-2"
                   />
+
+                  {(repliesByParent.get(item.c.id) ?? []).map((reply) => (
+                    <div
+                      key={reply.id}
+                      className="mt-3 border-l-2 border-border/70 pl-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <UserAvatar user={reply.author} className="size-4.5" />
+                        <span className="text-[13px] font-medium">
+                          {reply.author?.name ?? "Unknown"}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {timeAgo(reply.createdAt)}
+                        </span>
+                      </div>
+                      <CommentBody body={reply.body} members={members} />
+                      <AttachmentThumbnails
+                        saved={reply.attachments}
+                        onDeleteSaved={onDeleteAttachment}
+                        className="mt-2"
+                      />
+                    </div>
+                  ))}
+
+                  {replyingTo === item.c.id ? (
+                    <CommentComposer
+                      members={members}
+                      pending={pending}
+                      autoFocus
+                      placeholder="Write a reply…"
+                      submitLabel="Reply"
+                      onCancel={() => setReplyingTo(null)}
+                      onSubmit={(body, attachments) =>
+                        submitComment(body, attachments, item.c.id)
+                      }
+                      className="mt-3"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(item.c.id)}
+                      className="mt-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Reply
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div key={`a-${item.a.id}`} className="flex items-center gap-2 px-1 text-xs text-muted-foreground">

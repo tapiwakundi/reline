@@ -76,6 +76,7 @@ export type DetailIssue = {
 
 export type CommentItem = {
   id: string;
+  parentId: string | null;
   body: string;
   createdAt: string;
   author: Member | null;

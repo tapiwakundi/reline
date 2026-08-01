@@ -35,10 +35,21 @@ export function CommentComposer({
   members,
   onSubmit,
   pending,
+  placeholder = "Leave a comment… Use @ to mention",
+  submitLabel = "Comment",
+  autoFocus,
+  onCancel,
+  className,
 }: {
   members: Member[];
   onSubmit: (body: string, attachments: AttachmentInput[]) => void;
   pending?: boolean;
+  placeholder?: string;
+  submitLabel?: string;
+  autoFocus?: boolean;
+  /** When set, shows a Cancel button (used for inline reply composers). */
+  onCancel?: () => void;
+  className?: string;
 }) {
   const [value, setValue] = useState("");
   const [mention, setMention] = useState<MentionState | null>(null);
@@ -98,7 +109,7 @@ export function CommentComposer({
 
   return (
     <div
-      className="relative mt-6 rounded-lg border border-border bg-card"
+      className={cn("relative mt-6 rounded-lg border border-border bg-card", className)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         const files = mediaFiles(e.dataTransfer.files);
@@ -177,6 +188,11 @@ export function CommentComposer({
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();
             submit();
+            return;
+          }
+          if (e.key === "Escape" && onCancel) {
+            e.preventDefault();
+            onCancel();
           }
         }}
         onPaste={(e) => {
@@ -186,8 +202,9 @@ export function CommentComposer({
             uploads.addFiles(files);
           }
         }}
-        placeholder="Leave a comment… Use @ to mention"
-        rows={3}
+        placeholder={placeholder}
+        autoFocus={autoFocus}
+        rows={onCancel ? 2 : 3}
         className="w-full resize-none bg-transparent p-3 text-[13px] outline-none placeholder:text-muted-foreground/50"
       />
       <AttachmentThumbnails
@@ -200,6 +217,17 @@ export function CommentComposer({
         <span className="mr-auto text-[11px] text-muted-foreground">
           @ to mention · ⌘↵ to send
         </span>
+        {onCancel && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs"
+            onClick={onCancel}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+        )}
         <Button
           size="sm"
           className="h-7 text-xs"
@@ -210,7 +238,7 @@ export function CommentComposer({
             (!value.trim() && uploads.toInput().length === 0)
           }
         >
-          Comment
+          {submitLabel}
         </Button>
       </div>
     </div>

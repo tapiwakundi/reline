@@ -386,16 +386,27 @@ export async function deleteAttachment(attachmentId: string) {
 export async function addComment(
   issueId: string,
   body: string,
-  attachmentInput?: AttachmentInput[]
+  attachmentInput?: AttachmentInput[],
+  parentId?: string | null
 ) {
   const { workspace, user } = await requireWorkspace();
   const issue = await ownedIssue(issueId, workspace.id);
   const trimmed = body.trim();
   if (!trimmed && !attachmentInput?.length) return;
 
+  // Replies attach to the thread's root comment (threads are one level deep).
+  let resolvedParentId: string | null = null;
+  if (parentId) {
+    const parent = await db.query.comments.findFirst({
+      where: and(eq(comments.id, parentId), eq(comments.issueId, issueId)),
+    });
+    if (!parent) throw new Error("Comment to reply to was not found");
+    resolvedParentId = parent.parentId ?? parent.id;
+  }
+
   const [comment] = await db
     .insert(comments)
-    .values({ issueId, authorId: user.id, body: trimmed })
+    .values({ issueId, authorId: user.id, body: trimmed, parentId: resolvedParentId })
     .returning();
 
   if (attachmentInput?.length) {

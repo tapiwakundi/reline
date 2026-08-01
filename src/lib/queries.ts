@@ -271,6 +271,7 @@ export async function getIssueDetail(
     },
     comments: commentRows.map((c) => ({
       id: c.id,
+      parentId: c.parentId,
       body: c.body,
       createdAt: c.createdAt.toISOString(),
       author: c.author
