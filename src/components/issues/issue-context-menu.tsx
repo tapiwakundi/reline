@@ -29,17 +29,20 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { deleteIssue, updateIssue } from "@/lib/actions/issues";
-import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { useWorkspace } from "@/lib/workspace-context";
-import { invalidateAfterIssueChange } from "@/lib/invalidate";
+import {
+  optimisticDeleteIssue,
+  optimisticUpdateIssue,
+  resolveIssuePatch,
+  type IssuePatch,
+} from "@/lib/optimistic-issues";
 import { PRIORITIES } from "@/lib/defaults";
 import type { IssueListItem } from "@/lib/types";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
 
-export type IssuePatch = Parameters<typeof updateIssue>[1];
+export type { IssuePatch };
 
 export function IssueContextMenu({
   issue,
@@ -61,10 +64,19 @@ export function IssueContextMenu({
   const currentStatus = statuses.find((s) => s.id === issue.statusId);
 
   function patch(p: IssuePatch) {
-    onOptimisticUpdate?.(p);
+    const resolved = resolveIssuePatch(p, issue.statusId, statuses);
+    onOptimisticUpdate?.(resolved);
     startTransition(async () => {
-      await updateIssue(issue.id, p);
-      await invalidateAfterIssueChange(qc);
+      await optimisticUpdateIssue(
+        qc,
+        {
+          id: issue.id,
+          identifier: issue.identifier,
+          statusId: issue.statusId,
+        },
+        resolved,
+        statuses
+      );
     });
   }
 
@@ -84,9 +96,10 @@ export function IssueContextMenu({
   function onDelete() {
     onOptimisticDelete?.();
     startTransition(async () => {
-      await deleteIssue(issue.id);
-      toast.success(`${issue.identifier} deleted`);
-      await invalidateAfterIssueChange(qc);
+      await optimisticDeleteIssue(qc, {
+        id: issue.id,
+        identifier: issue.identifier,
+      });
     });
   }
 
@@ -228,18 +241,9 @@ export function IssueContextMenu({
             <ContextMenuSubContent className="w-52">
               <ContextMenuRadioGroup
                 value={issue.cycleId ?? "none"}
-                onValueChange={(v) => {
-                  const cycleId = v === "none" ? null : v;
-                  const statusId = todoStatusIdForCycleEntry(
-                    statuses,
-                    issue.statusId,
-                    cycleId
-                  );
-                  patch({
-                    cycleId,
-                    ...(statusId ? { statusId } : {}),
-                  });
-                }}
+                onValueChange={(v) =>
+                  patch({ cycleId: v === "none" ? null : v })
+                }
               >
                 <ContextMenuLabel>Change cycle…</ContextMenuLabel>
                 <ContextMenuRadioItem value="none">

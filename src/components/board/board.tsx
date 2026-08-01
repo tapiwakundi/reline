@@ -63,6 +63,11 @@ import type {
   BoardOrdering,
 } from "@/lib/board-display";
 import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import {
+  applyPatchToListItem,
+  resolveIssuePatch,
+  type IssuePatch,
+} from "@/lib/optimistic-issues";
 import type { StatusRow } from "@/lib/types";
 
 type BoardColumnDef = {
@@ -171,7 +176,7 @@ function Column({
   dragging: boolean;
   onNewIssue: () => void;
   properties: BoardCardProperty[];
-  onIssuePatch: (issueId: string, patch: Partial<IssueListItem>) => void;
+  onIssuePatch: (issueId: string, patch: IssuePatch) => void;
   onIssueDelete: (issueId: string) => void;
 }) {
   const { setNodeRef } = useDroppable({
@@ -689,23 +694,26 @@ export function Board({
                   }
                   properties={prefs.properties}
                   onIssuePatch={(issueId, patch) => {
+                    const current = issueMap.get(issueId);
+                    if (!current) return;
+                    // Local board state only — React Query is updated by
+                    // optimisticUpdateIssue so rollback snapshots stay correct.
+                    const resolved = resolveIssuePatch(
+                      patch,
+                      current.statusId,
+                      statuses
+                    );
+                    suppressServerSyncUntil.current = Date.now() + 4000;
                     setIssues((prev) =>
-                      prev.map((i) => {
-                        if (i.id !== issueId) return i;
-                        const next = { ...i, ...patch };
-                        if (patch.cycleId && !patch.statusId) {
-                          const statusId = todoStatusIdForCycleEntry(
-                            statuses,
-                            i.statusId,
-                            patch.cycleId
-                          );
-                          if (statusId) next.statusId = statusId;
-                        }
-                        return next;
-                      })
+                      prev.map((i) =>
+                        i.id === issueId
+                          ? applyPatchToListItem(i, resolved)
+                          : i
+                      )
                     );
                   }}
                   onIssueDelete={(issueId) => {
+                    suppressServerSyncUntil.current = Date.now() + 4000;
                     setIssues((prev) => prev.filter((i) => i.id !== issueId));
                   }}
                 />

@@ -4,21 +4,20 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { ChevronRightIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  addComment,
-  attachToIssue,
-  deleteAttachment,
-  deleteIssue,
-  updateIssue,
-  type AttachmentInput,
-} from "@/lib/actions/issues";
+import { attachToIssue, type AttachmentInput } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useIssueDetail } from "@/lib/hooks/queries";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
+import {
+  optimisticAddComment,
+  optimisticDeleteAttachment,
+  optimisticDeleteIssue,
+  optimisticUpdateIssue,
+  type IssuePatch,
+} from "@/lib/optimistic-issues";
 import type {
   ActivityItem,
   CommentItem,
@@ -76,7 +75,7 @@ export function IssueDetail({
   const { data, isPending } = useIssueDetail(key, initialData);
   const detail = data ?? initialData;
   const { issue, comments, activities } = detail;
-  const { members, labels } = useWorkspace();
+  const { members, labels, statuses, me } = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
@@ -139,10 +138,18 @@ export function IssueDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- persist each finished upload once
   }, [uploads, issue.id]);
 
-  function patch(p: Parameters<typeof updateIssue>[1]) {
+  function patch(p: IssuePatch) {
     startTransition(async () => {
-      await updateIssue(issue.id, p);
-      await refreshDetail();
+      await optimisticUpdateIssue(
+        qc,
+        {
+          id: issue.id,
+          identifier: issue.identifier,
+          statusId: issue.statusId,
+        },
+        p,
+        statuses
+      );
     });
   }
 
@@ -159,25 +166,35 @@ export function IssueDetail({
     attachments: AttachmentInput[],
     parentId?: string
   ) {
+    setReplyingTo(null);
     startTransition(async () => {
-      await addComment(issue.id, body, attachments, parentId ?? null);
-      setReplyingTo(null);
-      await refreshDetail();
+      await optimisticAddComment(
+        qc,
+        { id: issue.id, identifier: issue.identifier },
+        body,
+        me,
+        attachments,
+        parentId ?? null
+      );
     });
   }
 
   function onDeleteAttachment(id: string) {
     startTransition(async () => {
-      await deleteAttachment(id);
-      await refreshDetail();
+      await optimisticDeleteAttachment(
+        qc,
+        { identifier: issue.identifier },
+        id
+      );
     });
   }
 
   function onDelete() {
     startTransition(async () => {
-      await deleteIssue(issue.id);
-      toast.success(`${issue.identifier} deleted`);
-      await invalidateAfterIssueChange(qc);
+      await optimisticDeleteIssue(qc, {
+        id: issue.id,
+        identifier: issue.identifier,
+      });
       router.push("/issues");
     });
   }
