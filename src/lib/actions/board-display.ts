@@ -6,7 +6,7 @@ import { db } from "@/db";
 import { memberships } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
 import type { BoardDisplayPrefs } from "@/lib/board-display";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 export async function updateBoardDisplayPrefs(prefs: BoardDisplayPrefs) {
   const { membership, workspace } = await requireWorkspace();

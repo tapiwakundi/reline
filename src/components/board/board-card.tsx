@@ -6,7 +6,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import type { IssueListItem } from "@/lib/types";
 import type { BoardCardProperty } from "@/lib/board-display";
 import { PriorityIcon } from "@/components/priority-icon";

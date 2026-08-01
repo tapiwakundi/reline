@@ -30,7 +30,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import {
   optimisticDeleteIssue,
   optimisticUpdateIssue,

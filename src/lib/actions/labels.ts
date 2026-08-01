@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { labels } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 export async function createLabel(name: string, color: string) {
   const { workspace } = await requireWorkspace();

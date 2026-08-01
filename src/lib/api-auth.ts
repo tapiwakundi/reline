@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { db } from "@/db";
 import { memberships, workspaces } from "@/db/schema";
 import { getSession } from "@/lib/session";
-import { WORKSPACE_SLUG_COOKIE } from "@/lib/workspace-slug";
+import { WORKSPACE_SLUG_COOKIE } from "@/lib/workspace-paths";
 
 async function slugFromRequest(req?: Request): Promise<string | undefined> {
   const header = req?.headers.get("x-workspace-slug")?.trim();

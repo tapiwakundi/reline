@@ -40,7 +40,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useCycles } from "@/lib/hooks/queries";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
 import { CyclesSkeleton } from "@/components/skeletons/page-skeletons";

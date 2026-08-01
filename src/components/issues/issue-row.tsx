@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import {
   optimisticUpdateIssue,
   type IssuePatch,

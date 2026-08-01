@@ -4,12 +4,6 @@ import { db } from "@/db";
 import { workspaces } from "@/db/schema";
 import { RESERVED_SLUGS } from "@/lib/workspace-paths";
 
-export {
-  RESERVED_SLUGS,
-  WORKSPACE_SLUG_COOKIE,
-  wsPath,
-} from "@/lib/workspace-paths";
-
 export function slugifyName(name: string): string {
   const base = name
     .toLowerCase()
@@ -20,7 +14,7 @@ export function slugifyName(name: string): string {
   return base || "workspace";
 }
 
-/** Allocate a unique slug derived from a workspace name. */
+/** Allocate a unique slug derived from a workspace name. Server-only. */
 export async function allocateUniqueSlug(name: string): Promise<string> {
   let candidate = slugifyName(name);
   if (RESERVED_SLUGS.has(candidate)) {

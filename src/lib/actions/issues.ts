@@ -19,7 +19,7 @@ import { notifyIssueEvent, recordActivity } from "@/lib/notify";
 import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { classifyContentType, deleteObjects, MAX_ATTACHMENTS } from "@/lib/r2";
 import { revalidateWorkspaceLists } from "@/lib/revalidate";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 export type AttachmentInput = {
   key: string;

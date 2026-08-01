@@ -32,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import { useUnreadCount } from "@/lib/hooks/queries";
 import { useShortcuts } from "@/components/global-shortcuts";
 import { UserAvatar } from "@/components/user-avatar";

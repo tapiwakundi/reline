@@ -12,7 +12,7 @@ import {
 } from "@/lib/actions/notifications";
 import { useInbox } from "@/lib/hooks/queries";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import { invalidateAfterNotificationChange } from "@/lib/invalidate";
 import type { InboxItem } from "@/lib/types";
 import { UserAvatar } from "@/components/user-avatar";

@@ -5,7 +5,7 @@ import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issues, statuses, workspaces } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 function revalidateCycleViews(slug: string) {
   revalidatePath(wsPath(slug, "/cycles"));

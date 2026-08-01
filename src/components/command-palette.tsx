@@ -22,7 +22,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 type PaletteIssue = { id: string; identifier: string; title: string };
 

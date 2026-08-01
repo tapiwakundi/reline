@@ -7,7 +7,7 @@ import { cycles, issueLabels, issues, labels, workspaces } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
 import { getWorkspaceData } from "@/lib/queries";
 import { LABEL_COLORS } from "@/lib/defaults";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 import {
   adfToText,
   mapJiraAssignee,

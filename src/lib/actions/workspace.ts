@@ -15,11 +15,8 @@ import {
 import { requireSession, requireWorkspace, getUserWorkspaces } from "@/lib/session";
 import { DEFAULT_STATUSES } from "@/lib/defaults";
 import { deleteObjects } from "@/lib/r2";
-import {
-  allocateUniqueSlug,
-  WORKSPACE_SLUG_COOKIE,
-  wsPath,
-} from "@/lib/workspace-slug";
+import { allocateUniqueSlug } from "@/lib/workspace-slug";
+import { WORKSPACE_SLUG_COOKIE, wsPath } from "@/lib/workspace-paths";
 
 async function setWorkspaceCookie(slug: string) {
   const cookieStore = await cookies();

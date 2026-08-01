@@ -12,7 +12,7 @@ import {
   normalizeBoardDisplayPrefs,
 } from "@/lib/board-display";
 import { Board } from "@/components/board/board";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 export default async function BoardPage({
   params,

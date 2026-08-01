@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache";
-import { wsPath } from "@/lib/workspace-slug";
+import { wsPath } from "@/lib/workspace-paths";
 
 /** Revalidate common workspace-scoped list views. */
 export function revalidateWorkspaceLists(slug: string) {
