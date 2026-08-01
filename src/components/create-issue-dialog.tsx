@@ -23,10 +23,13 @@ export function CreateIssueDialog({
   open,
   onOpenChange,
   defaultStatusId,
+  defaultCycleId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultStatusId?: string;
+  /** When set (including `null` for "no cycle"), prefill the cycle picker. */
+  defaultCycleId?: string | null;
 }) {
   const { workspace, statuses } = useWorkspace();
   const qc = useQueryClient();
@@ -54,10 +57,10 @@ export function CreateIssueDialog({
     setStatusId(defaultStatusId ?? fallbackStatus);
     setPriority(0);
     setAssigneeId(null);
-    setCycleId(null);
+    setCycleId(defaultCycleId ?? null);
     setLabelIds([]);
     clearUploads();
-  }, [open, defaultStatusId, fallbackStatus, clearUploads]);
+  }, [open, defaultStatusId, defaultCycleId, fallbackStatus, clearUploads]);
 
   function submit() {
     if (!title.trim() || uploads.uploading) {

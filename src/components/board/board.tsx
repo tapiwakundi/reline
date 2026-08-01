@@ -42,6 +42,7 @@ import { queryKeys } from "@/lib/query-keys";
 import type { IssueListItem } from "@/lib/types";
 import {
   applyFilters,
+  defaultCycleIdFromFilters,
   parseFilters,
   serializeBoardFilters,
   type IssueFilters,
@@ -302,6 +303,12 @@ export function Board({
   const visible = useMemo(
     () => applyFilters(issues, filters, cycles),
     [issues, filters, cycles]
+  );
+
+  // Prefill create-issue with the board's cycle when the view is scoped to one.
+  const defaultCycleId = useMemo(
+    () => defaultCycleIdFromFilters(filters, cycles),
+    [filters, cycles]
   );
 
   const boardColumns = useMemo((): BoardColumnDef[] => {
@@ -624,7 +631,7 @@ export function Board({
           <Button
             size="sm"
             className="h-7 gap-1 text-xs"
-            onClick={() => openCreateIssue()}
+            onClick={() => openCreateIssue({ cycleId: defaultCycleId })}
           >
             <PlusIcon className="size-3.5" />
             New issue
@@ -656,7 +663,19 @@ export function Board({
                   column={c}
                   issues={issuesForColumn(c.key)}
                   dragging={!!activeId}
-                  onNewIssue={() => openCreateIssue(c.statusId)}
+                  onNewIssue={() =>
+                    openCreateIssue({
+                      statusId: c.statusId,
+                      // When columns are grouped by cycle, prefer the column;
+                      // otherwise use the board's active cycle filter.
+                      cycleId:
+                        prefs.columns === "cycle"
+                          ? c.key === "none"
+                            ? null
+                            : c.key
+                          : defaultCycleId,
+                    })
+                  }
                   properties={prefs.properties}
                   onIssuePatch={(issueId, patch) => {
                     setIssues((prev) =>

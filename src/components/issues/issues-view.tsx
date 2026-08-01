@@ -98,7 +98,7 @@ export function IssuesView({
           <Button
             size="sm"
             className="h-7 gap-1 text-xs"
-            onClick={() => openCreateIssue(defaultStatusId)}
+            onClick={() => openCreateIssue({ statusId: defaultStatusId })}
           >
             <PlusIcon className="size-3.5" />
             New issue
@@ -112,7 +112,7 @@ export function IssuesView({
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => openCreateIssue(defaultStatusId)}
+              onClick={() => openCreateIssue({ statusId: defaultStatusId })}
             >
               Create an issue
             </Button>

@@ -152,6 +152,24 @@ export function resolveCycleMatchSet(
   return match;
 }
 
+/**
+ * When the board is scoped to exactly one concrete cycle, return that id so
+ * new issues can default into it. Returns `null` for an explicit "No cycle"
+ * filter, and `undefined` when there's no single cycle to assume.
+ */
+export function defaultCycleIdFromFilters(
+  filters: IssueFilters,
+  cycles: CycleRow[]
+): string | null | undefined {
+  if (filters.cycleIds.length === 0) return undefined;
+  const match = resolveCycleMatchSet(filters.cycleIds, cycles);
+  if (match.size === 0) return undefined;
+  if (match.size === 1 && match.has("none")) return null;
+  const ids = [...match].filter((id) => id !== "none");
+  if (ids.length === 1) return ids[0]!;
+  return undefined;
+}
+
 export function applyFilters(
   issues: IssueListItem[],
   f: IssueFilters,

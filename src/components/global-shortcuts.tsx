@@ -4,8 +4,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { CommandPalette } from "@/components/command-palette";
 import { CreateIssueDialog } from "@/components/create-issue-dialog";
 
+export type CreateIssueDefaults = {
+  statusId?: string;
+  cycleId?: string | null;
+};
+
 const ShortcutsContext = createContext<{
-  openCreateIssue: (statusId?: string) => void;
+  openCreateIssue: (defaults?: CreateIssueDefaults) => void;
   openPalette: () => void;
 }>({ openCreateIssue: () => {}, openPalette: () => {} });
 
@@ -21,11 +26,11 @@ function isTyping(target: EventTarget | null) {
 
 export function GlobalShortcuts({ children }: { children: React.ReactNode }) {
   const [createOpen, setCreateOpen] = useState(false);
-  const [defaultStatusId, setDefaultStatusId] = useState<string | undefined>();
+  const [defaults, setDefaults] = useState<CreateIssueDefaults>({});
   const [paletteOpen, setPaletteOpen] = useState(false);
 
-  function openCreateIssue(statusId?: string) {
-    setDefaultStatusId(statusId);
+  function openCreateIssue(next: CreateIssueDefaults = {}) {
+    setDefaults(next);
     setCreateOpen(true);
   }
 
@@ -58,9 +63,10 @@ export function GlobalShortcuts({ children }: { children: React.ReactNode }) {
         open={createOpen}
         onOpenChange={(open) => {
           setCreateOpen(open);
-          if (!open) setDefaultStatusId(undefined);
+          if (!open) setDefaults({});
         }}
-        defaultStatusId={defaultStatusId}
+        defaultStatusId={defaults.statusId}
+        defaultCycleId={defaults.cycleId}
       />
       <CommandPalette
         open={paletteOpen}
