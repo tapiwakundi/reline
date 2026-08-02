@@ -104,14 +104,21 @@ export function IssueDetail({
   const uploads = useAttachmentUploads();
   const persisted = useRef(new Set<string>());
 
-  // Auto-grow the title textarea so long titles wrap instead of clipping.
+  // Auto-grow textareas so content isn't clipped behind an inner scrollbar.
   const titleRef = useRef<HTMLTextAreaElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = titleRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [title]);
+  useEffect(() => {
+    const el = descriptionRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 96)}px`;
+  }, [description]);
 
   async function refreshDetail() {
     await invalidateAfterIssueChange(qc, workspace.id);
@@ -267,6 +274,7 @@ export function IssueDetail({
             placeholder="Issue title"
           />
           <textarea
+            ref={descriptionRef}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             onBlur={saveText}
@@ -278,8 +286,8 @@ export function IssueDetail({
               }
             }}
             placeholder="Add description…"
-            rows={Math.max(4, description.split("\n").length + 1)}
-            className="mt-3 w-full resize-none bg-transparent text-sm leading-6 text-foreground/90 outline-none placeholder:text-muted-foreground/50"
+            rows={4}
+            className="mt-3 w-full resize-none overflow-hidden bg-transparent text-sm leading-6 text-foreground/90 outline-none placeholder:text-muted-foreground/50"
           />
 
           <div
