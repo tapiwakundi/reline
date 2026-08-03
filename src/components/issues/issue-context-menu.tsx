@@ -65,7 +65,7 @@ export function IssueContextMenu({
   const currentStatus = statuses.find((s) => s.id === issue.statusId);
 
   function patch(p: IssuePatch) {
-    const resolved = resolveIssuePatch(p, issue.statusId, statuses);
+    const resolved = resolveIssuePatch(p, issue, statuses, cycles);
     onOptimisticUpdate?.(resolved);
     startTransition(async () => {
       await optimisticUpdateIssue(
@@ -75,9 +75,11 @@ export function IssueContextMenu({
           id: issue.id,
           identifier: issue.identifier,
           statusId: issue.statusId,
+          cycleId: issue.cycleId,
         },
         resolved,
-        statuses
+        statuses,
+        cycles
       );
     });
   }

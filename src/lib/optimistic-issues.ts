@@ -9,11 +9,16 @@ import {
   updateIssue,
   type AttachmentInput,
 } from "@/lib/actions/issues";
-import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import {
+  activeCycleIdFromRows,
+  cycleIdForTodoEntry,
+  todoStatusIdForCycleEntry,
+} from "@/lib/issue-cycle";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import { queryKeys } from "@/lib/query-keys";
 import type {
   CommentItem,
+  CycleRow,
   DetailIssue,
   IssueDetailData,
   IssueListItem,
@@ -25,18 +30,33 @@ export type IssuePatch = Parameters<typeof updateIssue>[1];
 
 export function resolveIssuePatch(
   patch: IssuePatch,
-  currentStatusId: string,
-  statuses: StatusRow[]
+  issue: { statusId: string; cycleId?: string | null },
+  statuses: StatusRow[],
+  cycles: CycleRow[] = []
 ): IssuePatch {
-  if (patch.cycleId && !patch.statusId) {
+  let next = patch;
+
+  if (next.cycleId && !next.statusId) {
     const statusId = todoStatusIdForCycleEntry(
       statuses,
-      currentStatusId,
-      patch.cycleId
+      issue.statusId,
+      next.cycleId
     );
-    if (statusId) return { ...patch, statusId };
+    if (statusId) next = { ...next, statusId };
   }
-  return patch;
+
+  if (next.statusId && next.cycleId === undefined) {
+    const cycleId = cycleIdForTodoEntry(
+      statuses,
+      issue.statusId,
+      next.statusId,
+      issue.cycleId,
+      activeCycleIdFromRows(cycles)
+    );
+    if (cycleId) next = { ...next, cycleId };
+  }
+
+  return next;
 }
 
 export function applyPatchToListItem(
@@ -136,11 +156,17 @@ export function removeIssueFromCaches(
 export async function optimisticUpdateIssue(
   qc: QueryClient,
   workspaceId: string,
-  issue: { id: string; identifier: string; statusId: string },
+  issue: {
+    id: string;
+    identifier: string;
+    statusId: string;
+    cycleId?: string | null;
+  },
   patch: IssuePatch,
-  statuses: StatusRow[]
+  statuses: StatusRow[],
+  cycles: CycleRow[] = []
 ) {
-  const resolved = resolveIssuePatch(patch, issue.statusId, statuses);
+  const resolved = resolveIssuePatch(patch, issue, statuses, cycles);
   await qc.cancelQueries({ queryKey: queryKeys.issues.all(workspaceId) });
   const snapshot = snapshotIssueQueries(qc, workspaceId);
   applyIssuePatchToCaches(qc, workspaceId, issue, resolved);

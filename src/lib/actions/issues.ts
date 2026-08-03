@@ -6,6 +6,7 @@ import { db } from "@/db";
 import {
   attachments,
   comments,
+  cycles,
   issueLabels,
   issues,
   notifications,
@@ -16,7 +17,11 @@ import { requireWorkspace } from "@/lib/session";
 import { getWorkspaceData } from "@/lib/queries";
 import { resolveMentions } from "@/lib/mentions";
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
-import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import {
+  activeCycleIdFromRows,
+  cycleIdForTodoEntry,
+  todoStatusIdForCycleEntry,
+} from "@/lib/issue-cycle";
 import { classifyContentType, deleteObjects, MAX_ATTACHMENTS } from "@/lib/r2";
 import { revalidateWorkspaceLists } from "@/lib/revalidate";
 import { wsPath } from "@/lib/workspace-paths";
@@ -84,6 +89,33 @@ async function statusIdWhenEnteringCycle(
     workspaceStatuses,
     currentStatusId,
     cycleId
+  );
+}
+
+/** Assign current cycle when moving Backlog → Todo. */
+async function cycleIdWhenLeavingBacklogToTodo(
+  workspaceId: string,
+  currentStatusId: string,
+  nextStatusId: string,
+  existingCycleId: string | null
+): Promise<string | undefined> {
+  if (existingCycleId) return undefined;
+  const [workspaceStatuses, cycleRows] = await Promise.all([
+    db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspaceId),
+      columns: { id: true, type: true },
+    }),
+    db.query.cycles.findMany({
+      where: eq(cycles.workspaceId, workspaceId),
+      columns: { id: true, status: true, startDate: true, endDate: true },
+    }),
+  ]);
+  return cycleIdForTodoEntry(
+    workspaceStatuses,
+    currentStatusId,
+    nextStatusId,
+    existingCycleId,
+    activeCycleIdFromRows(cycleRows)
   );
 }
 
@@ -204,6 +236,18 @@ export async function updateIssue(
     if (promoted) fields.statusId = promoted;
   }
 
+  // Moving Backlog → Todo also assigns the current cycle, unless the caller
+  // is already setting an explicit cycle (including clearing it).
+  if (fields.statusId && fields.cycleId === undefined) {
+    const assigned = await cycleIdWhenLeavingBacklogToTodo(
+      workspace.id,
+      before.statusId,
+      fields.statusId,
+      before.cycleId
+    );
+    if (assigned) fields.cycleId = assigned;
+  }
+
   if (Object.keys(fields).length > 0) {
     await db
       .update(issues)
@@ -273,9 +317,21 @@ export async function moveIssueOnBoard(
   const { workspace, user } = await requireWorkspace();
   const before = await ownedIssue(issueId, workspace.id);
 
+  const fields: { statusId: string; boardOrder: number; cycleId?: string } = {
+    statusId,
+    boardOrder,
+  };
+  const assigned = await cycleIdWhenLeavingBacklogToTodo(
+    workspace.id,
+    before.statusId,
+    statusId,
+    before.cycleId
+  );
+  if (assigned) fields.cycleId = assigned;
+
   await db
     .update(issues)
-    .set({ statusId, boardOrder, updatedAt: new Date() })
+    .set({ ...fields, updatedAt: new Date() })
     .where(eq(issues.id, issueId));
 
   // Skip revalidating /board — the board already updated optimistically.

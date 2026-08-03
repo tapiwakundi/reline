@@ -23,7 +23,7 @@ function formatDate(iso: string) {
 }
 
 export function IssueRow({ issue }: { issue: IssueListItem }) {
-  const { workspace, labels, statuses } = useWorkspace();
+  const { workspace, labels, statuses, cycles } = useWorkspace();
   const qc = useQueryClient();
   const [, startTransition] = useTransition();
 
@@ -38,9 +38,11 @@ export function IssueRow({ issue }: { issue: IssueListItem }) {
           id: issue.id,
           identifier: issue.identifier,
           statusId: issue.statusId,
+          cycleId: issue.cycleId,
         },
         p,
-        statuses
+        statuses,
+        cycles
       );
     });
   }

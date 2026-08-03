@@ -62,7 +62,11 @@ import type {
   BoardDisplayPrefs,
   BoardOrdering,
 } from "@/lib/board-display";
-import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import {
+  activeCycleIdFromRows,
+  cycleIdForTodoEntry,
+  todoStatusIdForCycleEntry,
+} from "@/lib/issue-cycle";
 import {
   applyPatchToListItem,
   resolveIssuePatch,
@@ -97,11 +101,21 @@ function applyGroupToIssue(
   issue: IssueListItem,
   group: BoardColumnsGroup,
   key: string,
-  statuses: StatusRow[] = []
+  statuses: StatusRow[] = [],
+  activeCycleId: string | null = null
 ): IssueListItem {
   switch (group) {
-    case "status":
-      return { ...issue, statusId: key };
+    case "status": {
+      const cycleId =
+        cycleIdForTodoEntry(
+          statuses,
+          issue.statusId,
+          key,
+          issue.cycleId,
+          activeCycleId
+        ) ?? issue.cycleId;
+      return { ...issue, statusId: key, cycleId };
+    }
     case "assignee":
       return { ...issue, assigneeId: key === "none" ? null : key };
     case "priority":
@@ -323,6 +337,10 @@ export function Board({
     () => defaultCycleIdFromFilters(filters, cycles),
     [filters, cycles]
   );
+  const activeCycleId = useMemo(
+    () => activeCycleIdFromRows(cycles),
+    [cycles]
+  );
 
   const boardColumns = useMemo((): BoardColumnDef[] => {
     switch (prefs.columns) {
@@ -513,7 +531,13 @@ export function Board({
     setIssues((prev) =>
       prev.map((i) =>
         i.id === activeIssueId
-          ? applyGroupToIssue(i, prefs.columns, overContainer, statuses)
+          ? applyGroupToIssue(
+              i,
+              prefs.columns,
+              overContainer,
+              statuses,
+              activeCycleId
+            )
           : i
       )
     );
@@ -589,7 +613,13 @@ export function Board({
       const next = prevIssues.map((i) =>
         i.id === issueId
           ? {
-              ...applyGroupToIssue(i, prefs.columns, overContainer, statuses),
+              ...applyGroupToIssue(
+                i,
+                prefs.columns,
+                overContainer,
+                statuses,
+                activeCycleId
+              ),
               boardOrder,
             }
           : i
@@ -629,7 +659,13 @@ export function Board({
         if (!issue) return null;
         return groupKeyOf(issue, prefs.columns) === columnKey
           ? issue
-          : applyGroupToIssue(issue, prefs.columns, columnKey, statuses);
+          : applyGroupToIssue(
+              issue,
+              prefs.columns,
+              columnKey,
+              statuses,
+              activeCycleId
+            );
       })
       .filter((i): i is IssueListItem => !!i);
   }
@@ -703,8 +739,9 @@ export function Board({
                     // optimisticUpdateIssue so rollback snapshots stay correct.
                     const resolved = resolveIssuePatch(
                       patch,
-                      current.statusId,
-                      statuses
+                      current,
+                      statuses,
+                      cycles
                     );
                     suppressServerSyncUntil.current = Date.now() + 4000;
                     setIssues((prev) =>

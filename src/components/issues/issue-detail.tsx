@@ -76,7 +76,7 @@ export function IssueDetail({
   const { data, isPending } = useIssueDetail(key, initialData);
   const detail = data ?? initialData;
   const { issue, comments, activities } = detail;
-  const { workspace, members, labels, statuses, me } = useWorkspace();
+  const { workspace, members, labels, statuses, cycles, me } = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
@@ -155,9 +155,11 @@ export function IssueDetail({
           id: issue.id,
           identifier: issue.identifier,
           statusId: issue.statusId,
+          cycleId: issue.cycleId,
         },
         p,
-        statuses
+        statuses,
+        cycles
       );
     });
   }
