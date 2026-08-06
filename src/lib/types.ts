@@ -116,6 +116,8 @@ export type CycleListItem = {
   total: number;
   done: number;
   started: number;
+  /** Backlog + Todo (unstarted) issues still on this cycle. */
+  pending: number;
   estimateTotal: number;
   estimateDone: number;
 };

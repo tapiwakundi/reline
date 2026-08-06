@@ -10,6 +10,7 @@ import {
   HistoryIcon,
   MoreHorizontalIcon,
   PauseIcon,
+  PencilIcon,
   PlayIcon,
   PlusIcon,
   RefreshCwIcon,
@@ -32,10 +33,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  completeCycle,
   createCycle,
   deleteCycle,
   startCycle,
+  updateCycle,
 } from "@/lib/actions/cycles";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCycles } from "@/lib/hooks/queries";
@@ -45,6 +46,7 @@ import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
 import { CyclesSkeleton } from "@/components/skeletons/page-skeletons";
 import { MobileNavButton } from "@/components/mobile-nav";
+import { CompleteCycleDialog } from "@/components/cycles/complete-cycle-dialog";
 
 type CycleItem = CycleListItem;
 
@@ -278,10 +280,24 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const list = cycles ?? initialCycles;
   const [pending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState<CycleItem | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [completing, setCompleting] = useState<CycleItem | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(
     () => initialCycles.find((c) => c.status === "active")?.id ?? null
   );
   const defaults = defaultDates();
+
+  const upcomingCycles = useMemo(
+    () =>
+      [...list]
+        .filter((c) => c.status === "planned")
+        .sort(
+          (a, b) =>
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        ),
+    [list]
+  );
 
   const entries = useMemo((): ListEntry[] => {
     const sorted = [...list].sort(
@@ -313,6 +329,31 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       setOpen(false);
       toast.success("Cycle created");
       await invalidateAfterCycleChange(qc, workspace.id);
+    });
+  }
+
+  function openRename(cycle: CycleItem) {
+    setRenaming(cycle);
+    setRenameValue(cycle.name);
+  }
+
+  function rename(form: FormData) {
+    if (!renaming) return;
+    const name = String(form.get("name") ?? "").trim();
+    if (!name) {
+      toast.error("Cycle name is required");
+      return;
+    }
+    const cycleId = renaming.id;
+    startTransition(async () => {
+      try {
+        await updateCycle(cycleId, { name });
+        setRenaming(null);
+        toast.success("Cycle renamed");
+        await invalidateAfterCycleChange(qc, workspace.id);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Couldn't rename cycle");
+      }
     });
   }
 
@@ -513,6 +554,14 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                               <MoreHorizontalIcon className="size-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openRename(c);
+                                }}
+                              >
+                                <PencilIcon /> Rename
+                              </DropdownMenuItem>
                               {c.status === "planned" && (
                                 <DropdownMenuItem
                                   onClick={act(
@@ -525,10 +574,10 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                               )}
                               {c.status === "active" && (
                                 <DropdownMenuItem
-                                  onClick={act(
-                                    () => completeCycle(c.id),
-                                    `${c.name} completed`
-                                  )}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setCompleting(c);
+                                  }}
                                 >
                                   <CheckIcon /> Complete cycle
                                 </DropdownMenuItem>
@@ -608,6 +657,44 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!renaming}
+        onOpenChange={(next) => {
+          if (!next) setRenaming(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename cycle</DialogTitle>
+          </DialogHeader>
+          <form action={rename} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rename-cycle-name">Name</Label>
+              <Input
+                id="rename-cycle-name"
+                name="name"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+            <Button type="submit" disabled={pending || !renameValue.trim()}>
+              Save
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <CompleteCycleDialog
+        cycle={completing}
+        upcomingCycles={upcomingCycles}
+        open={!!completing}
+        onOpenChange={(next) => {
+          if (!next) setCompleting(null);
+        }}
+      />
     </div>
   );
 }

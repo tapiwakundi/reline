@@ -33,7 +33,7 @@ export function invalidateAfterIssueChange(
   ]);
 }
 
-/** After cycle create / start / complete / delete. */
+/** After cycle create / rename / start / complete / delete. */
 export function invalidateAfterCycleChange(
   qc: QueryClient,
   workspaceId: string
@@ -41,6 +41,7 @@ export function invalidateAfterCycleChange(
   return Promise.all([
     invalidateCycles(qc, workspaceId),
     invalidateIssues(qc, workspaceId),
+    invalidateWorkspace(qc, workspaceId),
   ]);
 }
 

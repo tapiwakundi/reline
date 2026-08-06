@@ -185,6 +185,7 @@ export async function getCyclesList(
     const inCycle = issueRows.filter((i) => i.cycleId === c.id);
     let done = 0;
     let started = 0;
+    let pending = 0;
     let estimateTotal = 0;
     let estimateDone = 0;
     for (const i of inCycle) {
@@ -196,6 +197,8 @@ export async function getCyclesList(
         estimateDone += est;
       } else if (type === "started") {
         started++;
+      } else {
+        pending++;
       }
     }
     return {
@@ -208,6 +211,7 @@ export async function getCyclesList(
       total: inCycle.length,
       done,
       started,
+      pending,
       estimateTotal,
       estimateDone,
     };

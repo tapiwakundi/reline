@@ -28,7 +28,7 @@ import {
   arrayMove,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CircleDashedIcon, PlusIcon } from "lucide-react";
+import { CheckIcon, CircleDashedIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   moveIssueOnBoard,
@@ -37,7 +37,7 @@ import {
 } from "@/lib/actions/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useShortcuts } from "@/components/global-shortcuts";
-import { useBoardIssues } from "@/lib/hooks/queries";
+import { useBoardIssues, useCycles } from "@/lib/hooks/queries";
 import { queryKeys } from "@/lib/query-keys";
 import type { IssueListItem } from "@/lib/types";
 import {
@@ -55,6 +55,7 @@ import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
 import { BoardCard, BoardCardContent } from "@/components/board/board-card";
 import { BoardDisplayMenu } from "@/components/board/board-display-menu";
+import { CompleteCycleDialog } from "@/components/cycles/complete-cycle-dialog";
 import { BoardSkeleton } from "@/components/skeletons/page-skeletons";
 import type {
   BoardCardProperty,
@@ -285,9 +286,11 @@ export function Board({
 
   const [issues, setIssues] = useState(initialIssues);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
   );
+  const { data: cycleList } = useCycles();
 
   function onFiltersChange(f: IssueFilters) {
     setFilters(f);
@@ -340,6 +343,24 @@ export function Board({
   const activeCycleId = useMemo(
     () => activeCycleIdFromRows(cycles),
     [cycles]
+  );
+  const scopedActiveCycle = useMemo(() => {
+    if (!defaultCycleId || !cycleList) return null;
+    return (
+      cycleList.find(
+        (c) => c.id === defaultCycleId && c.status === "active"
+      ) ?? null
+    );
+  }, [defaultCycleId, cycleList]);
+  const upcomingCycles = useMemo(
+    () =>
+      (cycleList ?? [])
+        .filter((c) => c.status === "planned")
+        .sort(
+          (a, b) =>
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+        ),
+    [cycleList]
   );
 
   const boardColumns = useMemo((): BoardColumnDef[] => {
@@ -682,6 +703,17 @@ export function Board({
         <span className="text-xs text-muted-foreground">{visible.length}</span>
         <FiltersBar filters={filters} onChange={onFiltersChange} />
         <div className="ml-auto flex items-center gap-2">
+          {scopedActiveCycle && (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 gap-1 text-xs"
+              onClick={() => setCompleteOpen(true)}
+            >
+              <CheckIcon className="size-3.5" />
+              Complete cycle
+            </Button>
+          )}
           <BoardDisplayMenu prefs={prefs} onChange={setPrefs} />
           <Button
             size="sm"
@@ -693,6 +725,17 @@ export function Board({
           </Button>
         </div>
       </header>
+      <CompleteCycleDialog
+        cycle={scopedActiveCycle}
+        upcomingCycles={upcomingCycles}
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        onCompleted={() => {
+          if (filters.cycleIds.length > 0) {
+            onFiltersChange({ ...filters, cycleIds: [] });
+          }
+        }}
+      />
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <DndContext
           id="board-dnd"
