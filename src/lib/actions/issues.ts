@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   attachments,
@@ -207,22 +207,24 @@ export async function createIssue(input: {
   return { id: issue.id, identifier: `${workspace.prefix}-${issue.number}` };
 }
 
-export async function updateIssue(
-  issueId: string,
-  patch: {
-    title?: string;
-    description?: string;
-    statusId?: string;
-    priority?: number;
-    assigneeId?: string | null;
-    cycleId?: string | null;
-    estimate?: number | null;
-    labelIds?: string[];
-  }
-) {
-  const { workspace, user } = await requireWorkspace();
-  const before = await ownedIssue(issueId, workspace.id);
+export type IssueUpdatePatch = {
+  title?: string;
+  description?: string;
+  statusId?: string;
+  priority?: number;
+  assigneeId?: string | null;
+  cycleId?: string | null;
+  estimate?: number | null;
+  labelIds?: string[];
+};
 
+async function applyIssueUpdate(
+  workspace: { id: string; slug: string; prefix: string },
+  user: { id: string },
+  before: typeof issues.$inferSelect,
+  patch: IssueUpdatePatch
+) {
+  const issueId = before.id;
   const { labelIds, ...fields } = patch;
 
   // Moving a backlog issue into a cycle promotes it to Todo, unless the
@@ -304,9 +306,41 @@ export async function updateIssue(
       type: "assigned",
     });
   }
+}
+
+export async function updateIssue(issueId: string, patch: IssueUpdatePatch) {
+  const { workspace, user } = await requireWorkspace();
+  const before = await ownedIssue(issueId, workspace.id);
+  await applyIssueUpdate(workspace, user, before, patch);
+  revalidateIssueViews(workspace.slug);
+  revalidatePath(
+    wsPath(workspace.slug, `/issue/${workspace.prefix}-${before.number}`)
+  );
+}
+
+export async function bulkUpdateIssues(
+  issueIds: string[],
+  patch: IssueUpdatePatch
+) {
+  const uniqueIds = [...new Set(issueIds)];
+  if (uniqueIds.length === 0) return;
+
+  const { workspace, user } = await requireWorkspace();
+  const rows = await db.query.issues.findMany({
+    where: and(
+      eq(issues.workspaceId, workspace.id),
+      inArray(issues.id, uniqueIds)
+    ),
+  });
+  if (rows.length !== uniqueIds.length) {
+    throw new Error("Issue not found");
+  }
+
+  for (const before of rows) {
+    await applyIssueUpdate(workspace, user, before, patch);
+  }
 
   revalidateIssueViews(workspace.slug);
-  revalidatePath(wsPath(workspace.slug, `/issue/${workspace.prefix}-${before.number}`));
 }
 
 export async function moveIssueOnBoard(

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
+import { useRef, useTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
@@ -16,16 +16,30 @@ import {
   StatusPicker,
 } from "@/components/pickers";
 import { IssueContextMenu } from "@/components/issues/issue-context-menu";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 function formatDate(iso: string) {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function IssueRow({ issue }: { issue: IssueListItem }) {
+export function IssueRow({
+  issue,
+  selected = false,
+  onSelect,
+}: {
+  issue: IssueListItem;
+  selected?: boolean;
+  onSelect?: (
+    issueId: string,
+    event: { shiftKey: boolean; checked: boolean }
+  ) => void;
+}) {
   const { workspace, labels, statuses, cycles } = useWorkspace();
   const qc = useQueryClient();
   const [, startTransition] = useTransition();
+  const shiftKeyRef = useRef(false);
 
   const issueLabels = labels.filter((l) => issue.labelIds.includes(l.id));
 
@@ -49,7 +63,30 @@ export function IssueRow({ issue }: { issue: IssueListItem }) {
 
   return (
     <IssueContextMenu issue={issue}>
-      <div className="group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-accent/40">
+      <div
+        className={cn(
+          "group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-accent/40",
+          selected && "bg-accent/40"
+        )}
+      >
+        {onSelect && (
+          <Checkbox
+            checked={selected}
+            aria-label={`Select ${issue.identifier}`}
+            className="shrink-0"
+            onPointerDown={(e) => {
+              shiftKeyRef.current = e.shiftKey;
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onCheckedChange={(checked) => {
+              onSelect(issue.id, {
+                shiftKey: shiftKeyRef.current,
+                checked,
+              });
+              shiftKeyRef.current = false;
+            }}
+          />
+        )}
         <PriorityPicker
           value={issue.priority}
           onChange={(priority) => patch({ priority })}
