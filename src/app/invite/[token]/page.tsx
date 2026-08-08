@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { invites, workspaces } from "@/db/schema";
@@ -6,6 +7,28 @@ import { getSession } from "@/lib/session";
 import { acceptInvite } from "@/lib/actions/workspace";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}): Promise<Metadata> {
+  const { token } = await params;
+  const invite = await db.query.invites.findFirst({
+    where: and(eq(invites.token, token), isNull(invites.usedAt)),
+    columns: { workspaceId: true, expiresAt: true },
+  });
+  if (!invite || invite.expiresAt <= new Date()) {
+    return { title: "Invite" };
+  }
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.id, invite.workspaceId),
+    columns: { name: true },
+  });
+  return {
+    title: workspace ? `Join ${workspace.name}` : "Invite",
+  };
+}
 
 export default async function InvitePage({
   params,

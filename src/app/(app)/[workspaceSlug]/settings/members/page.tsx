@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { requireWorkspaceBySlug } from "@/lib/session";
 import { getWorkspaceSettings } from "@/lib/queries";
 import { SettingsMembers } from "@/components/settings/settings-members";
+
+export const metadata: Metadata = { title: "Members" };
 
 export default async function MembersPage({
   params,

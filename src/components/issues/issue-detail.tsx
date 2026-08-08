@@ -110,6 +110,12 @@ export function IssueDetail({
   const uploads = useAttachmentUploads();
   const persisted = useRef(new Set<string>());
 
+  // Keep the browser tab in sync while editing (and on navigation).
+  useEffect(() => {
+    const label = title.trim() || "Untitled";
+    document.title = `${issue.identifier} · ${label} · Reline`;
+  }, [issue.identifier, title]);
+
   // Auto-grow textareas so content isn't clipped behind an inner scrollbar.
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);

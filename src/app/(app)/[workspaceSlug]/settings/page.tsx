@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { requireWorkspaceBySlug } from "@/lib/session";
 import { getWorkspaceSettings } from "@/lib/queries";
 import { SettingsGeneral } from "@/components/settings/settings-general";
+
+export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsGeneralPage({
   params,

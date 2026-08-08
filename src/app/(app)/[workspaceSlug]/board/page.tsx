@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { eq } from "drizzle-orm";
 import { requireWorkspaceBySlug } from "@/lib/session";
 import { getIssues } from "@/lib/queries";
@@ -13,6 +14,62 @@ import {
 } from "@/lib/board-display";
 import { Board } from "@/components/board/board";
 import { wsPath } from "@/lib/workspace-paths";
+import {
+  CYCLE_FILTER_ALL,
+  cycleFilterLabel,
+  defaultCycleIdFromFilters,
+  type CycleFilter,
+} from "@/lib/filtering";
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ workspaceSlug: string }>;
+  searchParams: Promise<{ cycle?: string | string[] }>;
+}): Promise<Metadata> {
+  const { workspaceSlug } = await params;
+  const sp = await searchParams;
+  const raw = Array.isArray(sp.cycle) ? sp.cycle[0] : sp.cycle;
+  if (!raw || raw === CYCLE_FILTER_ALL) return { title: "Board" };
+
+  const { workspace } = await requireWorkspaceBySlug(workspaceSlug);
+  const cycleRows = await db.query.cycles.findMany({
+    where: eq(cycles.workspaceId, workspace.id),
+    columns: {
+      id: true,
+      number: true,
+      name: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+    },
+  });
+  const cycleList = cycleRows.map((c) => ({
+    id: c.id,
+    number: c.number,
+    name: c.name,
+    status: c.status,
+    startDate: c.startDate.toISOString(),
+    endDate: c.endDate.toISOString(),
+  }));
+  const filter = raw as CycleFilter;
+  const scopedId = defaultCycleIdFromFilters(
+    {
+      statusIds: [],
+      priorities: [],
+      assigneeIds: [],
+      labelIds: [],
+      cycleIds: [filter],
+    },
+    cycleList
+  );
+  if (typeof scopedId === "string") {
+    const named = cycleList.find((c) => c.id === scopedId);
+    if (named) return { title: named.name };
+  }
+  return { title: cycleFilterLabel(filter, cycleList) };
+}
 
 export default async function BoardPage({
   params,

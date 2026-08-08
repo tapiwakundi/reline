@@ -14,7 +14,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reline",
+  title: {
+    default: "Reline",
+    template: "%s · Reline",
+  },
   description: "Issue tracking for small teams",
 };
 

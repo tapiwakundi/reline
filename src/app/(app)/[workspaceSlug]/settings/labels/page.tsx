@@ -1,6 +1,9 @@
+import type { Metadata } from "next";
 import { requireWorkspaceBySlug } from "@/lib/session";
 import { getWorkspaceSettings } from "@/lib/queries";
 import { LabelsManager } from "@/components/settings/labels-manager";
+
+export const metadata: Metadata = { title: "Labels" };
 
 export default async function LabelsPage({
   params,
