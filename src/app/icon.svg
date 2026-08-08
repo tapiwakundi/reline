@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Reline">
+  <rect width="32" height="32" rx="8" fill="#17181b"/>
+  <g transform="translate(4 4) scale(1.7142857)">
+    <circle cx="7" cy="7" r="6" fill="none" stroke="#f2c94c" stroke-width="1.5"/>
+    <path d="M 7 7 L 7 3.5 A 3.5 3.5 0 0 1 10.5 7 Z" fill="#f2c94c"/>
+    <circle cx="7" cy="7" r="2" fill="#f2c94c" opacity="0.4"/>
+  </g>
+</svg>
