@@ -49,11 +49,14 @@ export type { IssuePatch };
 export function IssueContextMenu({
   issue,
   children,
+  href,
   onOptimisticUpdate,
   onOptimisticDelete,
 }: {
   issue: IssueListItem;
   children: ReactElement;
+  /** Optional full path (e.g. board → issue with cycle query). */
+  href?: string;
   /** Apply local state immediately (e.g. board columns) before the server refresh. */
   onOptimisticUpdate?: (patch: IssuePatch) => void;
   onOptimisticDelete?: () => void;
@@ -64,6 +67,8 @@ export function IssueContextMenu({
   const [, startTransition] = useTransition();
   const { workspace, statuses, members, labels, cycles } = useWorkspace();
 
+  const issueHref =
+    href ?? wsPath(workspace.slug, `/issue/${issue.identifier}`);
   const currentStatus = statuses.find((s) => s.id === issue.statusId);
 
   function patch(p: IssuePatch) {
@@ -87,8 +92,8 @@ export function IssueContextMenu({
   }
 
   function openIssue() {
-    prefetchIssue(issue.identifier);
-    router.push(wsPath(workspace.slug, `/issue/${issue.identifier}`));
+    prefetchIssue(issue.identifier, issueHref);
+    router.push(issueHref);
   }
 
   async function copyText(value: string, label: string) {
@@ -120,7 +125,7 @@ export function IssueContextMenu({
   return (
     <ContextMenu
       onOpenChange={(open) => {
-        if (open) prefetchIssue(issue.identifier);
+        if (open) prefetchIssue(issue.identifier, issueHref);
       }}
     >
       <ContextMenuTrigger render={children} />

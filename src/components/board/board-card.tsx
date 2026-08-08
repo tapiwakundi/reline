@@ -6,10 +6,11 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
-import { wsPath } from "@/lib/workspace-paths";
 import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
+import { issueHrefWithCycle } from "@/components/workspace-trail";
 import type { IssueListItem } from "@/lib/types";
 import type { BoardCardProperty } from "@/lib/board-display";
+import type { CycleFilter } from "@/lib/filtering";
 import { PriorityIcon } from "@/components/priority-icon";
 import { StatusIcon } from "@/components/status-icon";
 import { UserAvatar } from "@/components/user-avatar";
@@ -136,11 +137,14 @@ export function BoardCardContent({
 export function BoardCard({
   issue,
   properties,
+  cycleIds,
   onOptimisticUpdate,
   onOptimisticDelete,
 }: {
   issue: IssueListItem;
   properties: BoardCardProperty[];
+  /** Board cycle filter — preserved in the issue URL for trail crumbs. */
+  cycleIds: CycleFilter[];
   onOptimisticUpdate?: (patch: IssuePatch) => void;
   onOptimisticDelete?: () => void;
 }) {
@@ -148,6 +152,7 @@ export function BoardCard({
   const { workspace } = useWorkspace();
   const prefetchIssue = usePrefetchIssue();
   const dragged = useRef(false);
+  const href = issueHrefWithCycle(workspace.slug, issue.identifier, cycleIds);
   const {
     attributes,
     listeners,
@@ -166,6 +171,7 @@ export function BoardCard({
   return (
     <IssueContextMenu
       issue={issue}
+      href={href}
       onOptimisticUpdate={onOptimisticUpdate}
       onOptimisticDelete={onOptimisticDelete}
     >
@@ -178,14 +184,14 @@ export function BoardCard({
         }}
         {...attributes}
         {...listeners}
-        onPointerEnter={() => prefetchIssue(issue.identifier)}
+        onPointerEnter={() => prefetchIssue(issue.identifier, href)}
         onClick={() => {
           // Ignore the click that fires right after a drag release
           if (dragged.current) {
             dragged.current = false;
             return;
           }
-          router.push(wsPath(workspace.slug, `/issue/${issue.identifier}`));
+          router.push(href);
         }}
         className={cn("touch-manipulation", isDragging && "pointer-events-none")}
       >

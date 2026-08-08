@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,8 @@ import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbn
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 import { IssueDetailSkeleton } from "@/components/skeletons/page-skeletons";
 import { MobileNavButton } from "@/components/mobile-nav";
+import { WorkspaceTrail } from "@/components/workspace-trail";
+import { parseFilters } from "@/lib/filtering";
 import { cn } from "@/lib/utils";
 
 function timeAgo(iso: string) {
@@ -78,6 +80,10 @@ export function IssueDetail({
   const { issue, comments, activities } = detail;
   const { workspace, members, labels, statuses, cycles, me } = useWorkspace();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const boardTrailFilters = searchParams.has("cycle")
+    ? parseFilters(searchParams)
+    : null;
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
@@ -237,18 +243,27 @@ export function IssueDetail({
     <div className="flex h-full flex-col">
       <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border px-4 text-[13px]">
           <MobileNavButton />
-          <Link
-            href={wsPath(workspace.slug, "/issues")}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            Issues
-          </Link>
-          <ChevronRightIcon className="size-3.5 text-muted-foreground/60" />
-          <span className="font-medium">{issue.identifier}</span>
+          {boardTrailFilters ? (
+            <WorkspaceTrail
+              filters={boardTrailFilters}
+              issue={{ identifier: issue.identifier }}
+            />
+          ) : (
+            <>
+              <Link
+                href={wsPath(workspace.slug, "/issues")}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Issues
+              </Link>
+              <ChevronRightIcon className="size-3.5 text-muted-foreground/60" />
+              <span className="font-medium">{issue.identifier}</span>
+            </>
+          )}
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto size-7 text-muted-foreground hover:text-destructive"
+            className="ml-auto size-7 shrink-0 text-muted-foreground hover:text-destructive"
             onClick={onDelete}
             disabled={pending}
             title="Delete issue"

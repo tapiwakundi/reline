@@ -16,9 +16,9 @@ export function usePrefetchIssue() {
   const { workspace } = useWorkspace();
 
   return useCallback(
-    (identifier: string) => {
-      const href = wsPath(workspace.slug, `/issue/${identifier}`);
-      router.prefetch(href);
+    (identifier: string, href?: string) => {
+      const path = href ?? wsPath(workspace.slug, `/issue/${identifier}`);
+      router.prefetch(path);
       void qc.prefetchQuery({
         queryKey: queryKeys.issues.detail(workspace.id, identifier),
         queryFn: () =>

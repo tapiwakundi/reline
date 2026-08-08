@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireWorkspaceBySlug } from "@/lib/session";
 import { getIssueDetail } from "@/lib/queries";
@@ -12,5 +13,9 @@ export default async function IssuePage({
   const { workspace } = await requireWorkspaceBySlug(workspaceSlug);
   const data = await getIssueDetail(workspace.id, workspace.prefix, key);
   if (!data) notFound();
-  return <IssueDetail initialData={data} />;
+  return (
+    <Suspense>
+      <IssueDetail initialData={data} />
+    </Suspense>
+  );
 }

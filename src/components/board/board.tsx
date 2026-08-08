@@ -57,6 +57,7 @@ import {
   defaultCycleIdFromFilters,
   parseFilters,
   serializeBoardFilters,
+  type CycleFilter,
   type IssueFilters,
 } from "@/lib/filtering";
 import { FiltersBar } from "@/components/filters-bar";
@@ -196,6 +197,7 @@ function Column({
   dragging,
   onNewIssue,
   properties,
+  cycleIds,
   onIssuePatch,
   onIssueDelete,
 }: {
@@ -204,6 +206,7 @@ function Column({
   dragging: boolean;
   onNewIssue: () => void;
   properties: BoardCardProperty[];
+  cycleIds: CycleFilter[];
   onIssuePatch: (issueId: string, patch: IssuePatch) => void;
   onIssueDelete: (issueId: string) => void;
 }) {
@@ -241,6 +244,7 @@ function Column({
               key={issue.id}
               issue={issue}
               properties={properties}
+              cycleIds={cycleIds}
               onOptimisticUpdate={(patch) => onIssuePatch(issue.id, patch)}
               onOptimisticDelete={() => onIssueDelete(issue.id)}
             />
@@ -811,6 +815,7 @@ export function Board({
                     })
                   }
                   properties={prefs.properties}
+                  cycleIds={filters.cycleIds}
                   onIssuePatch={(issueId, patch) => {
                     const current = issueMap.get(issueId);
                     if (!current) return;
