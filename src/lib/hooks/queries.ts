@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { BoardCompletedWindow } from "@/lib/board-display";
 import { fetchJson } from "@/lib/fetch-json";
@@ -51,6 +52,10 @@ export function useIssuesList(initialData?: IssueListItem[]) {
 
 export function useIssueDetail(key: string, initialData?: IssueDetailData) {
   const { workspace } = useWorkspace();
+  // Stamp once so RSC/prefetched data isn't treated as immediately stale.
+  const [initialUpdatedAt] = useState(() =>
+    initialData ? Date.now() : undefined
+  );
   return useQuery({
     queryKey: queryKeys.issues.detail(workspace.id, key),
     queryFn: () =>
@@ -59,6 +64,7 @@ export function useIssueDetail(key: string, initialData?: IssueDetailData) {
         { workspaceSlug: workspace.slug }
       ),
     initialData,
+    initialDataUpdatedAt: initialUpdatedAt,
   });
 }
 

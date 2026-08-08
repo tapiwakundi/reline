@@ -9,6 +9,7 @@ import {
   optimisticUpdateIssue,
   type IssuePatch,
 } from "@/lib/optimistic-issues";
+import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
 import type { IssueListItem } from "@/lib/types";
 import {
   AssigneePicker,
@@ -38,6 +39,7 @@ export function IssueRow({
 }) {
   const { workspace, labels, statuses, cycles } = useWorkspace();
   const qc = useQueryClient();
+  const prefetchIssue = usePrefetchIssue();
   const [, startTransition] = useTransition();
   const shiftKeyRef = useRef(false);
 
@@ -64,6 +66,7 @@ export function IssueRow({
   return (
     <IssueContextMenu issue={issue}>
       <div
+        onPointerEnter={() => prefetchIssue(issue.identifier)}
         className={cn(
           "group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-foreground/10",
           selected && "bg-foreground/[0.07] hover:bg-foreground/12"

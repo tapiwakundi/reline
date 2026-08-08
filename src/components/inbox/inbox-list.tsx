@@ -11,6 +11,7 @@ import {
   markNotificationRead,
 } from "@/lib/actions/notifications";
 import { useInbox } from "@/lib/hooks/queries";
+import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
 import { invalidateAfterNotificationChange } from "@/lib/invalidate";
@@ -52,6 +53,7 @@ export function InboxList({
   const router = useRouter();
   const qc = useQueryClient();
   const { workspace } = useWorkspace();
+  const prefetchIssue = usePrefetchIssue();
   const { data: notifications, isPending } = useInbox(initialNotifications);
   const list = notifications ?? initialNotifications;
   const [pending, startTransition] = useTransition();
@@ -62,13 +64,14 @@ export function InboxList({
   }
 
   function open(n: InboxItem) {
-    startTransition(async () => {
-      if (!n.readAt) {
+    prefetchIssue(n.issue.identifier);
+    router.push(wsPath(workspace.slug, `/issue/${n.issue.identifier}`));
+    if (!n.readAt) {
+      startTransition(async () => {
         await markNotificationRead(n.id);
         await invalidateAfterNotificationChange(qc, workspace.id);
-      }
-      router.push(wsPath(workspace.slug, `/issue/${n.issue.identifier}`));
-    });
+      });
+    }
   }
 
   return (
@@ -108,6 +111,7 @@ export function InboxList({
             <button
               key={n.id}
               onClick={() => open(n)}
+              onPointerEnter={() => prefetchIssue(n.issue.identifier)}
               className={cn(
                 "flex w-full items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-accent/40",
                 !n.readAt && "bg-primary/[0.04]"

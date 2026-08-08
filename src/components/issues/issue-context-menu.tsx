@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
+import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
 import {
   optimisticDeleteIssue,
   optimisticUpdateIssue,
@@ -59,6 +60,7 @@ export function IssueContextMenu({
 }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const prefetchIssue = usePrefetchIssue();
   const [, startTransition] = useTransition();
   const { workspace, statuses, members, labels, cycles } = useWorkspace();
 
@@ -85,6 +87,7 @@ export function IssueContextMenu({
   }
 
   function openIssue() {
+    prefetchIssue(issue.identifier);
     router.push(wsPath(workspace.slug, `/issue/${issue.identifier}`));
   }
 
@@ -115,7 +118,11 @@ export function IssueContextMenu({
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu
+      onOpenChange={(open) => {
+        if (open) prefetchIssue(issue.identifier);
+      }}
+    >
       <ContextMenuTrigger render={children} />
       <ContextMenuContent className="w-56">
         <ContextMenuSub>

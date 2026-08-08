@@ -7,6 +7,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
+import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
 import type { IssueListItem } from "@/lib/types";
 import type { BoardCardProperty } from "@/lib/board-display";
 import { PriorityIcon } from "@/components/priority-icon";
@@ -145,6 +146,7 @@ export function BoardCard({
 }) {
   const router = useRouter();
   const { workspace } = useWorkspace();
+  const prefetchIssue = usePrefetchIssue();
   const dragged = useRef(false);
   const {
     attributes,
@@ -176,6 +178,7 @@ export function BoardCard({
         }}
         {...attributes}
         {...listeners}
+        onPointerEnter={() => prefetchIssue(issue.identifier)}
         onClick={() => {
           // Ignore the click that fires right after a drag release
           if (dragged.current) {
