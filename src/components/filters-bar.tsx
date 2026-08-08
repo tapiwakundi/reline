@@ -101,10 +101,16 @@ export function FiltersBar({
   filters,
   onChange,
   hideAssignee,
+  iconOnly = false,
+  toolbarEnd,
 }: {
   filters: IssueFilters;
   onChange: (f: IssueFilters) => void;
   hideAssignee?: boolean;
+  /** Circular icon trigger (Linear-style board toolbar). */
+  iconOnly?: boolean;
+  /** Extra controls after the filter icon (iconOnly mode). */
+  toolbarEnd?: React.ReactNode;
 }) {
   const { statuses, labels, members, cycles } = useWorkspace();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -150,31 +156,119 @@ export function FiltersBar({
     (c) => !cq || c.name.toLowerCase().includes(cq)
   );
 
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <DropdownMenu
-        open={menuOpen}
-        onOpenChange={(open) => {
-          setMenuOpen(open);
-          if (!open) {
-            setQuery("");
-            setCycleQuery("");
-            setStatusQuery("");
-            setPriorityQuery("");
-            setAssigneeQuery("");
-            setLabelQuery("");
-          }
-        }}
-      >
-        <DropdownMenuTrigger
-          className={cn(
-            buttonVariants({ variant: "ghost", size: "sm" }),
-            "h-7 gap-1.5 text-xs text-muted-foreground"
+  const chips = (
+    <>
+      {filters.statusIds.length > 0 && (
+        <FilterChip
+          label="Status"
+          value={joinLabels(
+            filters.statusIds.map(
+              (id) => statuses.find((s) => s.id === id)?.name ?? "Unknown"
+            )
           )}
-        >
-          <ListFilterIcon className="size-3.5" />
-          Filter
-        </DropdownMenuTrigger>
+          onClear={() => onChange({ ...filters, statusIds: [] })}
+        />
+      )}
+      {filters.priorities.length > 0 && (
+        <FilterChip
+          label="Priority"
+          value={joinLabels(
+            filters.priorities.map(
+              (p) => PRIORITIES.find((x) => x.value === p)?.label ?? "Unknown"
+            )
+          )}
+          onClear={() => onChange({ ...filters, priorities: [] })}
+        />
+      )}
+      {!hideAssignee && filters.assigneeIds.length > 0 && (
+        <FilterChip
+          label="Assignee"
+          value={joinLabels(
+            filters.assigneeIds.map((id) =>
+              id === "none"
+                ? "Unassigned"
+                : (members.find((m) => m.id === id)?.name ?? "Unknown")
+            )
+          )}
+          onClear={() => onChange({ ...filters, assigneeIds: [] })}
+        />
+      )}
+      {filters.labelIds.length > 0 && (
+        <FilterChip
+          label="Label"
+          value={joinLabels(
+            filters.labelIds.map(
+              (id) => labels.find((l) => l.id === id)?.name ?? "Unknown"
+            )
+          )}
+          onClear={() => onChange({ ...filters, labelIds: [] })}
+        />
+      )}
+      {filters.cycleIds.length > 0 && !iconOnly && (
+        <FilterChip
+          label="Cycle"
+          value={joinLabels(
+            filters.cycleIds.map((id) => cycleFilterLabel(id, cycles))
+          )}
+          onClear={() => onChange({ ...filters, cycleIds: [] })}
+        />
+      )}
+      {hasActiveFilters(filters) &&
+        !(
+          iconOnly &&
+          filters.statusIds.length === 0 &&
+          filters.priorities.length === 0 &&
+          filters.assigneeIds.length === 0 &&
+          filters.labelIds.length === 0
+        ) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1 text-xs text-muted-foreground"
+            onClick={() => onChange({ ...EMPTY_FILTERS })}
+          >
+            <XIcon className="size-3" />
+            Clear
+          </Button>
+        )}
+    </>
+  );
+
+  const menu = (
+    <DropdownMenu
+      open={menuOpen}
+      onOpenChange={(open) => {
+        setMenuOpen(open);
+        if (!open) {
+          setQuery("");
+          setCycleQuery("");
+          setStatusQuery("");
+          setPriorityQuery("");
+          setAssigneeQuery("");
+          setLabelQuery("");
+        }
+      }}
+    >
+      <DropdownMenuTrigger
+        className={cn(
+          iconOnly
+            ? cn(
+                buttonVariants({ variant: "secondary", size: "icon" }),
+                "relative size-8 rounded-full text-muted-foreground hover:text-foreground"
+              )
+            : cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "h-7 gap-1.5 text-xs text-muted-foreground"
+              )
+        )}
+        title="Filter"
+      >
+        <ListFilterIcon className="size-3.5" />
+        {!iconOnly && "Filter"}
+        {iconOnly && hasActiveFilters(filters) && (
+          <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary" />
+        )}
+      </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
           <div className="p-1.5 pb-1">
             <Input
@@ -440,74 +534,24 @@ export function FiltersBar({
             )}
         </DropdownMenuContent>
       </DropdownMenu>
+  );
 
-      {filters.statusIds.length > 0 && (
-        <FilterChip
-          label="Status"
-          value={joinLabels(
-            filters.statusIds.map(
-              (id) => statuses.find((s) => s.id === id)?.name ?? "Unknown"
-            )
-          )}
-          onClear={() => onChange({ ...filters, statusIds: [] })}
-        />
-      )}
-      {filters.priorities.length > 0 && (
-        <FilterChip
-          label="Priority"
-          value={joinLabels(
-            filters.priorities.map(
-              (p) => PRIORITIES.find((x) => x.value === p)?.label ?? "Unknown"
-            )
-          )}
-          onClear={() => onChange({ ...filters, priorities: [] })}
-        />
-      )}
-      {!hideAssignee && filters.assigneeIds.length > 0 && (
-        <FilterChip
-          label="Assignee"
-          value={joinLabels(
-            filters.assigneeIds.map((id) =>
-              id === "none"
-                ? "Unassigned"
-                : (members.find((m) => m.id === id)?.name ?? "Unknown")
-            )
-          )}
-          onClear={() => onChange({ ...filters, assigneeIds: [] })}
-        />
-      )}
-      {filters.labelIds.length > 0 && (
-        <FilterChip
-          label="Label"
-          value={joinLabels(
-            filters.labelIds.map(
-              (id) => labels.find((l) => l.id === id)?.name ?? "Unknown"
-            )
-          )}
-          onClear={() => onChange({ ...filters, labelIds: [] })}
-        />
-      )}
-      {filters.cycleIds.length > 0 && (
-        <FilterChip
-          label="Cycle"
-          value={joinLabels(
-            filters.cycleIds.map((id) => cycleFilterLabel(id, cycles))
-          )}
-          onClear={() => onChange({ ...filters, cycleIds: [] })}
-        />
-      )}
+  if (iconOnly) {
+    return (
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+        {chips}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {menu}
+          {toolbarEnd}
+        </div>
+      </div>
+    );
+  }
 
-      {hasActiveFilters(filters) && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1 text-xs text-muted-foreground"
-          onClick={() => onChange({ ...EMPTY_FILTERS })}
-        >
-          <XIcon className="size-3" />
-          Clear
-        </Button>
-      )}
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {menu}
+      {chips}
     </div>
   );
 }

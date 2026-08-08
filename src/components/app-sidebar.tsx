@@ -232,7 +232,7 @@ export function SidebarContent({
         </nav>
       </div>
 
-      <div className="mt-auto border-t border-sidebar-border p-2">
+      <div className="mt-auto p-2">
         <DropdownMenu>
           <DropdownMenuTrigger className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent data-popup-open:bg-sidebar-accent">
             <UserAvatar user={me} className="size-7" />
@@ -286,7 +286,7 @@ export function SidebarContent({
 
 export function AppSidebar({ initialUnread }: { initialUnread: number }) {
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside className="hidden w-60 shrink-0 flex-col bg-sidebar md:flex">
       <SidebarContent initialUnread={initialUnread} />
     </aside>
   );

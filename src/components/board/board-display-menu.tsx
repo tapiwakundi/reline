@@ -88,9 +88,12 @@ function PrefSelect<T extends string>({
 export function BoardDisplayMenu({
   prefs,
   onChange,
+  iconOnly = false,
 }: {
   prefs: BoardDisplayPrefs;
   onChange: (prefs: BoardDisplayPrefs) => void;
+  /** Circular icon trigger (Linear-style board toolbar). */
+  iconOnly?: boolean;
 }) {
   const [, startTransition] = useTransition();
 
@@ -114,12 +117,20 @@ export function BoardDisplayMenu({
     <Popover>
       <PopoverTrigger
         className={cn(
-          buttonVariants({ variant: "ghost", size: "sm" }),
-          "h-7 gap-1.5 text-xs text-muted-foreground"
+          iconOnly
+            ? cn(
+                buttonVariants({ variant: "secondary", size: "icon" }),
+                "size-8 rounded-full text-muted-foreground hover:text-foreground"
+              )
+            : cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "h-7 gap-1.5 text-xs text-muted-foreground"
+              )
         )}
+        title="Display"
       >
         <SlidersHorizontalIcon className="size-3.5" />
-        Display
+        {!iconOnly && "Display"}
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 gap-0 p-3">
         <div className="flex flex-col gap-1">

@@ -17,8 +17,10 @@ import {
 } from "@/components/pickers";
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
+import { showIssueCreatedToast } from "@/components/issue-created-toast";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import { wsPath } from "@/lib/workspace-paths";
 
 export function CreateIssueDialog({
   open,
@@ -82,21 +84,30 @@ export function CreateIssueDialog({
       }
       return;
     }
+    const createdTitle = title.trim();
+    const createdStatusId = statusId;
     startTransition(async () => {
       try {
         const payload = uploads.toInput();
         const { identifier } = await createIssue({
-          title,
+          title: createdTitle,
           description,
-          statusId,
+          statusId: createdStatusId,
           priority,
           assigneeId,
           cycleId,
           labelIds,
           attachments: payload,
         });
-        toast.success(`${identifier} created`);
         onOpenChange(false);
+        const status =
+          statuses.find((s) => s.id === createdStatusId) ?? statuses[0];
+        showIssueCreatedToast({
+          identifier,
+          title: createdTitle,
+          status: status ?? { type: "unstarted", color: "currentColor" },
+          href: wsPath(workspace.slug, `/issue/${identifier}`),
+        });
         void invalidateAfterIssueChange(qc, workspace.id);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to create issue");

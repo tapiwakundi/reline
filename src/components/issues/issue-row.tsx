@@ -65,8 +65,8 @@ export function IssueRow({
     <IssueContextMenu issue={issue}>
       <div
         className={cn(
-          "group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-accent/40",
-          selected && "bg-accent/40"
+          "group flex h-10 items-center gap-2.5 border-b border-border/60 px-4 transition-colors hover:bg-foreground/10",
+          selected && "bg-foreground/[0.07] hover:bg-foreground/12"
         )}
       >
         {onSelect && (

@@ -32,11 +32,13 @@ export default async function WorkspaceLayout({
     <QueryProvider>
       <WorkspaceProvider value={{ ...data, workspaces }}>
         <GlobalShortcuts>
-          <div className="flex h-dvh overflow-hidden">
+          <div className="flex h-dvh overflow-hidden bg-sidebar">
             <AppSidebar initialUnread={unread} />
-            <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              {children}
-            </main>
+            <div className="flex min-w-0 flex-1 flex-col py-2 pr-2 max-md:p-2">
+              <main className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+                {children}
+              </main>
+            </div>
           </div>
         </GlobalShortcuts>
       </WorkspaceProvider>

@@ -63,7 +63,7 @@ export function BoardCardContent({
   return (
     <div
       className={cn(
-        "flex cursor-pointer flex-col gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:border-muted-foreground/30",
+        "flex shrink-0 cursor-pointer flex-col gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/30 hover:bg-foreground/10",
         className
       )}
     >

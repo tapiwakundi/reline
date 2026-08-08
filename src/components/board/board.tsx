@@ -28,8 +28,20 @@ import {
   arrayMove,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CheckIcon, CircleDashedIcon, PlusIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import {
+  CheckIcon,
+  CircleDashedIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+} from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import {
   moveIssueOnBoard,
   moveIssueOnBoardGrouped,
@@ -54,6 +66,7 @@ import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
 import { BoardCard, BoardCardContent } from "@/components/board/board-card";
+import { BoardBreadcrumbs } from "@/components/board/board-breadcrumbs";
 import { BoardDisplayMenu } from "@/components/board/board-display-menu";
 import { CompleteCycleDialog } from "@/components/cycles/complete-cycle-dialog";
 import { BoardSkeleton } from "@/components/skeletons/page-skeletons";
@@ -200,8 +213,8 @@ function Column({
   });
 
   return (
-    <div className="group/col flex w-[300px] shrink-0 flex-col">
-      <div className="flex h-9 items-center gap-2 px-1.5">
+    <div className="group/col flex h-full w-[300px] shrink-0 flex-col">
+      <div className="flex h-9 shrink-0 items-center gap-2 px-1.5">
         {column.icon}
         <span className="text-[13px] font-medium">{column.title}</span>
         <span className="text-xs text-muted-foreground">{issues.length}</span>
@@ -221,7 +234,7 @@ function Column({
       >
         <div
           ref={setNodeRef}
-          className="flex min-h-[calc(100dvh-10rem)] flex-1 flex-col gap-2 rounded-lg p-1.5"
+          className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg p-1.5"
         >
           {issues.map((issue) => (
             <BoardCard
@@ -236,7 +249,7 @@ function Column({
             <button
               type="button"
               onClick={onNewIssue}
-              className="flex h-9 w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-transparent text-xs text-muted-foreground opacity-0 transition-all duration-150 group-hover/col:border-border/80 group-hover/col:opacity-100 hover:border-primary/45 hover:bg-primary/5 hover:text-foreground max-md:border-border/80 max-md:opacity-100"
+              className="flex h-9 min-h-9 w-full shrink-0 items-center justify-center gap-1.5 rounded-md border border-dashed border-transparent text-xs text-muted-foreground opacity-0 transition-all duration-150 group-hover/col:border-border/80 group-hover/col:opacity-100 hover:border-primary/45 hover:bg-primary/5 hover:text-foreground max-md:border-border/80 max-md:opacity-100"
             >
               <PlusIcon className="size-3.5" />
               Create new issue
@@ -697,32 +710,55 @@ export function Board({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border px-4 py-1.5">
-        <MobileNavButton />
-        <h1 className="text-sm font-semibold">Board</h1>
-        <span className="text-xs text-muted-foreground">{visible.length}</span>
-        <FiltersBar filters={filters} onChange={onFiltersChange} />
-        <div className="ml-auto flex items-center gap-2">
-          {scopedActiveCycle && (
-            <Button
-              size="sm"
-              variant="secondary"
-              className="h-7 gap-1 text-xs"
-              onClick={() => setCompleteOpen(true)}
-            >
-              <CheckIcon className="size-3.5" />
-              Complete cycle
-            </Button>
-          )}
-          <BoardDisplayMenu prefs={prefs} onChange={setPrefs} />
-          <Button
-            size="sm"
-            className="h-7 gap-1 text-xs"
-            onClick={() => openCreateIssue({ cycleId: defaultCycleId })}
-          >
-            <PlusIcon className="size-3.5" />
-            New issue
-          </Button>
+      <header className="shrink-0 border-b border-border">
+        <div className="flex h-11 items-center gap-2 px-4">
+          <MobileNavButton />
+          <BoardBreadcrumbs
+            filters={filters}
+            onCycleChange={(cycleIds) =>
+              onFiltersChange({ ...filters, cycleIds })
+            }
+            actions={
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  className={cn(
+                    buttonVariants({ variant: "ghost", size: "icon" }),
+                    "size-7 text-muted-foreground"
+                  )}
+                  title="Cycle actions"
+                >
+                  <MoreHorizontalIcon className="size-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onClick={() =>
+                      openCreateIssue({ cycleId: defaultCycleId })
+                    }
+                  >
+                    <PlusIcon /> New issue
+                  </DropdownMenuItem>
+                  {scopedActiveCycle && (
+                    <DropdownMenuItem onClick={() => setCompleteOpen(true)}>
+                      <CheckIcon /> Complete cycle
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            }
+          />
+        </div>
+        <div className="flex h-10 items-center gap-2 px-4 pb-1.5">
+          <span className="shrink-0 text-[13px] text-muted-foreground">
+            {visible.length} {visible.length === 1 ? "issue" : "issues"}
+          </span>
+          <FiltersBar
+            filters={filters}
+            onChange={onFiltersChange}
+            iconOnly
+            toolbarEnd={
+              <BoardDisplayMenu prefs={prefs} onChange={setPrefs} iconOnly />
+            }
+          />
         </div>
       </header>
       <CompleteCycleDialog
@@ -749,7 +785,7 @@ export function Board({
             lastOverId.current = null;
           }}
         >
-          <div className="flex h-full gap-3 overflow-y-auto p-3">
+          <div className="flex h-full gap-3 p-3">
             {boardColumns
               .filter((c) => {
                 if (prefs.showEmptyColumns || activeId) return true;
