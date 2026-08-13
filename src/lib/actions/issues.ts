@@ -346,7 +346,9 @@ export async function bulkUpdateIssues(
 export async function moveIssueOnBoard(
   issueId: string,
   statusId: string,
-  boardOrder: number
+  boardOrder: number,
+  /** Sibling ranks to rewrite when a fractional insert collides. */
+  siblingOrders: { issueId: string; boardOrder: number }[] = []
 ) {
   const { workspace, user } = await requireWorkspace();
   const before = await ownedIssue(issueId, workspace.id);
@@ -363,13 +365,22 @@ export async function moveIssueOnBoard(
   );
   if (assigned) fields.cycleId = assigned;
 
-  await db
-    .update(issues)
-    .set({ ...fields, updatedAt: new Date() })
-    .where(eq(issues.id, issueId));
+  const statusChanged = statusId !== before.statusId;
+  // Pure reorders should not bump updatedAt — board order is independent of
+  // "last updated" sorting.
+  const patch =
+    statusChanged || assigned
+      ? { ...fields, updatedAt: new Date() }
+      : fields;
+
+  await db.update(issues).set(patch).where(eq(issues.id, issueId));
+
+  if (siblingOrders.length > 0) {
+    await setBoardOrders(siblingOrders, workspace.id);
+  }
 
   // Skip revalidating /board — the board already updated optimistically.
-  if (statusId !== before.statusId) {
+  if (statusChanged) {
     const to = await db.query.statuses.findFirst({
       where: eq(statuses.id, statusId),
     });
@@ -390,6 +401,28 @@ export async function moveIssueOnBoard(
   }
 }
 
+/** Persist explicit board ranks without touching updatedAt. */
+export async function setBoardOrders(
+  entries: { issueId: string; boardOrder: number }[],
+  workspaceId?: string
+) {
+  if (entries.length === 0) return;
+  const workspace =
+    workspaceId != null
+      ? { id: workspaceId }
+      : (await requireWorkspace()).workspace;
+
+  await Promise.all(
+    entries.map(async ({ issueId, boardOrder }) => {
+      await ownedIssue(issueId, workspace.id);
+      await db
+        .update(issues)
+        .set({ boardOrder })
+        .where(and(eq(issues.id, issueId), eq(issues.workspaceId, workspace.id)));
+    })
+  );
+}
+
 export type BoardMoveTarget =
   | { kind: "status"; statusId: string }
   | { kind: "assignee"; assigneeId: string | null }
@@ -404,10 +437,11 @@ export type BoardMoveTarget =
 export async function moveIssueOnBoardGrouped(
   issueId: string,
   target: BoardMoveTarget,
-  boardOrder: number
+  boardOrder: number,
+  siblingOrders: { issueId: string; boardOrder: number }[] = []
 ) {
   if (target.kind === "status") {
-    return moveIssueOnBoard(issueId, target.statusId, boardOrder);
+    return moveIssueOnBoard(issueId, target.statusId, boardOrder, siblingOrders);
   }
 
   const { workspace, user } = await requireWorkspace();
@@ -434,10 +468,21 @@ export async function moveIssueOnBoardGrouped(
     if (promoted) fields.statusId = promoted;
   }
 
-  await db
-    .update(issues)
-    .set({ ...fields, boardOrder, updatedAt: new Date() })
-    .where(eq(issues.id, issueId));
+  const groupChanged =
+    (target.kind === "assignee" && target.assigneeId !== before.assigneeId) ||
+    (target.kind === "priority" && target.priority !== before.priority) ||
+    (target.kind === "cycle" && target.cycleId !== before.cycleId) ||
+    (fields.statusId != null && fields.statusId !== before.statusId);
+
+  const patch = groupChanged
+    ? { ...fields, boardOrder, updatedAt: new Date() }
+    : { ...fields, boardOrder };
+
+  await db.update(issues).set(patch).where(eq(issues.id, issueId));
+
+  if (siblingOrders.length > 0) {
+    await setBoardOrders(siblingOrders, workspace.id);
+  }
 
   // Skip revalidating /board — the board already updated optimistically.
   if (

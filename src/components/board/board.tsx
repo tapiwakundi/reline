@@ -47,6 +47,7 @@ import {
   moveIssueOnBoardGrouped,
   type BoardMoveTarget,
 } from "@/lib/actions/issues";
+import { updateBoardDisplayPrefs } from "@/lib/actions/board-display";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useShortcuts } from "@/components/global-shortcuts";
 import { useBoardIssues, useCycles } from "@/lib/hooks/queries";
@@ -161,6 +162,41 @@ function moveTargetFor(group: BoardColumnsGroup, key: string): BoardMoveTarget {
 // Urgent > High > Medium > Low > No priority
 const priorityRank = (p: number) => (p === 0 ? 5 : p);
 
+const BOARD_ORDER_GAP = 1000;
+
+/** Stable manual rank: boardOrder first, then id. */
+function compareBoardOrder(a: IssueListItem, b: IssueListItem) {
+  return a.boardOrder - b.boardOrder || a.id.localeCompare(b.id);
+}
+
+/**
+ * Fractional index between neighbors. When ranks collide (common with the
+ * default 0) or floats collapse, returns null so the caller can reindex.
+ */
+function fractionalBoardOrder(
+  prevOrder: number | null,
+  nextOrder: number | null
+): number | null {
+  if (prevOrder != null && nextOrder != null) {
+    if (prevOrder === nextOrder) return null;
+    const mid = (prevOrder + nextOrder) / 2;
+    if (mid === prevOrder || mid === nextOrder) return null;
+    return mid;
+  }
+  if (prevOrder != null) return prevOrder + BOARD_ORDER_GAP;
+  if (nextOrder != null) return nextOrder - BOARD_ORDER_GAP;
+  return Date.now();
+}
+
+/** Spaced ranks for a whole column — used when fractional insert fails. */
+function reindexBoardOrders(orderedIds: string[]): Map<string, number> {
+  const ranks = new Map<string, number>();
+  orderedIds.forEach((id, i) => {
+    ranks.set(id, (i + 1) * BOARD_ORDER_GAP);
+  });
+  return ranks;
+}
+
 function orderingComparator(
   ordering: BoardOrdering
 ): (a: IssueListItem, b: IssueListItem) => number {
@@ -168,7 +204,7 @@ function orderingComparator(
     case "priority":
       return (a, b) =>
         priorityRank(a.priority) - priorityRank(b.priority) ||
-        a.boardOrder - b.boardOrder;
+        compareBoardOrder(a, b);
     case "created":
       return (a, b) => b.createdAt.localeCompare(a.createdAt);
     case "updated":
@@ -176,7 +212,7 @@ function orderingComparator(
     case "title":
       return (a, b) => a.title.localeCompare(b.title);
     default:
-      return (a, b) => a.boardOrder - b.boardOrder;
+      return compareBoardOrder;
   }
 }
 
@@ -450,7 +486,7 @@ export function Board({
     for (const c of boardColumns) {
       next[c.key] = initialIssues
         .filter((i) => groupKeyOf(i, prefs.columns) === c.key)
-        .sort((a, b) => a.boardOrder - b.boardOrder)
+        .sort(compareBoardOrder)
         .map((i) => i.id);
     }
     return next;
@@ -636,32 +672,54 @@ export function Board({
       ? (issueMap.get(afterId)?.boardOrder ?? null)
       : null;
 
-    let boardOrder: number;
-    if (prevOrder != null && nextOrder != null) {
-      boardOrder = (prevOrder + nextOrder) / 2;
-    } else if (prevOrder != null) {
-      boardOrder = prevOrder + 1000;
-    } else if (nextOrder != null) {
-      boardOrder = nextOrder - 1000;
-    } else {
-      boardOrder = Date.now();
+    const fractional = fractionalBoardOrder(prevOrder, nextOrder);
+    const ranks =
+      fractional == null
+        ? reindexBoardOrders(orderedIds)
+        : new Map([[issueId, fractional]]);
+    const boardOrder = ranks.get(issueId) ?? fractional ?? Date.now();
+    const siblingOrders =
+      fractional == null
+        ? orderedIds
+            .filter((id) => id !== issueId)
+            .map((id) => ({
+              issueId: id,
+              boardOrder: ranks.get(id)!,
+            }))
+        : [];
+
+    // Drag defines manual order — switch off updatedAt-based sorting so the
+    // new ranks stay visible after the drop.
+    if (
+      prefs.ordering !== "manual" ||
+      prefs.orderCompletedByRecency
+    ) {
+      const nextPrefs = {
+        ...prefs,
+        ordering: "manual" as const,
+        orderCompletedByRecency: false,
+      };
+      setPrefs(nextPrefs);
+      void updateBoardDisplayPrefs(nextPrefs);
     }
 
     setIssues((prevIssues) => {
-      const next = prevIssues.map((i) =>
-        i.id === issueId
-          ? {
-              ...applyGroupToIssue(
-                i,
-                prefs.columns,
-                overContainer,
-                statuses,
-                activeCycleId
-              ),
-              boardOrder,
-            }
-          : i
-      );
+      const next = prevIssues.map((i) => {
+        const rank = ranks.get(i.id);
+        if (i.id === issueId) {
+          return {
+            ...applyGroupToIssue(
+              i,
+              prefs.columns,
+              overContainer,
+              statuses,
+              activeCycleId
+            ),
+            boardOrder,
+          };
+        }
+        return rank != null ? { ...i, boardOrder: rank } : i;
+      });
       qc.setQueryData(queryKeys.issues.board(workspace.id, boardOpts), next);
       qc.setQueryData(
         queryKeys.issues.list(workspace.id),
@@ -679,12 +737,13 @@ export function Board({
     lastOverId.current = null;
 
     if (prefs.columns === "status") {
-      void moveIssueOnBoard(issueId, overContainer, boardOrder);
+      void moveIssueOnBoard(issueId, overContainer, boardOrder, siblingOrders);
     } else {
       void moveIssueOnBoardGrouped(
         issueId,
         moveTargetFor(prefs.columns, overContainer),
-        boardOrder
+        boardOrder,
+        siblingOrders
       );
     }
   }
