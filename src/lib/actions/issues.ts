@@ -186,7 +186,7 @@ export async function createIssue(input: {
       title,
       description: input.description?.trim() ?? "",
       priority: input.priority ?? 0,
-      type: input.type ?? "task",
+      type: input.type ?? "story",
       statusId,
       assigneeId: input.assigneeId ?? null,
       cycleId,

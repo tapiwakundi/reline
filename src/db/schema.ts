@@ -196,7 +196,7 @@ export const issues = pgTable(
     priority: integer("priority").notNull().default(0),
     type: text("type", { enum: ["story", "task", "bug"] })
       .notNull()
-      .default("task"),
+      .default("story"),
     statusId: text("status_id")
       .notNull()
       .references(() => statuses.id),

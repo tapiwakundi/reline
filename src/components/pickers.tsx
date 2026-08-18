@@ -144,7 +144,7 @@ export function TypePicker({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const current = ISSUE_TYPES.find((t) => t.value === value) ?? ISSUE_TYPES[1];
+  const current = ISSUE_TYPES.find((t) => t.value === value) ?? ISSUE_TYPES[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

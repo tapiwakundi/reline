@@ -43,6 +43,13 @@
       "when": 1786988237766,
       "tag": "0005_fantastic_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787093529564,
+      "tag": "0006_calm_selene",
+      "breakpoints": true
     }
   ]
 }

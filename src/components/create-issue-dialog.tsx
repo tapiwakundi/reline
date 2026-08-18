@@ -48,7 +48,7 @@ export function CreateIssueDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [statusId, setStatusId] = useState(fallbackStatus);
-  const [type, setType] = useState<IssueType>("task");
+  const [type, setType] = useState<IssueType>("story");
   const [priority, setPriority] = useState(0);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [cycleId, setCycleId] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export function CreateIssueDialog({
       todoStatusIdForCycleEntry(statuses, initialStatusId, initialCycleId) ??
         initialStatusId
     );
-    setType("task");
+    setType("story");
     setPriority(0);
     setAssigneeId(null);
     setCycleId(initialCycleId);
