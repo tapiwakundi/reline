@@ -55,6 +55,27 @@ export function mapJiraPriority(jiraPriority: string): number {
   }
 }
 
+/** Map a Jira issue type name to Reline's story | task | bug. */
+export function mapJiraIssueType(
+  jiraType: string
+): "story" | "task" | "bug" {
+  switch (jiraType.trim().toLowerCase()) {
+    case "story":
+    case "user story":
+    case "epic":
+      return "story";
+    case "bug":
+    case "defect":
+    case "error":
+      return "bug";
+    case "task":
+    case "sub-task":
+    case "subtask":
+    default:
+      return "task";
+  }
+}
+
 /** Match a Jira assignee (email or display name) to a workspace member. */
 export function mapJiraAssignee(
   value: string,

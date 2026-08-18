@@ -58,6 +58,7 @@ export function issueHrefWithCycle(
   const path = wsPath(slug, `/issue/${identifier}`);
   const params = serializeBoardFilters({
     statusIds: [],
+    types: [],
     priorities: [],
     assigneeIds: [],
     labelIds: [],

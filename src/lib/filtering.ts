@@ -1,5 +1,6 @@
-import type { CycleRow, IssueListItem } from "@/lib/types";
+import type { CycleRow, IssueListItem, IssueType } from "@/lib/types";
 import { resolveCycleStatuses } from "@/lib/cycle-status";
+import { ISSUE_TYPES } from "@/lib/defaults";
 
 export type CycleFilterPreset =
   | "none"
@@ -24,6 +25,7 @@ export const CYCLE_FILTER_PRESETS: {
 ];
 
 const PRESET_VALUES = new Set<string>(CYCLE_FILTER_PRESETS.map((p) => p.value));
+const ISSUE_TYPE_VALUES = new Set<string>(ISSUE_TYPES.map((t) => t.value));
 
 export function isCycleFilterPreset(v: string): v is CycleFilterPreset {
   return PRESET_VALUES.has(v);
@@ -31,6 +33,7 @@ export function isCycleFilterPreset(v: string): v is CycleFilterPreset {
 
 export type IssueFilters = {
   statusIds: string[];
+  types: IssueType[];
   priorities: number[];
   assigneeIds: (string | "none")[];
   labelIds: string[];
@@ -39,6 +42,7 @@ export type IssueFilters = {
 
 export const EMPTY_FILTERS: IssueFilters = {
   statusIds: [],
+  types: [],
   priorities: [],
   assigneeIds: [],
   labelIds: [],
@@ -51,6 +55,9 @@ export const CYCLE_FILTER_ALL = "all";
 export function parseFilters(params: URLSearchParams): IssueFilters {
   return {
     statusIds: params.getAll("status"),
+    types: params
+      .getAll("type")
+      .filter((v): v is IssueType => ISSUE_TYPE_VALUES.has(v)),
     priorities: params.getAll("priority").map(Number).filter(Number.isFinite),
     assigneeIds: params.getAll("assignee"),
     labelIds: params.getAll("label"),
@@ -63,6 +70,7 @@ export function parseFilters(params: URLSearchParams): IssueFilters {
 export function serializeFilters(f: IssueFilters): URLSearchParams {
   const p = new URLSearchParams();
   f.statusIds.forEach((v) => p.append("status", v));
+  f.types.forEach((v) => p.append("type", v));
   f.priorities.forEach((v) => p.append("priority", String(v)));
   f.assigneeIds.forEach((v) => p.append("assignee", v));
   f.labelIds.forEach((v) => p.append("label", v));
@@ -80,6 +88,7 @@ export function serializeBoardFilters(f: IssueFilters): URLSearchParams {
 export function hasActiveFilters(f: IssueFilters) {
   return (
     f.statusIds.length > 0 ||
+    f.types.length > 0 ||
     f.priorities.length > 0 ||
     f.assigneeIds.length > 0 ||
     f.labelIds.length > 0 ||
@@ -180,6 +189,7 @@ export function applyFilters(
 
   return issues.filter((i) => {
     if (f.statusIds.length && !f.statusIds.includes(i.statusId)) return false;
+    if (f.types.length && !f.types.includes(i.type)) return false;
     if (f.priorities.length && !f.priorities.includes(i.priority)) return false;
     if (f.assigneeIds.length) {
       const key = i.assigneeId ?? "none";

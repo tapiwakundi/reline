@@ -57,6 +57,7 @@ export async function generateMetadata({
   const scopedId = defaultCycleIdFromFilters(
     {
       statusIds: [],
+      types: [],
       priorities: [],
       assigneeIds: [],
       labelIds: [],

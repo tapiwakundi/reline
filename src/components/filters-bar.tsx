@@ -26,7 +26,8 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
-import { PRIORITIES } from "@/lib/defaults";
+import { PRIORITIES, ISSUE_TYPES } from "@/lib/defaults";
+import { TypeIcon } from "@/components/issue-type-icon";
 import {
   CYCLE_FILTER_PRESETS,
   EMPTY_FILTERS,
@@ -35,6 +36,7 @@ import {
   type CycleFilter,
   type IssueFilters,
 } from "@/lib/filtering";
+import type { IssueType } from "@/lib/types";
 
 function toggle<T>(arr: T[], v: T): T[] {
   return arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
@@ -118,6 +120,7 @@ export function FiltersBar({
   const [cycleQuery, setCycleQuery] = useState("");
   const [statusQuery, setStatusQuery] = useState("");
   const [priorityQuery, setPriorityQuery] = useState("");
+  const [typeQuery, setTypeQuery] = useState("");
   const [assigneeQuery, setAssigneeQuery] = useState("");
   const [labelQuery, setLabelQuery] = useState("");
 
@@ -133,6 +136,7 @@ export function FiltersBar({
 
   const q = query.trim().toLowerCase();
   const showStatus = !q || "status".includes(q);
+  const showType = !q || "type".includes(q);
   const showPriority = !q || "priority".includes(q);
   const showAssignee = !hideAssignee && (!q || "assignee".includes(q));
   const showLabel =
@@ -167,6 +171,17 @@ export function FiltersBar({
             )
           )}
           onClear={() => onChange({ ...filters, statusIds: [] })}
+        />
+      )}
+      {filters.types.length > 0 && (
+        <FilterChip
+          label="Type"
+          value={joinLabels(
+            filters.types.map(
+              (t) => ISSUE_TYPES.find((x) => x.value === t)?.label ?? "Unknown"
+            )
+          )}
+          onClear={() => onChange({ ...filters, types: [] })}
         />
       )}
       {filters.priorities.length > 0 && (
@@ -217,6 +232,7 @@ export function FiltersBar({
         !(
           iconOnly &&
           filters.statusIds.length === 0 &&
+          filters.types.length === 0 &&
           filters.priorities.length === 0 &&
           filters.assigneeIds.length === 0 &&
           filters.labelIds.length === 0
@@ -243,6 +259,7 @@ export function FiltersBar({
           setQuery("");
           setCycleQuery("");
           setStatusQuery("");
+          setTypeQuery("");
           setPriorityQuery("");
           setAssigneeQuery("");
           setLabelQuery("");
@@ -321,6 +338,45 @@ export function FiltersBar({
                         {s.name}
                       </DropdownMenuCheckboxItem>
                     ))}
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+
+          {showType && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <TypeIcon type="task" />
+                Type
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-52 p-0">
+                <SubmenuSearch value={typeQuery} onChange={setTypeQuery} />
+                <DropdownMenuSeparator />
+                <div className="max-h-64 overflow-y-auto p-1">
+                  {ISSUE_TYPES.filter(
+                    (t) =>
+                      !typeQuery.trim() ||
+                      t.label
+                        .toLowerCase()
+                        .includes(typeQuery.trim().toLowerCase())
+                  ).map((t) => (
+                    <DropdownMenuCheckboxItem
+                      key={t.value}
+                      checked={filters.types.includes(t.value)}
+                      onCheckedChange={() =>
+                        onChange({
+                          ...filters,
+                          types: toggle(filters.types, t.value as IssueType),
+                        })
+                      }
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      <span className="mr-2 inline-flex">
+                        <TypeIcon type={t.value} />
+                      </span>
+                      {t.label}
+                    </DropdownMenuCheckboxItem>
+                  ))}
                 </div>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -524,6 +580,7 @@ export function FiltersBar({
           )}
 
           {!showStatus &&
+            !showType &&
             !showPriority &&
             !showAssignee &&
             !showLabel &&

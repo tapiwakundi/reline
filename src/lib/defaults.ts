@@ -29,3 +29,9 @@ export const PRIORITIES = [
   { value: 3, label: "Medium" },
   { value: 4, label: "Low" },
 ] as const;
+
+export const ISSUE_TYPES = [
+  { value: "story", label: "Story" },
+  { value: "task", label: "Task" },
+  { value: "bug", label: "Bug" },
+] as const;

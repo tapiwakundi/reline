@@ -38,10 +38,11 @@ import {
   resolveIssuePatch,
   type IssuePatch,
 } from "@/lib/optimistic-issues";
-import { PRIORITIES } from "@/lib/defaults";
+import { PRIORITIES, ISSUE_TYPES } from "@/lib/defaults";
 import type { IssueListItem } from "@/lib/types";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
+import { TypeIcon } from "@/components/issue-type-icon";
 import { UserAvatar } from "@/components/user-avatar";
 
 export type { IssuePatch };
@@ -179,6 +180,32 @@ export function IssueContextMenu({
                 <ContextMenuRadioItem key={p.value} value={String(p.value)}>
                   <PriorityIcon priority={p.value} />
                   {p.label}
+                </ContextMenuRadioItem>
+              ))}
+            </ContextMenuRadioGroup>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>
+            <TypeIcon type={issue.type} />
+            <span className="flex-1">Type</span>
+            <span className="text-xs tracking-widest text-muted-foreground">
+              T
+            </span>
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-44">
+            <ContextMenuRadioGroup
+              value={issue.type}
+              onValueChange={(v) =>
+                patch({ type: v as (typeof ISSUE_TYPES)[number]["value"] })
+              }
+            >
+              <ContextMenuLabel>Change type…</ContextMenuLabel>
+              {ISSUE_TYPES.map((t) => (
+                <ContextMenuRadioItem key={t.value} value={t.value}>
+                  <TypeIcon type={t.value} />
+                  {t.label}
                 </ContextMenuRadioItem>
               ))}
             </ContextMenuRadioGroup>

@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/issues";
 import {
   activeCycleIdFromRows,
+  cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
   todoStatusIdForCycleEntry,
 } from "@/lib/issue-cycle";
@@ -47,14 +48,23 @@ export function resolveIssuePatch(
   }
 
   if (next.statusId && next.cycleId === undefined) {
-    const cycleId = cycleIdForTodoEntry(
+    const cleared = cycleIdForBacklogEntry(
       statuses,
-      issue.statusId,
       next.statusId,
-      issue.cycleId,
-      activeCycleIdFromRows(cycles)
+      issue.cycleId
     );
-    if (cycleId) next = { ...next, cycleId };
+    if (cleared === null) {
+      next = { ...next, cycleId: null };
+    } else {
+      const cycleId = cycleIdForTodoEntry(
+        statuses,
+        issue.statusId,
+        next.statusId,
+        issue.cycleId,
+        activeCycleIdFromRows(cycles)
+      );
+      if (cycleId) next = { ...next, cycleId };
+    }
   }
 
   return next;
@@ -68,6 +78,7 @@ export function applyPatchToListItem(
     ...issue,
     ...(patch.title !== undefined ? { title: patch.title } : {}),
     ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+    ...(patch.type !== undefined ? { type: patch.type } : {}),
     ...(patch.statusId !== undefined ? { statusId: patch.statusId } : {}),
     ...(patch.assigneeId !== undefined ? { assigneeId: patch.assigneeId } : {}),
     ...(patch.cycleId !== undefined ? { cycleId: patch.cycleId } : {}),
@@ -85,6 +96,7 @@ function patchDetailIssue(issue: DetailIssue, patch: IssuePatch): DetailIssue {
       ? { description: patch.description }
       : {}),
     ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+    ...(patch.type !== undefined ? { type: patch.type } : {}),
     ...(patch.statusId !== undefined ? { statusId: patch.statusId } : {}),
     ...(patch.assigneeId !== undefined ? { assigneeId: patch.assigneeId } : {}),
     ...(patch.cycleId !== undefined ? { cycleId: patch.cycleId } : {}),

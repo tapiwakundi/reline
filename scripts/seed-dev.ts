@@ -64,13 +64,20 @@ async function main() {
     .returning();
 
   const byType = Object.fromEntries(statusRows.map((s) => [s.type, s.id]));
-  const sample = [
-    { title: "Set up CI pipeline", type: "started", priority: 2, label: "Infra", cycle: true },
-    { title: "Fix login redirect loop on Safari", type: "unstarted", priority: 1, label: "Bug", cycle: true },
-    { title: "Design onboarding empty states", type: "unstarted", priority: 3, label: "Design", cycle: false },
-    { title: "Add dark mode toggle", type: "backlog", priority: 4, label: "Feature", cycle: false },
-    { title: "Migrate images to object storage", type: "backlog", priority: 3, label: "Infra", cycle: false },
-    { title: "Write API docs for webhooks", type: "done", priority: 3, label: "Feature", cycle: true },
+  const sample: {
+    title: string;
+    statusType: string;
+    issueType: "story" | "task" | "bug";
+    priority: number;
+    label: string;
+    cycle: boolean;
+  }[] = [
+    { title: "Set up CI pipeline", statusType: "started", issueType: "task", priority: 2, label: "Infra", cycle: true },
+    { title: "Fix login redirect loop on Safari", statusType: "unstarted", issueType: "bug", priority: 1, label: "Bug", cycle: true },
+    { title: "Design onboarding empty states", statusType: "unstarted", issueType: "story", priority: 3, label: "Design", cycle: false },
+    { title: "Add dark mode toggle", statusType: "backlog", issueType: "story", priority: 4, label: "Feature", cycle: false },
+    { title: "Migrate images to object storage", statusType: "backlog", issueType: "task", priority: 3, label: "Infra", cycle: false },
+    { title: "Write API docs for webhooks", statusType: "done", issueType: "task", priority: 3, label: "Feature", cycle: true },
   ];
 
   let counter = 0;
@@ -83,8 +90,9 @@ async function main() {
         number: counter,
         title: s.title,
         description: "",
+        type: s.issueType,
         priority: s.priority,
-        statusId: byType[s.type],
+        statusId: byType[s.statusType],
         assigneeId: counter % 2 === 0 ? u.id : null,
         creatorId: u.id,
         cycleId: s.cycle ? cycle.id : null,

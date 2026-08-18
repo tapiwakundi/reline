@@ -15,6 +15,7 @@ import {
   AssigneePicker,
   PriorityPicker,
   StatusPicker,
+  TypePicker,
 } from "@/components/pickers";
 import { IssueContextMenu } from "@/components/issues/issue-context-menu";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -93,6 +94,11 @@ export function IssueRow({
         <PriorityPicker
           value={issue.priority}
           onChange={(priority) => patch({ priority })}
+          compact
+        />
+        <TypePicker
+          value={issue.type}
+          onChange={(type) => patch({ type })}
           compact
         />
         <span className="w-16 shrink-0 text-xs text-muted-foreground">

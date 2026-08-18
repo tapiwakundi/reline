@@ -13,6 +13,8 @@ export type StatusRow = {
   position: number;
 };
 
+export type IssueType = "story" | "task" | "bug";
+
 export type LabelRow = {
   id: string;
   name: string;
@@ -33,6 +35,7 @@ export type IssueListItem = {
   identifier: string;
   number: number;
   title: string;
+  type: IssueType;
   priority: number;
   statusId: string;
   assigneeId: string | null;
@@ -73,6 +76,7 @@ export type DetailIssue = {
   identifier: string;
   title: string;
   description: string;
+  type: IssueType;
   priority: number;
   statusId: string;
   assigneeId: string | null;

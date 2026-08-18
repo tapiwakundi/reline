@@ -31,6 +31,7 @@ import {
   LabelPicker,
   PriorityPicker,
   StatusPicker,
+  TypePicker,
 } from "@/components/pickers";
 import { UserAvatar } from "@/components/user-avatar";
 import { CommentBody } from "@/components/comment-body";
@@ -337,6 +338,7 @@ export function IssueDetail({
 
           <div className="mt-4 flex flex-wrap gap-1.5 lg:hidden">
             <StatusPicker value={issue.statusId} onChange={(statusId) => patch({ statusId })} />
+            <TypePicker value={issue.type} onChange={(type) => patch({ type })} />
             <PriorityPicker value={issue.priority} onChange={(priority) => patch({ priority })} />
             <AssigneePicker value={issue.assigneeId} onChange={(assigneeId) => patch({ assigneeId })} />
             <ReporterRow creator={issue.creator} />
@@ -444,6 +446,11 @@ export function IssueDetail({
             <StatusPicker
               value={issue.statusId}
               onChange={(statusId) => patch({ statusId })}
+              className={railPickerClass}
+            />
+            <TypePicker
+              value={issue.type}
+              onChange={(type) => patch({ type })}
               className={railPickerClass}
             />
             <PriorityPicker

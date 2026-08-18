@@ -12,6 +12,7 @@ import type { IssueListItem } from "@/lib/types";
 import type { BoardCardProperty } from "@/lib/board-display";
 import type { CycleFilter } from "@/lib/filtering";
 import { PriorityIcon } from "@/components/priority-icon";
+import { TypeIcon } from "@/components/issue-type-icon";
 import { StatusIcon } from "@/components/status-icon";
 import { UserAvatar } from "@/components/user-avatar";
 import {
@@ -54,6 +55,7 @@ export function BoardCardContent({
 
   const showHeader = show("id") || !!assignee;
   const showFooter =
+    show("type") ||
     show("priority") ||
     !!status ||
     issueLabels.length > 0 ||
@@ -88,6 +90,7 @@ export function BoardCardContent({
       </p>
       {showFooter && (
         <div className="flex flex-wrap items-center gap-1.5">
+          {show("type") && <TypeIcon type={issue.type} />}
           {show("priority") && <PriorityIcon priority={issue.priority} />}
           {status && <StatusIcon status={status} />}
           {issueLabels.map((l) => (

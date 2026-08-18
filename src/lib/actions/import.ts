@@ -11,6 +11,7 @@ import { wsPath } from "@/lib/workspace-paths";
 import {
   adfToText,
   mapJiraAssignee,
+  mapJiraIssueType,
   mapJiraPriority,
   mapJiraStatus,
   mapSprintToCycleStatus,
@@ -38,6 +39,7 @@ type ImportRow = {
   description: string;
   status: string;
   priority: string;
+  issueType: string;
   assignee: string;
   labels: string[];
   /** Sprints this issue belonged to; the latest/active one becomes its cycle. */
@@ -285,6 +287,7 @@ async function runImport(rows: ImportRow[]): Promise<ImportReport> {
           title: row.title.trim().slice(0, 500),
           description: row.description.trim(),
           priority: mapJiraPriority(row.priority),
+          type: mapJiraIssueType(row.issueType),
           statusId: status.id,
           assigneeId: assignee?.id ?? null,
           cycleId,
@@ -341,6 +344,7 @@ export async function importJiraCsv(formData: FormData): Promise<ImportReport> {
   const descIdx = col("description");
   const statusIdx = col("status");
   const priorityIdx = col("priority");
+  const issueTypeIdx = col("issue type");
   const assigneeIdx = header.findIndex(
     (h) => h === "assignee" || h === "assignee email"
   );
@@ -370,6 +374,7 @@ export async function importJiraCsv(formData: FormData): Promise<ImportReport> {
       description: descIdx !== -1 ? (r[descIdx] ?? "") : "",
       status: statusIdx !== -1 ? (r[statusIdx] ?? "") : "",
       priority: priorityIdx !== -1 ? (r[priorityIdx] ?? "") : "",
+      issueType: issueTypeIdx !== -1 ? (r[issueTypeIdx] ?? "") : "",
       assignee: assigneeIdx !== -1 ? (r[assigneeIdx] ?? "") : "",
       labels: labelIdxs.map((i) => r[i] ?? "").filter(Boolean),
       sprints: unique,
@@ -387,6 +392,7 @@ type JiraApiIssue = {
     description?: unknown;
     status?: { name?: string };
     priority?: { name?: string };
+    issuetype?: { name?: string };
     assignee?: { emailAddress?: string; displayName?: string } | null;
     labels?: string[];
     created?: string;
@@ -457,6 +463,7 @@ export async function importJiraApi(input: {
     "description",
     "status",
     "priority",
+    "issuetype",
     "assignee",
     "labels",
     "created",
@@ -509,6 +516,7 @@ export async function importJiraApi(input: {
           : adfToText(i.fields.description).trim(),
       status: i.fields.status?.name ?? "",
       priority: i.fields.priority?.name ?? "",
+      issueType: i.fields.issuetype?.name ?? "",
       assignee:
         i.fields.assignee?.emailAddress ?? i.fields.assignee?.displayName ?? "",
       labels: i.fields.labels ?? [],

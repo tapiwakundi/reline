@@ -142,6 +142,8 @@ export type StatusType =
   | "done"
   | "canceled";
 
+export type IssueType = "story" | "task" | "bug";
+
 export const statuses = pgTable(
   "statuses",
   {
@@ -192,6 +194,9 @@ export const issues = pgTable(
     description: text("description").notNull().default(""),
     // 0 none, 1 urgent, 2 high, 3 medium, 4 low
     priority: integer("priority").notNull().default(0),
+    type: text("type", { enum: ["story", "task", "bug"] })
+      .notNull()
+      .default("task"),
     statusId: text("status_id")
       .notNull()
       .references(() => statuses.id),

@@ -35,6 +35,21 @@ export function cycleIdForTodoEntry(
   return activeCycleId;
 }
 
+/**
+ * When an issue moves into Backlog, clear its cycle.
+ * Returns `null` to clear, or `undefined` if no change is needed.
+ */
+export function cycleIdForBacklogEntry(
+  statuses: { id: string; type: string }[],
+  nextStatusId: string,
+  existingCycleId: string | null | undefined
+): null | undefined {
+  if (existingCycleId == null) return undefined;
+  const to = statuses.find((s) => s.id === nextStatusId);
+  if (to?.type !== "backlog") return undefined;
+  return null;
+}
+
 /** Resolve the workspace's current (active) cycle id from cycle rows. */
 export function activeCycleIdFromRows(
   cycles: {

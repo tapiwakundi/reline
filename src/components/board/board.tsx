@@ -80,6 +80,7 @@ import type {
 } from "@/lib/board-display";
 import {
   activeCycleIdFromRows,
+  cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
   todoStatusIdForCycleEntry,
 } from "@/lib/issue-cycle";
@@ -122,14 +123,17 @@ function applyGroupToIssue(
 ): IssueListItem {
   switch (group) {
     case "status": {
+      const cleared = cycleIdForBacklogEntry(statuses, key, issue.cycleId);
       const cycleId =
-        cycleIdForTodoEntry(
-          statuses,
-          issue.statusId,
-          key,
-          issue.cycleId,
-          activeCycleId
-        ) ?? issue.cycleId;
+        cleared === null
+          ? null
+          : cycleIdForTodoEntry(
+              statuses,
+              issue.statusId,
+              key,
+              issue.cycleId,
+              activeCycleId
+            ) ?? issue.cycleId;
       return { ...issue, statusId: key, cycleId };
     }
     case "assignee":

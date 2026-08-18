@@ -8,6 +8,7 @@ export type BoardOrdering = "manual" | "priority" | "created" | "updated" | "tit
 
 export type BoardCardProperty =
     | "id"
+    | "type"
     | "priority"
     | "status"
     | "assignee"
@@ -34,7 +35,7 @@ export const DEFAULT_BOARD_DISPLAY_PREFS: BoardDisplayPrefs = {
   completed: "7",
   showBacklog: true,
   showEmptyColumns: true,
-  properties: ["id", "priority", "assignee", "labels"],
+  properties: ["id", "type", "priority", "assignee", "labels"],
 };
 
 export const COMPLETED_OPTIONS: {
@@ -69,6 +70,7 @@ export const CARD_PROPERTY_OPTIONS: {
   label: string;
 }[] = [
   { value: "id", label: "ID" },
+  { value: "type", label: "Type" },
   { value: "priority", label: "Priority" },
   { value: "status", label: "Status" },
   { value: "assignee", label: "Assignee" },

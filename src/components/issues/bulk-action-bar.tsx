@@ -6,6 +6,7 @@ import {
   CyclePicker,
   PriorityPicker,
   StatusPicker,
+  TypePicker,
 } from "@/components/pickers";
 import type { IssuePatch } from "@/lib/optimistic-issues";
 import type { IssueListItem } from "@/lib/types";
@@ -41,6 +42,10 @@ export function BulkActionBar({
         <StatusPicker
           value={first.statusId}
           onChange={(statusId) => onPatch({ statusId })}
+        />
+        <TypePicker
+          value={first.type}
+          onChange={(type) => onPatch({ type })}
         />
         <PriorityPicker
           value={first.priority}

@@ -19,6 +19,7 @@ import { resolveMentions } from "@/lib/mentions";
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
 import {
   activeCycleIdFromRows,
+  cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
   todoStatusIdForCycleEntry,
 } from "@/lib/issue-cycle";
@@ -119,11 +120,30 @@ async function cycleIdWhenLeavingBacklogToTodo(
   );
 }
 
+/** Clear cycle when moving into Backlog. */
+async function cycleIdWhenEnteringBacklog(
+  workspaceId: string,
+  nextStatusId: string,
+  existingCycleId: string | null
+): Promise<null | undefined> {
+  if (existingCycleId == null) return undefined;
+  const workspaceStatuses = await db.query.statuses.findMany({
+    where: eq(statuses.workspaceId, workspaceId),
+    columns: { id: true, type: true },
+  });
+  return cycleIdForBacklogEntry(
+    workspaceStatuses,
+    nextStatusId,
+    existingCycleId
+  );
+}
+
 export async function createIssue(input: {
   title: string;
   description?: string;
   statusId?: string;
   priority?: number;
+  type?: "story" | "task" | "bug";
   assigneeId?: string | null;
   cycleId?: string | null;
   labelIds?: string[];
@@ -166,6 +186,7 @@ export async function createIssue(input: {
       title,
       description: input.description?.trim() ?? "",
       priority: input.priority ?? 0,
+      type: input.type ?? "task",
       statusId,
       assigneeId: input.assigneeId ?? null,
       cycleId,
@@ -212,6 +233,7 @@ export type IssueUpdatePatch = {
   description?: string;
   statusId?: string;
   priority?: number;
+  type?: "story" | "task" | "bug";
   assigneeId?: string | null;
   cycleId?: string | null;
   estimate?: number | null;
@@ -238,16 +260,25 @@ async function applyIssueUpdate(
     if (promoted) fields.statusId = promoted;
   }
 
-  // Moving Backlog → Todo also assigns the current cycle, unless the caller
-  // is already setting an explicit cycle (including clearing it).
+  // Status transitions that imply a cycle change, unless the caller already
+  // set an explicit cycle (including clearing it).
   if (fields.statusId && fields.cycleId === undefined) {
-    const assigned = await cycleIdWhenLeavingBacklogToTodo(
+    const cleared = await cycleIdWhenEnteringBacklog(
       workspace.id,
-      before.statusId,
       fields.statusId,
       before.cycleId
     );
-    if (assigned) fields.cycleId = assigned;
+    if (cleared === null) {
+      fields.cycleId = null;
+    } else {
+      const assigned = await cycleIdWhenLeavingBacklogToTodo(
+        workspace.id,
+        before.statusId,
+        fields.statusId,
+        before.cycleId
+      );
+      if (assigned) fields.cycleId = assigned;
+    }
   }
 
   if (Object.keys(fields).length > 0) {
@@ -353,23 +384,38 @@ export async function moveIssueOnBoard(
   const { workspace, user } = await requireWorkspace();
   const before = await ownedIssue(issueId, workspace.id);
 
-  const fields: { statusId: string; boardOrder: number; cycleId?: string } = {
+  const fields: {
+    statusId: string;
+    boardOrder: number;
+    cycleId?: string | null;
+  } = {
     statusId,
     boardOrder,
   };
-  const assigned = await cycleIdWhenLeavingBacklogToTodo(
+  const cleared = await cycleIdWhenEnteringBacklog(
     workspace.id,
-    before.statusId,
     statusId,
     before.cycleId
   );
-  if (assigned) fields.cycleId = assigned;
+  if (cleared === null) {
+    fields.cycleId = null;
+  } else {
+    const assigned = await cycleIdWhenLeavingBacklogToTodo(
+      workspace.id,
+      before.statusId,
+      statusId,
+      before.cycleId
+    );
+    if (assigned) fields.cycleId = assigned;
+  }
 
   const statusChanged = statusId !== before.statusId;
+  const cycleChanged =
+    fields.cycleId !== undefined && fields.cycleId !== before.cycleId;
   // Pure reorders should not bump updatedAt — board order is independent of
   // "last updated" sorting.
   const patch =
-    statusChanged || assigned
+    statusChanged || cycleChanged
       ? { ...fields, updatedAt: new Date() }
       : fields;
 

@@ -14,6 +14,7 @@ import {
   LabelPicker,
   PriorityPicker,
   StatusPicker,
+  TypePicker,
 } from "@/components/pickers";
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
@@ -21,6 +22,7 @@ import { showIssueCreatedToast } from "@/components/issue-created-toast";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { wsPath } from "@/lib/workspace-paths";
+import type { IssueType } from "@/lib/types";
 
 export function CreateIssueDialog({
   open,
@@ -46,6 +48,7 @@ export function CreateIssueDialog({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [statusId, setStatusId] = useState(fallbackStatus);
+  const [type, setType] = useState<IssueType>("task");
   const [priority, setPriority] = useState(0);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [cycleId, setCycleId] = useState<string | null>(null);
@@ -63,6 +66,7 @@ export function CreateIssueDialog({
       todoStatusIdForCycleEntry(statuses, initialStatusId, initialCycleId) ??
         initialStatusId
     );
+    setType("task");
     setPriority(0);
     setAssigneeId(null);
     setCycleId(initialCycleId);
@@ -93,6 +97,7 @@ export function CreateIssueDialog({
           title: createdTitle,
           description,
           statusId: createdStatusId,
+          type,
           priority,
           assigneeId,
           cycleId,
@@ -172,6 +177,7 @@ export function CreateIssueDialog({
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
           <StatusPicker value={statusId} onChange={setStatusId} />
+          <TypePicker value={type} onChange={setType} />
           <PriorityPicker value={priority} onChange={setPriority} />
           <AssigneePicker value={assigneeId} onChange={setAssigneeId} />
           <LabelPicker value={labelIds} onChange={setLabelIds} />

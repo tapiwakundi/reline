@@ -25,7 +25,9 @@ import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
 import { createLabel } from "@/lib/actions/labels";
 import { invalidateAfterLabelChange } from "@/lib/invalidate";
-import { LABEL_COLORS, PRIORITIES } from "@/lib/defaults";
+import { LABEL_COLORS, PRIORITIES, ISSUE_TYPES } from "@/lib/defaults";
+import { TypeIcon } from "@/components/issue-type-icon";
+import type { IssueType } from "@/lib/types";
 
 const chipClass = cn(
   "inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-transparent px-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-accent"
@@ -118,6 +120,56 @@ export function PriorityPicker({
                   <PriorityIcon priority={p.value} />
                   {p.label}
                   {p.value === value && (
+                    <CheckIcon className="ml-auto size-3.5" />
+                  )}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function TypePicker({
+  value,
+  onChange,
+  compact,
+  className,
+}: {
+  value: IssueType;
+  onChange: (t: IssueType) => void;
+  compact?: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = ISSUE_TYPES.find((t) => t.value === value) ?? ISSUE_TYPES[1];
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className={cn(chipClass, className)}>
+        <TypeIcon type={value} />
+        {!compact && current.label}
+      </PopoverTrigger>
+      <PopoverContent className="w-52 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Set type…" />
+          <CommandList>
+            <CommandEmpty>No type found.</CommandEmpty>
+            <CommandGroup>
+              {ISSUE_TYPES.map((t) => (
+                <CommandItem
+                  key={t.value}
+                  value={t.label}
+                  onSelect={() => {
+                    onChange(t.value);
+                    setOpen(false);
+                  }}
+                >
+                  <TypeIcon type={t.value} />
+                  {t.label}
+                  {t.value === value && (
                     <CheckIcon className="ml-auto size-3.5" />
                   )}
                 </CommandItem>
