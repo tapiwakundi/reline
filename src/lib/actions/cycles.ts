@@ -29,7 +29,7 @@ export async function createCycle(input: {
   await db.insert(cycles).values({
     workspaceId: workspace.id,
     number: ws.counter,
-    name: input.name?.trim() || `Cycle ${ws.counter}`,
+    name: input.name?.trim() || `${workspace.name} Cycle ${ws.counter}`,
     startDate: new Date(input.startDate),
     endDate: new Date(input.endDate),
   });

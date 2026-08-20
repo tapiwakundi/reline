@@ -287,6 +287,17 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
     () => initialCycles.find((c) => c.status === "active")?.id ?? null
   );
   const defaults = defaultDates();
+  const nextCycleNumber =
+    list.reduce((max, c) => Math.max(max, c.number), 0) + 1;
+  const defaultCycleName = `${workspace.name} Cycle ${nextCycleNumber}`;
+  const [createName, setCreateName] = useState(defaultCycleName);
+
+  function openCreate() {
+    setCreateName(
+      `${workspace.name} Cycle ${list.reduce((max, c) => Math.max(max, c.number), 0) + 1}`
+    );
+    setOpen(true);
+  }
 
   const upcomingCycles = useMemo(
     () =>
@@ -376,7 +387,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
         <Button
           size="sm"
           className="ml-auto h-7 gap-1 text-xs"
-          onClick={() => setOpen(true)}
+          onClick={openCreate}
         >
           <PlusIcon className="size-3.5" />
           New cycle
@@ -390,7 +401,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
             <p className="text-sm text-muted-foreground">
               Cycles are time-boxed sprints for your team.
             </p>
-            <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+            <Button size="sm" variant="secondary" onClick={openCreate}>
               Create a cycle
             </Button>
           </div>
@@ -626,7 +637,9 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
               <Input
                 id="cycle-name"
                 name="name"
-                placeholder={`Cycle ${list.length + 1}`}
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder={defaultCycleName}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
