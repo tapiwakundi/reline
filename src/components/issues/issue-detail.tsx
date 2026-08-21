@@ -35,6 +35,7 @@ import {
 } from "@/components/pickers";
 import { UserAvatar } from "@/components/user-avatar";
 import { CommentBody } from "@/components/comment-body";
+import { RichText } from "@/components/rich-text";
 import { CommentComposer } from "@/components/comment-composer";
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
@@ -90,6 +91,7 @@ export function IssueDetail({
 
   const [title, setTitle] = useState(issue.title);
   const [description, setDescription] = useState(issue.description);
+  const [editingDescription, setEditingDescription] = useState(false);
   const [syncedFrom, setSyncedFrom] = useState({
     id: issue.id,
     title: issue.title,
@@ -107,6 +109,7 @@ export function IssueDetail({
     });
     setTitle(issue.title);
     setDescription(issue.description);
+    setEditingDescription(false);
   }
   const uploads = useAttachmentUploads();
   const persisted = useRef(new Set<string>());
@@ -128,10 +131,13 @@ export function IssueDetail({
   }, [title]);
   useEffect(() => {
     const el = descriptionRef.current;
-    if (!el) return;
+    if (!el || !editingDescription) return;
     el.style.height = "auto";
     el.style.height = `${Math.max(el.scrollHeight, 96)}px`;
-  }, [description]);
+    el.focus();
+    const len = el.value.length;
+    el.setSelectionRange(len, len);
+  }, [description, editingDescription]);
 
   async function refreshDetail() {
     await invalidateAfterIssueChange(qc, workspace.id);
@@ -181,6 +187,7 @@ export function IssueDetail({
     if (title !== issue.title || description !== issue.description) {
       patch({ title, description });
     }
+    setEditingDescription(false);
   }
 
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -297,22 +304,47 @@ export function IssueDetail({
             className="w-full resize-none overflow-hidden bg-transparent text-xl font-semibold leading-snug outline-none placeholder:text-muted-foreground/50"
             placeholder="Issue title"
           />
-          <textarea
-            ref={descriptionRef}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={saveText}
-            onPaste={(e) => {
-              const files = mediaFiles(e.clipboardData.files);
-              if (files.length) {
-                e.preventDefault();
-                uploads.addFiles(files);
-              }
-            }}
-            placeholder="Add description…"
-            rows={4}
-            className="mt-3 w-full resize-none overflow-hidden bg-transparent text-sm leading-6 text-foreground/90 outline-none placeholder:text-muted-foreground/50"
-          />
+          {editingDescription ? (
+            <textarea
+              ref={descriptionRef}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onBlur={saveText}
+              onPaste={(e) => {
+                const files = mediaFiles(e.clipboardData.files);
+                if (files.length) {
+                  e.preventDefault();
+                  uploads.addFiles(files);
+                }
+              }}
+              placeholder="Add description…"
+              rows={4}
+              className="mt-3 w-full resize-none overflow-hidden bg-transparent text-sm leading-6 text-foreground/90 outline-none placeholder:text-muted-foreground/50"
+            />
+          ) : (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setEditingDescription(true)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setEditingDescription(true);
+                }
+              }}
+              className="mt-3 block w-full cursor-text rounded-md text-left text-sm leading-6 text-foreground/90 outline-none hover:bg-foreground/[0.03] focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {description.trim() ? (
+                <RichText
+                  text={description}
+                  members={members}
+                  className="whitespace-pre-wrap"
+                />
+              ) : (
+                <span className="text-muted-foreground/50">Add description…</span>
+              )}
+            </div>
+          )}
 
           <div
             className="mt-2 flex flex-col gap-2"
