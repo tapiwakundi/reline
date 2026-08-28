@@ -32,7 +32,7 @@ const DISPOSITIONS: {
   {
     value: "next",
     label: "Move to next cycle",
-    description: "Keep status, assign the next cycle",
+    description: "Keep status, assign the next upcoming cycle",
   },
   {
     value: "backlog",
@@ -51,13 +51,11 @@ function DispositionPicker({
   count,
   value,
   onChange,
-  nextDisabled,
 }: {
   label: string;
   count: number;
   value: CycleIssueDisposition;
   onChange: (value: CycleIssueDisposition) => void;
-  nextDisabled: boolean;
 }) {
   if (count === 0) return null;
   return (
@@ -70,27 +68,22 @@ function DispositionPicker({
       </div>
       <div className="flex flex-col gap-1.5">
         {DISPOSITIONS.map((opt) => {
-          const disabled = opt.value === "next" && nextDisabled;
           const selected = value === opt.value;
           return (
             <button
               key={opt.value}
               type="button"
-              disabled={disabled}
               onClick={() => onChange(opt.value)}
               className={cn(
                 "flex flex-col items-start rounded-md border px-3 py-2 text-left transition-colors",
                 selected
                   ? "border-primary bg-primary/5"
-                  : "border-border hover:bg-accent/50",
-                disabled && "cursor-not-allowed opacity-50"
+                  : "border-border hover:bg-accent/50"
               )}
             >
               <span className="text-[13px] font-medium">{opt.label}</span>
               <span className="text-[11px] text-muted-foreground">
-                {disabled
-                  ? "Create an upcoming cycle first"
-                  : opt.description}
+                {opt.description}
               </span>
             </button>
           );
@@ -124,10 +117,9 @@ export function CompleteCycleDialog({
 
   useEffect(() => {
     if (!open || !cycle) return;
-    const hasNext = upcomingCycles.length > 0;
-    const fallback: CycleIssueDisposition = hasNext ? "next" : "backlog";
-    setInProgressDisposition(fallback);
-    setPendingDisposition(fallback);
+    // Completing always tops up upcoming cycles, so "next" is always available.
+    setInProgressDisposition("next");
+    setPendingDisposition("next");
     setNextCycleId(upcomingCycles[0]?.id ?? "");
   }, [open, cycle, upcomingCycles]);
 
@@ -136,16 +128,13 @@ export function CompleteCycleDialog({
     const needsNext =
       (cycle.started > 0 && inProgressDisposition === "next") ||
       (pendingCount(cycle) > 0 && pendingDisposition === "next");
-    if (needsNext && !nextCycleId) {
-      toast.error("Create an upcoming cycle first");
-      return;
-    }
     startTransition(async () => {
       try {
         await completeCycle(cycle.id, {
           inProgress: inProgressDisposition,
           pending: pendingDisposition,
-          nextCycleId: needsNext ? nextCycleId : null,
+          // Empty means server picks (or creates) the soonest upcoming cycle.
+          nextCycleId: needsNext ? nextCycleId || null : null,
         });
         onOpenChange(false);
         onCompleted?.();
@@ -183,14 +172,12 @@ export function CompleteCycleDialog({
                   count={cycle.started}
                   value={inProgressDisposition}
                   onChange={setInProgressDisposition}
-                  nextDisabled={upcomingCycles.length === 0}
                 />
                 <DispositionPicker
                   label="Pending"
                   count={pendingCount(cycle)}
                   value={pendingDisposition}
                   onChange={setPendingDisposition}
-                  nextDisabled={upcomingCycles.length === 0}
                 />
                 {(inProgressDisposition === "next" ||
                   pendingDisposition === "next") &&
@@ -210,6 +197,14 @@ export function CompleteCycleDialog({
                         ))}
                       </select>
                     </div>
+                  )}
+                {(inProgressDisposition === "next" ||
+                  pendingDisposition === "next") &&
+                  upcomingCycles.length === 0 && (
+                    <p className="text-[12px] text-muted-foreground">
+                      Upcoming cycles will be created automatically when you
+                      complete this one.
+                    </p>
                   )}
               </>
             )}

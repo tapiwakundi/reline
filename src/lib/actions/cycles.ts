@@ -6,11 +6,79 @@ import { db } from "@/db";
 import { cycles, issues, statuses, workspaces } from "@/db/schema";
 import { requireWorkspace } from "@/lib/session";
 import { wsPath } from "@/lib/workspace-paths";
+import {
+  snapCycleDurationDays,
+  upcomingCycleWindows,
+} from "@/lib/cycle-schedule";
+
+const TARGET_PLANNED_CYCLES = 2;
 
 function revalidateCycleViews(slug: string) {
   revalidatePath(wsPath(slug, "/cycles"));
   revalidatePath(wsPath(slug, "/board"));
   revalidatePath(wsPath(slug, "/issues"));
+}
+
+/**
+ * Keep a pipeline of planned cycles. Creates at most enough to reach
+ * TARGET_PLANNED_CYCLES, using the closed cycle's 1- or 2-week duration.
+ * Returns the soonest planned cycle id (after any inserts).
+ */
+async function ensureUpcomingCycles(opts: {
+  workspaceId: string;
+  workspaceName: string;
+  /** Cycle being completed — excluded from the planned pool. */
+  excludeCycleId: string;
+  durationSource: { startDate: Date; endDate: Date };
+}): Promise<string | null> {
+  const planned = await db.query.cycles.findMany({
+    where: and(
+      eq(cycles.workspaceId, opts.workspaceId),
+      eq(cycles.status, "planned"),
+      ne(cycles.id, opts.excludeCycleId)
+    ),
+    orderBy: asc(cycles.startDate),
+    columns: { id: true, startDate: true, endDate: true },
+  });
+
+  const toCreate = Math.max(0, TARGET_PLANNED_CYCLES - planned.length);
+  if (toCreate === 0) return planned[0]?.id ?? null;
+
+  const durationDays = snapCycleDurationDays(
+    opts.durationSource.startDate,
+    opts.durationSource.endDate
+  );
+  const windows = upcomingCycleWindows({
+    durationDays,
+    anchorEnd: opts.durationSource.endDate,
+    planned,
+    count: toCreate,
+  });
+
+  let firstCreatedId: string | null = null;
+  for (const window of windows) {
+    const [ws] = await db
+      .update(workspaces)
+      .set({ cycleCounter: sql`${workspaces.cycleCounter} + 1` })
+      .where(eq(workspaces.id, opts.workspaceId))
+      .returning({ counter: workspaces.cycleCounter });
+
+    const [created] = await db
+      .insert(cycles)
+      .values({
+        workspaceId: opts.workspaceId,
+        number: ws.counter,
+        name: `${opts.workspaceName} Cycle ${ws.counter}`,
+        startDate: window.startDate,
+        endDate: window.endDate,
+        status: "planned",
+      })
+      .returning({ id: cycles.id });
+
+    if (!firstCreatedId) firstCreatedId = created.id;
+  }
+
+  return planned[0]?.id ?? firstCreatedId;
 }
 
 export async function createCycle(input: {
@@ -79,6 +147,7 @@ export type CycleIssueDisposition = "next" | "backlog" | "keep";
 /**
  * Manually complete a cycle. Done/Canceled issues stay on the cycle for
  * history. In-progress and pending issues follow the chosen disposition.
+ * Always tops up the planned pipeline to two upcoming cycles.
  */
 export async function completeCycle(
   cycleId: string,
@@ -96,6 +165,16 @@ export async function completeCycle(
   if (!cycle) throw new Error("Cycle not found");
   if (cycle.status === "completed") throw new Error("Cycle already completed");
 
+  const soonestPlannedId = await ensureUpcomingCycles({
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+    excludeCycleId: cycleId,
+    durationSource: {
+      startDate: cycle.startDate,
+      endDate: cycle.endDate,
+    },
+  });
+
   const needsNext =
     options.inProgress === "next" || options.pending === "next";
   let nextCycleId: string | null = null;
@@ -112,16 +191,7 @@ export async function completeCycle(
       if (!next) throw new Error("Next cycle not found");
       nextCycleId = next.id;
     } else {
-      const [upcoming] = await db.query.cycles.findMany({
-        where: and(
-          eq(cycles.workspaceId, workspace.id),
-          eq(cycles.status, "planned"),
-          ne(cycles.id, cycleId)
-        ),
-        orderBy: asc(cycles.startDate),
-        limit: 1,
-      });
-      nextCycleId = upcoming?.id ?? null;
+      nextCycleId = soonestPlannedId;
       if (!nextCycleId) {
         throw new Error("No upcoming cycle to move issues into");
       }
