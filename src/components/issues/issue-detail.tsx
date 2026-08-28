@@ -474,7 +474,7 @@ export function IssueDetail({
           <div className="mb-2 text-xs font-medium text-muted-foreground">
             Properties
           </div>
-          <div className="-ml-2 flex flex-col items-start gap-0.5">
+          <div className="-ml-2 flex w-full flex-col gap-0.5">
             <StatusPicker
               value={issue.statusId}
               onChange={(statusId) => patch({ statusId })}
@@ -541,7 +541,7 @@ export function IssueDetail({
 
 /** Borderless ghost rows for the right-hand properties rail. */
 const railPickerClass =
-  "border-transparent text-[13px] font-normal hover:border-transparent";
+  "w-full justify-start border-transparent text-[13px] font-normal hover:border-transparent";
 
 function ReporterRow({
   creator,
@@ -550,16 +550,17 @@ function ReporterRow({
   creator: Member | null;
   className?: string;
 }) {
+  const name = creator ? creator.name : "Unknown";
   return (
     <div
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium text-foreground/90",
+        "inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium text-foreground/90",
         className
       )}
+      title={`Reporter · ${name}`}
     >
-      <UserAvatar user={creator} className="size-4" />
-      <span className="text-muted-foreground">Reporter</span>
-      <span>{creator ? creator.name : "Unknown"}</span>
+      <UserAvatar user={creator} className="size-4 shrink-0" />
+      <span className="min-w-0 truncate">{name}</span>
     </div>
   );
 }

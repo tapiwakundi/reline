@@ -30,7 +30,7 @@ import { TypeIcon } from "@/components/issue-type-icon";
 import type { IssueType } from "@/lib/types";
 
 const chipClass = cn(
-  "inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-transparent px-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-accent"
+  "inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-border bg-transparent px-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-accent"
 );
 
 export function StatusPicker({
@@ -200,8 +200,12 @@ export function AssigneePicker({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger className={cn(chipClass, className)}>
-          <UserAvatar user={current} className="size-4" />
-          {!compact && (current ? current.name : "Unassigned")}
+          <UserAvatar user={current} className="size-4 shrink-0" />
+          {!compact && (
+            <span className="min-w-0 truncate">
+              {current ? current.name : "Unassigned"}
+            </span>
+          )}
       </PopoverTrigger>
       <PopoverContent className="w-56 p-0" align="start">
         <Command>
@@ -415,14 +419,30 @@ export function CyclePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={cn(chipClass, className)}>
-          <svg viewBox="0 0 16 16" className="size-3.5 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <PopoverTrigger
+        className={cn(chipClass, className)}
+        title={current?.name}
+      >
+          <svg
+            viewBox="0 0 16 16"
+            className="size-3.5 shrink-0 text-muted-foreground"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <path d="M13.5 8a5.5 5.5 0 1 1-1.61-3.89" strokeLinecap="round" />
             <path d="M13.5 1.5v3h-3" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {!compact && (current ? current.name : placeholder)}
+          {!compact && (
+            <span className="min-w-0 truncate">
+              {current ? current.name : placeholder}
+            </span>
+          )}
           {current?.status === "active" && (
-            <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+            <Badge
+              variant="secondary"
+              className="h-4 shrink-0 px-1 text-[10px]"
+            >
               Active
             </Badge>
           )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -235,6 +235,9 @@ function Column({
   column,
   issues,
   dragging,
+  selectedIds,
+  dragIds,
+  onSelectClick,
   onNewIssue,
   properties,
   cycleIds,
@@ -244,6 +247,9 @@ function Column({
   column: BoardColumnDef;
   issues: IssueListItem[];
   dragging: boolean;
+  selectedIds: Set<string>;
+  dragIds: Set<string>;
+  onSelectClick: (issueId: string, event: MouseEvent) => void;
   onNewIssue: () => void;
   properties: BoardCardProperty[];
   cycleIds: CycleFilter[];
@@ -285,6 +291,9 @@ function Column({
               issue={issue}
               properties={properties}
               cycleIds={cycleIds}
+              selected={selectedIds.has(issue.id)}
+              isDragPlaceholder={dragIds.has(issue.id)}
+              onSelectClick={onSelectClick}
               onOptimisticUpdate={(patch) => onIssuePatch(issue.id, patch)}
               onOptimisticDelete={() => onIssueDelete(issue.id)}
             />
@@ -343,6 +352,10 @@ export function Board({
 
   const [issues, setIssues] = useState(initialIssues);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set<string>());
+  const [dragIds, setDragIds] = useState<string[]>([]);
+  const dragIdsRef = useRef<string[]>([]);
+  const lastClickedId = useRef<string | null>(null);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [filters, setFilters] = useState<IssueFilters>(() =>
     parseFilters(new URLSearchParams(searchParams.toString()))
@@ -563,7 +576,24 @@ export function Board({
 
   function onDragStart(e: DragStartEvent) {
     lastOverId.current = null;
-    setActiveId(String(e.active.id));
+    const id = String(e.active.id);
+    setActiveId(id);
+
+    let block: string[];
+    if (selectedIds.has(id) && selectedIds.size > 1) {
+      block = [];
+      for (const c of boardColumns) {
+        for (const issueId of columns[c.key] ?? []) {
+          if (selectedIds.has(issueId)) block.push(issueId);
+        }
+      }
+      if (!block.includes(id)) block = [id];
+    } else {
+      block = [id];
+      setSelectedIds(new Set());
+    }
+    dragIdsRef.current = block;
+    setDragIds(block);
   }
 
   function onDragOver(e: DragOverEvent) {
@@ -574,19 +604,30 @@ export function Board({
     const overId = String(over.id);
     if (overId === activeIssueId) return;
 
+    const block = dragIdsRef.current;
+    const blockSet = new Set(block.length > 0 ? block : [activeIssueId]);
+    if (blockSet.has(overId) && !overId.startsWith("col-")) return;
+
     const activeContainer = findContainer(activeIssueId);
     const overContainer = findContainer(overId);
     if (!activeContainer || !overContainer) return;
-    if (activeContainer === overContainer) return;
+
+    // Same-column single-card reorder is handled by sortable transforms until drop.
+    if (
+      activeContainer === overContainer &&
+      blockSet.size === 1
+    ) {
+      return;
+    }
 
     lastOverId.current = over.id;
 
     setColumns((prev) => {
-      const activeItems = prev[activeContainer] ?? [];
-      const overItems = prev[overContainer] ?? [];
-      const activeIndex = activeItems.indexOf(activeIssueId);
-      if (activeIndex === -1) return prev;
-
+      const cleaned: Record<string, string[]> = {};
+      for (const [key, ids] of Object.entries(prev)) {
+        cleaned[key] = ids.filter((id) => !blockSet.has(id));
+      }
+      const overItems = cleaned[overContainer] ?? [];
       let newIndex: number;
       if (overId.startsWith("col-")) {
         newIndex = overItems.length;
@@ -594,13 +635,16 @@ export function Board({
         const overIndex = overItems.indexOf(overId);
         newIndex = overIndex >= 0 ? overIndex : overItems.length;
       }
+      const orderedBlock =
+        block.length > 0
+          ? block.filter((id) => blockSet.has(id))
+          : [activeIssueId];
 
       return {
-        ...prev,
-        [activeContainer]: activeItems.filter((id) => id !== activeIssueId),
+        ...cleaned,
         [overContainer]: [
           ...overItems.slice(0, newIndex),
-          activeIssueId,
+          ...orderedBlock,
           ...overItems.slice(newIndex),
         ],
       };
@@ -608,7 +652,7 @@ export function Board({
 
     setIssues((prev) =>
       prev.map((i) =>
-        i.id === activeIssueId
+        blockSet.has(i.id)
           ? applyGroupToIssue(
               i,
               prefs.columns,
@@ -624,6 +668,9 @@ export function Board({
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     const issueId = String(active.id);
+    const block =
+      dragIdsRef.current.length > 0 ? dragIdsRef.current : [issueId];
+    const blockSet = new Set(block);
 
     const resolvedOverId = String(
       (over && over.id !== active.id ? over.id : null) ??
@@ -634,6 +681,8 @@ export function Board({
 
     if (!resolvedOverId) {
       setActiveId(null);
+      setDragIds([]);
+      dragIdsRef.current = [];
       lastOverId.current = null;
       return;
     }
@@ -643,57 +692,85 @@ export function Board({
     const overContainer = findContainer(overId) ?? activeContainer;
     if (!activeContainer || !overContainer) {
       setActiveId(null);
+      setDragIds([]);
+      dragIdsRef.current = [];
       lastOverId.current = null;
       return;
     }
 
     let nextColumns = columns;
 
-    if (activeContainer === overContainer && !overId.startsWith("col-")) {
+    // Finalize placement: pull the block out and insert at the drop index.
+    if (
+      block.length === 1 &&
+      activeContainer === overContainer &&
+      !overId.startsWith("col-")
+    ) {
       const items = columns[activeContainer] ?? [];
       const oldIndex = items.indexOf(issueId);
-      const newIndex = items.indexOf(overId);
-      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+      const targetIndex = items.indexOf(overId);
+      if (oldIndex !== -1 && targetIndex !== -1 && oldIndex !== targetIndex) {
         nextColumns = {
           ...columns,
-          [activeContainer]: arrayMove(items, oldIndex, newIndex),
+          [activeContainer]: arrayMove(items, oldIndex, targetIndex),
         };
-        setColumns(nextColumns);
       }
+    } else {
+      const cleaned: Record<string, string[]> = {};
+      for (const [key, ids] of Object.entries(columns)) {
+        cleaned[key] = ids.filter((id) => !blockSet.has(id));
+      }
+      const overItems = cleaned[overContainer] ?? [];
+      let newIndex = overItems.length;
+      if (!overId.startsWith("col-") && !blockSet.has(overId)) {
+        const overIndex = overItems.indexOf(overId);
+        if (overIndex >= 0) newIndex = overIndex;
+      }
+      nextColumns = {
+        ...cleaned,
+        [overContainer]: [
+          ...overItems.slice(0, newIndex),
+          ...block,
+          ...overItems.slice(newIndex),
+        ],
+      };
     }
+    setColumns(nextColumns);
 
     const orderedIds = nextColumns[overContainer] ?? [];
-    const index = orderedIds.indexOf(issueId);
-    const beforeId = index > 0 ? orderedIds[index - 1] : undefined;
-    const afterId =
-      index >= 0 && index < orderedIds.length - 1
-        ? orderedIds[index + 1]
-        : undefined;
-    const prevOrder = beforeId
-      ? (issueMap.get(beforeId)?.boardOrder ?? null)
-      : null;
-    const nextOrder = afterId
-      ? (issueMap.get(afterId)?.boardOrder ?? null)
-      : null;
 
-    const fractional = fractionalBoardOrder(prevOrder, nextOrder);
+    // Multi-card drops always reindex so the block keeps a stable contiguous order.
     const ranks =
-      fractional == null
+      block.length > 1
         ? reindexBoardOrders(orderedIds)
-        : new Map([[issueId, fractional]]);
-    const boardOrder = ranks.get(issueId) ?? fractional ?? Date.now();
+        : (() => {
+            const index = orderedIds.indexOf(issueId);
+            const beforeId = index > 0 ? orderedIds[index - 1] : undefined;
+            const afterId =
+              index >= 0 && index < orderedIds.length - 1
+                ? orderedIds[index + 1]
+                : undefined;
+            const prevOrder = beforeId
+              ? (issueMap.get(beforeId)?.boardOrder ?? null)
+              : null;
+            const nextOrder = afterId
+              ? (issueMap.get(afterId)?.boardOrder ?? null)
+              : null;
+            const fractional = fractionalBoardOrder(prevOrder, nextOrder);
+            if (fractional == null) return reindexBoardOrders(orderedIds);
+            return new Map([[issueId, fractional]]);
+          })();
+
     const siblingOrders =
-      fractional == null
+      ranks.size > 1
         ? orderedIds
-            .filter((id) => id !== issueId)
+            .filter((id) => !blockSet.has(id))
             .map((id) => ({
               issueId: id,
               boardOrder: ranks.get(id)!,
             }))
         : [];
 
-    // Drag defines manual order — switch off updatedAt-based sorting so the
-    // new ranks stay visible after the drop.
     if (
       prefs.ordering !== "manual" ||
       prefs.orderCompletedByRecency
@@ -710,7 +787,7 @@ export function Board({
     setIssues((prevIssues) => {
       const next = prevIssues.map((i) => {
         const rank = ranks.get(i.id);
-        if (i.id === issueId) {
+        if (blockSet.has(i.id)) {
           return {
             ...applyGroupToIssue(
               i,
@@ -719,7 +796,7 @@ export function Board({
               statuses,
               activeCycleId
             ),
-            boardOrder,
+            boardOrder: rank ?? i.boardOrder,
           };
         }
         return rank != null ? { ...i, boardOrder: rank } : i;
@@ -738,18 +815,26 @@ export function Board({
 
     suppressServerSyncUntil.current = Date.now() + 4000;
     setActiveId(null);
+    setDragIds([]);
+    dragIdsRef.current = [];
     lastOverId.current = null;
+    setSelectedIds(new Set());
 
-    if (prefs.columns === "status") {
-      void moveIssueOnBoard(issueId, overContainer, boardOrder, siblingOrders);
-    } else {
-      void moveIssueOnBoardGrouped(
-        issueId,
-        moveTargetFor(prefs.columns, overContainer),
-        boardOrder,
-        siblingOrders
-      );
-    }
+    block.forEach((id, i) => {
+      const boardOrder = ranks.get(id);
+      if (boardOrder == null) return;
+      const siblings = i === 0 ? siblingOrders : [];
+      if (prefs.columns === "status") {
+        void moveIssueOnBoard(id, overContainer, boardOrder, siblings);
+      } else {
+        void moveIssueOnBoardGrouped(
+          id,
+          moveTargetFor(prefs.columns, overContainer),
+          boardOrder,
+          siblings
+        );
+      }
+    });
   }
 
   function issuesForColumn(columnKey: string): IssueListItem[] {
@@ -770,6 +855,56 @@ export function Board({
       })
       .filter((i): i is IssueListItem => !!i);
   }
+
+  function onSelectClick(issueId: string, event: MouseEvent) {
+    const columnIds =
+      boardColumns.flatMap((c) => columns[c.key] ?? []) ?? [];
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (event.shiftKey && lastClickedId.current) {
+        const a = columnIds.indexOf(lastClickedId.current);
+        const b = columnIds.indexOf(issueId);
+        if (a !== -1 && b !== -1) {
+          const [from, to] = a < b ? [a, b] : [b, a];
+          for (let i = from; i <= to; i++) next.add(columnIds[i]!);
+          return next;
+        }
+      }
+      if (event.metaKey || event.ctrlKey) {
+        if (next.has(issueId)) next.delete(issueId);
+        else next.add(issueId);
+      }
+      return next;
+    });
+    lastClickedId.current = issueId;
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setSelectedIds(new Set());
+        lastClickedId.current = null;
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Drop selection for issues that left the board.
+  useEffect(() => {
+    const visibleIds = new Set(issues.map((i) => i.id));
+    setSelectedIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [issues]);
+
+  const dragIdSet = useMemo(() => new Set(dragIds), [dragIds]);
 
   if (boardPending && !resolvedQueryIssues) {
     return <BoardSkeleton />;
@@ -849,6 +984,8 @@ export function Board({
           onDragEnd={onDragEnd}
           onDragCancel={() => {
             setActiveId(null);
+            setDragIds([]);
+            dragIdsRef.current = [];
             lastOverId.current = null;
           }}
         >
@@ -864,6 +1001,9 @@ export function Board({
                   column={c}
                   issues={issuesForColumn(c.key)}
                   dragging={!!activeId}
+                  selectedIds={selectedIds}
+                  dragIds={dragIdSet}
+                  onSelectClick={onSelectClick}
                   onNewIssue={() =>
                     openCreateIssue({
                       statusId: c.statusId,
@@ -902,17 +1042,31 @@ export function Board({
                   onIssueDelete={(issueId) => {
                     suppressServerSyncUntil.current = Date.now() + 4000;
                     setIssues((prev) => prev.filter((i) => i.id !== issueId));
+                    setSelectedIds((prev) => {
+                      if (!prev.has(issueId)) return prev;
+                      const next = new Set(prev);
+                      next.delete(issueId);
+                      return next;
+                    });
                   }}
                 />
               ))}
           </div>
           <DragOverlay dropAnimation={dropAnimation}>
             {activeIssue ? (
-              <BoardCardContent
-                issue={activeIssue}
-                properties={prefs.properties}
-                className="drag-overlay-card cursor-grabbing"
-              />
+              <div className="relative">
+                <BoardCardContent
+                  issue={activeIssue}
+                  properties={prefs.properties}
+                  selected={dragIds.length > 1}
+                  className="drag-overlay-card cursor-grabbing shadow-lg"
+                />
+                {dragIds.length > 1 && (
+                  <span className="absolute -right-2 -top-2 flex size-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground shadow">
+                    {dragIds.length}
+                  </span>
+                )}
+              </div>
             ) : null}
           </DragOverlay>
         </DndContext>

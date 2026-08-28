@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -31,10 +31,12 @@ export function BoardCardContent({
   issue,
   properties,
   className,
+  selected = false,
 }: {
   issue: IssueListItem;
   properties: BoardCardProperty[];
   className?: string;
+  selected?: boolean;
 }) {
   const { labels, members, statuses, cycles } = useWorkspace();
   const show = (p: BoardCardProperty) => properties.includes(p);
@@ -68,6 +70,8 @@ export function BoardCardContent({
     <div
       className={cn(
         "flex shrink-0 cursor-pointer flex-col gap-2 rounded-lg border border-border bg-card p-3 transition-colors hover:border-foreground/30 hover:bg-foreground/10",
+        selected &&
+          "border-primary/55 bg-primary/5 ring-1 ring-primary/35 hover:border-primary/55 hover:bg-primary/10",
         className
       )}
     >
@@ -141,6 +145,9 @@ export function BoardCard({
   issue,
   properties,
   cycleIds,
+  selected = false,
+  isDragPlaceholder = false,
+  onSelectClick,
   onOptimisticUpdate,
   onOptimisticDelete,
 }: {
@@ -148,6 +155,10 @@ export function BoardCard({
   properties: BoardCardProperty[];
   /** Board cycle filter — preserved in the issue URL for trail crumbs. */
   cycleIds: CycleFilter[];
+  selected?: boolean;
+  /** True while this card is part of an active multi-drag block. */
+  isDragPlaceholder?: boolean;
+  onSelectClick?: (issueId: string, event: MouseEvent) => void;
   onOptimisticUpdate?: (patch: IssuePatch) => void;
   onOptimisticDelete?: () => void;
 }) {
@@ -170,6 +181,7 @@ export function BoardCard({
   });
 
   if (isDragging) dragged.current = true;
+  const showPlaceholder = isDragging || isDragPlaceholder;
 
   return (
     <IssueContextMenu
@@ -188,24 +200,36 @@ export function BoardCard({
         {...attributes}
         {...listeners}
         onPointerEnter={() => prefetchIssue(issue.identifier, href)}
-        onClick={() => {
+        onClick={(e) => {
           // Ignore the click that fires right after a drag release
           if (dragged.current) {
             dragged.current = false;
             return;
           }
+          if (e.metaKey || e.ctrlKey || e.shiftKey) {
+            e.preventDefault();
+            onSelectClick?.(issue.id, e);
+            return;
+          }
           router.push(href);
         }}
-        className={cn("touch-manipulation", isDragging && "pointer-events-none")}
+        className={cn(
+          "touch-manipulation",
+          isDragging && "pointer-events-none"
+        )}
       >
-        {isDragging ? (
+        {showPlaceholder ? (
           // Card-sized drop slot (not a full-column highlight)
           <div
             aria-hidden
             className="min-h-[72px] rounded-lg border border-dashed border-primary/45 bg-primary/10"
           />
         ) : (
-          <BoardCardContent issue={issue} properties={properties} />
+          <BoardCardContent
+            issue={issue}
+            properties={properties}
+            selected={selected}
+          />
         )}
       </div>
     </IssueContextMenu>
