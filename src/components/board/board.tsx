@@ -355,6 +355,11 @@ export function Board({
   const [selectedIds, setSelectedIds] = useState(() => new Set<string>());
   const [dragIds, setDragIds] = useState<string[]>([]);
   const dragIdsRef = useRef<string[]>([]);
+  /** Snapshot so cancel can unwind live cross-column previews. */
+  const dragSnapshotRef = useRef<{
+    columns: Record<string, string[]>;
+    issues: IssueListItem[];
+  } | null>(null);
   const lastClickedId = useRef<string | null>(null);
   const [completeOpen, setCompleteOpen] = useState(false);
   const [filters, setFilters] = useState<IssueFilters>(() =>
@@ -536,8 +541,13 @@ export function Board({
   const collisionDetection: CollisionDetection = useCallback(
     (args) => {
       const active = args.active.id;
-      const pointerHits = pointerWithin(args).filter((c) => c.id !== active);
-      const rectHits = rectIntersection(args).filter((c) => c.id !== active);
+      const dragging = new Set(dragIdsRef.current.map(String));
+      dragging.add(String(active));
+      const notDragging = (c: { id: UniqueIdentifier }) =>
+        !dragging.has(String(c.id));
+
+      const pointerHits = pointerWithin(args).filter(notDragging);
+      const rectHits = rectIntersection(args).filter(notDragging);
       const hits = pointerHits.length > 0 ? pointerHits : rectHits;
 
       let overId = getFirstCollision(hits, "id");
@@ -545,12 +555,14 @@ export function Board({
       if (overId != null) {
         if (String(overId).startsWith("col-")) {
           const statusId = String(overId).slice(4);
-          const cardIds = columns[statusId] ?? [];
+          const cardIds = (columns[statusId] ?? []).filter(
+            (id) => !dragging.has(id)
+          );
           if (cardIds.length > 0) {
             const closest = closestCorners({
               ...args,
               droppableContainers: args.droppableContainers.filter(
-                (c) => c.id !== active && cardIds.includes(String(c.id))
+                (c) => notDragging(c) && cardIds.includes(String(c.id))
               ),
             });
             if (closest[0]) overId = closest[0].id;
@@ -560,19 +572,33 @@ export function Board({
         return [{ id: overId }];
       }
 
-      if (lastOverId.current && lastOverId.current !== active) {
+      if (lastOverId.current && !dragging.has(String(lastOverId.current))) {
         return [{ id: lastOverId.current }];
       }
 
       return closestCorners({
         ...args,
-        droppableContainers: args.droppableContainers.filter(
-          (c) => c.id !== active
-        ),
+        droppableContainers: args.droppableContainers.filter(notDragging),
       });
     },
     [columns]
   );
+
+  function clearDragState() {
+    setActiveId(null);
+    setDragIds([]);
+    dragIdsRef.current = [];
+    lastOverId.current = null;
+    dragSnapshotRef.current = null;
+  }
+
+  function restoreDragSnapshot() {
+    const snap = dragSnapshotRef.current;
+    if (!snap) return;
+    setColumns(snap.columns);
+    setIssues(snap.issues);
+    dragSnapshotRef.current = null;
+  }
 
   function onDragStart(e: DragStartEvent) {
     lastOverId.current = null;
@@ -594,6 +620,12 @@ export function Board({
     }
     dragIdsRef.current = block;
     setDragIds(block);
+    dragSnapshotRef.current = {
+      columns: Object.fromEntries(
+        Object.entries(columns).map(([key, ids]) => [key, [...ids]])
+      ),
+      issues: issues.map((i) => ({ ...i })),
+    };
   }
 
   function onDragOver(e: DragOverEvent) {
@@ -612,15 +644,19 @@ export function Board({
     const overContainer = findContainer(overId);
     if (!activeContainer || !overContainer) return;
 
-    // Same-column single-card reorder is handled by sortable transforms until drop.
-    if (
-      activeContainer === overContainer &&
-      blockSet.size === 1
-    ) {
+    // Same-column reorders (single or multi) use sortable transforms /
+    // drop finalization only. Live list mutation mid-drag thrashes
+    // SortableContext and frequently crashes the board.
+    if (activeContainer === overContainer) {
       return;
     }
 
     lastOverId.current = over.id;
+
+    const orderedBlock =
+      block.length > 0
+        ? block.filter((id) => blockSet.has(id))
+        : [activeIssueId];
 
     setColumns((prev) => {
       const cleaned: Record<string, string[]> = {};
@@ -635,34 +671,46 @@ export function Board({
         const overIndex = overItems.indexOf(overId);
         newIndex = overIndex >= 0 ? overIndex : overItems.length;
       }
-      const orderedBlock =
-        block.length > 0
-          ? block.filter((id) => blockSet.has(id))
-          : [activeIssueId];
-
+      const nextIds = [
+        ...overItems.slice(0, newIndex),
+        ...orderedBlock,
+        ...overItems.slice(newIndex),
+      ];
+      const prevIds = prev[overContainer] ?? [];
+      if (
+        prevIds.length === nextIds.length &&
+        prevIds.every((id, i) => id === nextIds[i]) &&
+        Object.keys(cleaned).every((key) => {
+          if (key === overContainer) return true;
+          const a = cleaned[key] ?? [];
+          const b = prev[key] ?? [];
+          return a.length === b.length && a.every((id, i) => id === b[i]);
+        })
+      ) {
+        return prev;
+      }
       return {
         ...cleaned,
-        [overContainer]: [
-          ...overItems.slice(0, newIndex),
-          ...orderedBlock,
-          ...overItems.slice(newIndex),
-        ],
+        [overContainer]: nextIds,
       };
     });
 
-    setIssues((prev) =>
-      prev.map((i) =>
-        blockSet.has(i.id)
-          ? applyGroupToIssue(
-              i,
-              prefs.columns,
-              overContainer,
-              statuses,
-              activeCycleId
-            )
-          : i
-      )
-    );
+    setIssues((prev) => {
+      let changed = false;
+      const next = prev.map((i) => {
+        if (!blockSet.has(i.id)) return i;
+        if (groupKeyOf(i, prefs.columns) === overContainer) return i;
+        changed = true;
+        return applyGroupToIssue(
+          i,
+          prefs.columns,
+          overContainer,
+          statuses,
+          activeCycleId
+        );
+      });
+      return changed ? next : prev;
+    });
   }
 
   function onDragEnd(e: DragEndEvent) {
@@ -680,10 +728,8 @@ export function Board({
     );
 
     if (!resolvedOverId) {
-      setActiveId(null);
-      setDragIds([]);
-      dragIdsRef.current = [];
-      lastOverId.current = null;
+      restoreDragSnapshot();
+      clearDragState();
       return;
     }
 
@@ -691,10 +737,8 @@ export function Board({
     const activeContainer = findContainer(issueId);
     const overContainer = findContainer(overId) ?? activeContainer;
     if (!activeContainer || !overContainer) {
-      setActiveId(null);
-      setDragIds([]);
-      dragIdsRef.current = [];
-      lastOverId.current = null;
+      restoreDragSnapshot();
+      clearDragState();
       return;
     }
 
@@ -764,7 +808,7 @@ export function Board({
     const siblingOrders =
       ranks.size > 1
         ? orderedIds
-            .filter((id) => !blockSet.has(id))
+            .filter((id) => !blockSet.has(id) && ranks.has(id))
             .map((id) => ({
               issueId: id,
               boardOrder: ranks.get(id)!,
@@ -814,10 +858,7 @@ export function Board({
     });
 
     suppressServerSyncUntil.current = Date.now() + 4000;
-    setActiveId(null);
-    setDragIds([]);
-    dragIdsRef.current = [];
-    lastOverId.current = null;
+    clearDragState();
     setSelectedIds(new Set());
 
     block.forEach((id, i) => {
@@ -983,10 +1024,8 @@ export function Board({
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
           onDragCancel={() => {
-            setActiveId(null);
-            setDragIds([]);
-            dragIdsRef.current = [];
-            lastOverId.current = null;
+            restoreDragSnapshot();
+            clearDragState();
           }}
         >
           <div className="flex h-full gap-3 p-3">
