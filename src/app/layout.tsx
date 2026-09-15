@@ -14,11 +14,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: "Reline",
   title: {
     default: "Reline",
     template: "%s · Reline",
   },
   description: "Issue tracking for small teams",
+  appleWebApp: {
+    capable: true,
+    title: "Reline",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
@@ -27,6 +33,7 @@ export const viewport: Viewport = {
   // Stops iOS Safari from zooming in when focusing our (sub-16px) inputs.
   maximumScale: 1,
   viewportFit: "cover",
+  themeColor: "#17181b",
 };
 
 export default function RootLayout({
