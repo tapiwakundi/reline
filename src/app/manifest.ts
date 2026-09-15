@@ -5,7 +5,9 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Reline",
     short_name: "Reline",
     description: "Issue tracking for small teams",
+    id: "/",
     start_url: "/",
+    scope: "/",
     display: "standalone",
     background_color: "#17181b",
     theme_color: "#17181b",
@@ -14,11 +16,13 @@ export default function manifest(): MetadataRoute.Manifest {
         src: "/icons/icon-192.png",
         sizes: "192x192",
         type: "image/png",
+        purpose: "any",
       },
       {
         src: "/icons/icon-512.png",
         sizes: "512x512",
         type: "image/png",
+        purpose: "any",
       },
       {
         src: "/icons/icon-192-maskable.png",
