@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -231,6 +239,51 @@ const dropAnimation: DropAnimation = {
   }),
 };
 
+/** Survives board unmount when opening an issue, so back keeps column scroll. */
+const overflowScrollPositions = new Map<string, number>();
+
+function usePersistedOverflowScroll(
+  key: string,
+  axis: "x" | "y",
+  layoutKey: string | number
+) {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (!node) return;
+
+    const read = () => (axis === "y" ? node.scrollTop : node.scrollLeft);
+    const write = (value: number) => {
+      if (axis === "y") node.scrollTop = value;
+      else node.scrollLeft = value;
+    };
+
+    const restore = () => {
+      const saved = overflowScrollPositions.get(key);
+      if (saved != null) write(saved);
+    };
+
+    restore();
+    const ro = new ResizeObserver(restore);
+    ro.observe(node);
+
+    const onScroll = () => {
+      overflowScrollPositions.set(key, read());
+    };
+    node.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      const current = read();
+      const saved = overflowScrollPositions.get(key);
+      // An unready layout clamps to 0 — don't overwrite a real saved offset.
+      if (current > 0 || saved == null) overflowScrollPositions.set(key, current);
+      node.removeEventListener("scroll", onScroll);
+    };
+  }, [node, key, axis, layoutKey]);
+
+  return setNode;
+}
+
 function Column({
   column,
   issues,
@@ -243,6 +296,7 @@ function Column({
   cycleIds,
   onIssuePatch,
   onIssueDelete,
+  scrollKey,
 }: {
   column: BoardColumnDef;
   issues: IssueListItem[];
@@ -255,11 +309,25 @@ function Column({
   cycleIds: CycleFilter[];
   onIssuePatch: (issueId: string, patch: IssuePatch) => void;
   onIssueDelete: (issueId: string) => void;
+  scrollKey: string;
 }) {
   const { setNodeRef } = useDroppable({
     id: `col-${column.key}`,
     data: { columnKey: column.key, type: "column" },
   });
+  const scrollLayoutKey = `${issues.length}:${issues[0]?.id ?? ""}:${issues[issues.length - 1]?.id ?? ""}`;
+  const setScrollRef = usePersistedOverflowScroll(
+    scrollKey,
+    "y",
+    scrollLayoutKey
+  );
+  const setRefs = useCallback(
+    (el: HTMLDivElement | null) => {
+      setScrollRef(el);
+      setNodeRef(el);
+    },
+    [setScrollRef, setNodeRef]
+  );
 
   return (
     <div className="group/col flex h-full w-[300px] shrink-0 flex-col">
@@ -282,7 +350,7 @@ function Column({
         strategy={verticalListSortingStrategy}
       >
         <div
-          ref={setNodeRef}
+          ref={setRefs}
           className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg p-1.5"
         >
           {issues.map((issue) => (
@@ -947,6 +1015,17 @@ export function Board({
 
   const dragIdSet = useMemo(() => new Set(dragIds), [dragIds]);
 
+  const visibleBoardColumns = boardColumns.filter((c) => {
+    if (prefs.showEmptyColumns || activeId) return true;
+    return issuesForColumn(c.key).length > 0;
+  });
+  const boardViewKey = `${workspace.id}:${prefs.columns}:${serializeBoardFilters(filters).toString()}`;
+  const boardXScrollRef = usePersistedOverflowScroll(
+    `board-x:${boardViewKey}`,
+    "x",
+    visibleBoardColumns.map((c) => `${c.key}:${(columns[c.key] ?? []).length}`).join("|")
+  );
+
   if (boardPending && !resolvedQueryIssues) {
     return <BoardSkeleton />;
   }
@@ -1015,7 +1094,10 @@ export function Board({
           }
         }}
       />
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
+      <div
+        ref={boardXScrollRef}
+        className="flex-1 overflow-x-auto overflow-y-hidden"
+      >
         <DndContext
           id="board-dnd"
           sensors={sensors}
@@ -1029,12 +1111,7 @@ export function Board({
           }}
         >
           <div className="flex h-full gap-3 p-3">
-            {boardColumns
-              .filter((c) => {
-                if (prefs.showEmptyColumns || activeId) return true;
-                return issuesForColumn(c.key).length > 0;
-              })
-              .map((c) => (
+            {visibleBoardColumns.map((c) => (
                 <Column
                   key={c.key}
                   column={c}
@@ -1058,6 +1135,7 @@ export function Board({
                   }
                   properties={prefs.properties}
                   cycleIds={filters.cycleIds}
+                  scrollKey={`board-col:${boardViewKey}:${c.key}`}
                   onIssuePatch={(issueId, patch) => {
                     const current = issueMap.get(issueId);
                     if (!current) return;
@@ -1089,7 +1167,7 @@ export function Board({
                     });
                   }}
                 />
-              ))}
+            ))}
           </div>
           <DragOverlay dropAnimation={dropAnimation}>
             {activeIssue ? (
