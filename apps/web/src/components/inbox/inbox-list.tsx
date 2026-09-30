@@ -1,0 +1,146 @@
+"use client";
+
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { CheckCheckIcon, InboxIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import {
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/lib/api/notifications";
+import { useInbox } from "@/lib/hooks/queries";
+import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
+import { useWorkspace } from "@/lib/workspace-context";
+import { wsPath } from "@/lib/workspace-paths";
+import { invalidateAfterNotificationChange } from "@/lib/invalidate";
+import type { InboxItem } from "@/lib/types";
+import { UserAvatar } from "@/components/user-avatar";
+import { InboxSkeleton } from "@/components/skeletons/page-skeletons";
+import { MobileNavButton } from "@/components/mobile-nav";
+
+function timeAgo(iso: string) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
+
+function describe(n: InboxItem) {
+  switch (n.type) {
+    case "assigned":
+      return "assigned you";
+    case "commented":
+      return n.payload.preview ? `commented: “${n.payload.preview}”` : "commented";
+    case "status_changed":
+      return n.payload.to ? `moved to ${n.payload.to}` : "changed status";
+    case "mentioned":
+      return n.payload.preview
+        ? `mentioned you: “${n.payload.preview}”`
+        : "mentioned you";
+    default:
+      return n.type;
+  }
+}
+
+export function InboxList({
+  notifications: initialNotifications,
+}: {
+  notifications: InboxItem[];
+}) {
+  const router = useRouter();
+  const qc = useQueryClient();
+  const { workspace } = useWorkspace();
+  const prefetchIssue = usePrefetchIssue();
+  const { data: notifications, isPending } = useInbox(initialNotifications);
+  const list = notifications ?? initialNotifications;
+  const [pending, startTransition] = useTransition();
+  const unread = list.filter((n) => !n.readAt).length;
+
+  if (isPending && !notifications) {
+    return <InboxSkeleton />;
+  }
+
+  function open(n: InboxItem) {
+    prefetchIssue(n.issue.identifier);
+    router.push(wsPath(workspace.slug, `/issue/${n.issue.identifier}`));
+    if (!n.readAt) {
+      startTransition(async () => {
+        await markNotificationRead(n.id);
+        await invalidateAfterNotificationChange(qc, workspace.id);
+      });
+    }
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4">
+        <MobileNavButton />
+        <h1 className="text-sm font-semibold">Inbox</h1>
+        {unread > 0 && (
+          <span className="text-xs text-muted-foreground">{unread} unread</span>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto h-7 gap-1.5 text-xs text-muted-foreground"
+          disabled={pending || unread === 0}
+          onClick={() =>
+            startTransition(async () => {
+              await markAllNotificationsRead();
+              await invalidateAfterNotificationChange(qc, workspace.id);
+            })
+          }
+        >
+          <CheckCheckIcon className="size-3.5" />
+          Mark all read
+        </Button>
+      </header>
+      <div className="flex-1 overflow-y-auto">
+        {list.length === 0 ? (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <InboxIcon className="size-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">
+              You&apos;re all caught up.
+            </p>
+          </div>
+        ) : (
+          list.map((n) => (
+            <button
+              key={n.id}
+              onClick={() => open(n)}
+              onPointerEnter={() => prefetchIssue(n.issue.identifier)}
+              className={cn(
+                "flex w-full items-start gap-3 border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-accent/40",
+                !n.readAt && "bg-primary/[0.04]"
+              )}
+            >
+              <span
+                className={cn(
+                  "mt-2 size-1.5 shrink-0 rounded-full",
+                  n.readAt ? "bg-transparent" : "bg-primary"
+                )}
+              />
+              <UserAvatar user={n.actor} className="mt-0.5 size-6" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px]">
+                  <span className="font-medium">{n.actor?.name ?? "Someone"}</span>{" "}
+                  <span className="text-muted-foreground">{describe(n)}</span>
+                </span>
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  <span className="text-muted-foreground/70">{n.issue.identifier}</span>{" "}
+                  {n.issue.title}
+                </span>
+              </span>
+              <span className="shrink-0 text-[11px] text-muted-foreground">
+                {timeAgo(n.createdAt)}
+              </span>
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}

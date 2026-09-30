@@ -4,9 +4,19 @@ A self-hosted, Linear-style issue tracker for small teams. Kanban board, cycles
 (sprints), labels, notifications, keyboard-first UX, and a one-time Jira
 import — free to run on Render + Neon.
 
+The repo is an npm workspaces monorepo:
+
+- **`apps/web`** — Next.js UI (no database access)
+- **`apps/api`** — Hono API (Postgres, Better Auth, R2)
+- **`packages/shared`** — shared types, constants, and pure helpers
+
+The browser only talks to the web origin. Next.js rewrites `/api/*` to the API
+so auth cookies stay first-party.
+
 ## Stack
 
 - **Next.js** (App Router) + TypeScript
+- **Hono** API on Node
 - **Tailwind CSS + shadcn/ui** — Linear-inspired dark UI
 - **Better Auth** — email & password + Google OAuth
 - **Neon Postgres** + **Drizzle ORM**
@@ -33,13 +43,24 @@ docker run -d --name reline-pg \
   -e POSTGRES_USER=reline -e POSTGRES_PASSWORD=reline -e POSTGRES_DB=reline \
   -p 5433:5432 postgres:16-alpine
 
-cp .env.example .env   # fill in values (defaults work with the docker command above)
-npx drizzle-kit migrate
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+# fill in values (API defaults work with the docker command above)
+
+npm run db:migrate
 npm run dev
 ```
 
-Open http://localhost:3000, sign up, and create your workspace. Invite your
-teammate from Settings → Members.
+This starts the API on http://localhost:4001 and the web app on
+http://localhost:4000. Open the web URL, sign up, and create your workspace.
+Invite your teammate from Settings → Members.
+
+`npm run dev` runs both apps. You can also start them separately:
+
+```bash
+npm run dev -w @reline/api
+npm run dev -w @reline/web
+```
 
 ### Google login (optional)
 
@@ -47,33 +68,35 @@ teammate from Settings → Members.
    create an **OAuth 2.0 Client ID** (Web application).
 2. Add authorized redirect URI:
    `{BETTER_AUTH_URL}/api/auth/callback/google`
-   (e.g. `http://localhost:3100/api/auth/callback/google` in local dev).
-3. Put the values in `.env`:
+   (e.g. `http://localhost:4000/api/auth/callback/google` in local dev).
+3. Put the values in `apps/api/.env` and `apps/web/.env`:
 
 ```bash
+# apps/api/.env
 GOOGLE_CLIENT_ID=....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=....
+
+# apps/web/.env
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=....apps.googleusercontent.com  # same as GOOGLE_CLIENT_ID
 ```
 
-4. Restart the dev server. Login/signup will show **Continue with Google**.
+4. Restart the dev servers. Login/signup will show **Continue with Google**.
 
 ### Attachments (Cloudflare R2)
 
 Issues and comments support image (jpeg/png/gif/webp/avif, ≤10 MB) and video
 (mp4/webm/mov, ≤100 MB) attachments, stored in Cloudflare R2. Files upload
-straight from the browser via presigned URLs, so they never pass through the
-app server.
+through the API in local/dev (avoids browser CORS) or via presigned URLs.
 
 1. In the [Cloudflare dashboard](https://dash.cloudflare.com), go to **R2**
    and create a bucket (e.g. `reline`).
 2. Add a CORS policy to the bucket (Settings → CORS policy) so the browser
-   can PUT to it:
+   can PUT to it if you use presigned uploads:
 
 ```json
 [
   {
-    "AllowedOrigins": ["http://localhost:3100", "https://<your-app-domain>"],
+    "AllowedOrigins": ["http://localhost:4000", "https://<your-web-domain>"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["content-type"],
     "MaxAgeSeconds": 3600
@@ -85,7 +108,7 @@ app server.
    subdomain, or connect a custom domain) and note the public URL.
 4. Create an API token under **R2 → Manage R2 API Tokens** with
    **Object Read & Write** scoped to the bucket.
-5. Fill in `.env`:
+5. Fill in `apps/api/.env`:
 
 ```bash
 R2_ACCOUNT_ID=          # from the dashboard URL / R2 overview
@@ -103,18 +126,21 @@ with a clear error.
 1. **Neon**: create a project at [console.neon.tech](https://console.neon.tech),
    copy the pooled connection string.
 2. **Render**: push this repo to GitHub, then create a Blueprint from it
-   (Render reads `render.yaml`). Set the env vars when prompted:
-   - `DATABASE_URL` — your Neon connection string
-   - `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` — `https://<your-service>.onrender.com`
-   - `BETTER_AUTH_API_KEY` is generated automatically
+   (Render reads `render.yaml`). This creates two web services: `reline-api`
+   and `reline-web`. Set the env vars when prompted:
+   - `DATABASE_URL` — your Neon connection string (API)
+   - `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` — `https://<reline-web>.onrender.com`
+   - `BETTER_AUTH_SECRET` / `BETTER_AUTH_API_KEY` are generated automatically
+   - `API_INTERNAL_URL` is wired to the API's private host
    - Optional Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
      `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same as client id), and add
-     `https://<your-service>.onrender.com/api/auth/callback/google` in Google Cloud
+     `https://<reline-web>.onrender.com/api/auth/callback/google` in Google Cloud
    - Attachments: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
      `R2_BUCKET_NAME`, `R2_PUBLIC_URL` (see the R2 section above), and add your
-     Render URL to the bucket's CORS policy
-3. Deploy. Migrations run during build; the app binds to `0.0.0.0:$PORT` and
-   health-checks at `/api/health`.
+     web URL to the bucket's CORS policy
+3. Deploy. Migrations run as the API pre-deploy command. The API binds to
+   `0.0.0.0:$PORT` and health-checks at `/api/health`; the web app health-checks
+   at `/health`.
 
 Note: free Render services spin down after 15 minutes of inactivity — the
 first request after that takes a few seconds.

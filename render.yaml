@@ -1,0 +1,67 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+services:
+  - type: web
+    name: reline-api
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build -w @reline/api
+    preDeployCommand: npm run db:migrate -w @reline/api
+    startCommand: npm run start -w @reline/api
+    healthCheckPath: /api/health
+    buildFilter:
+      paths:
+        - apps/api/**
+        - packages/shared/**
+        - package.json
+        - package-lock.json
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      - key: BETTER_AUTH_API_KEY
+        generateValue: true
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: reline
+      - key: R2_PUBLIC_URL
+        sync: false
+
+  - type: web
+    name: reline-web
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build -w @reline/web
+    startCommand: npm run start -w @reline/web
+    healthCheckPath: /health
+    buildFilter:
+      paths:
+        - apps/web/**
+        - packages/shared/**
+        - package.json
+        - package-lock.json
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: API_INTERNAL_URL
+        fromService:
+          name: reline-api
+          type: web
+          property: hostport
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
