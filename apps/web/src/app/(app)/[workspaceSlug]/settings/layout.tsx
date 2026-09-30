@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ const tabDefs = [
   { path: "/settings/members", label: "Members" },
   { path: "/settings/labels", label: "Labels" },
   { path: "/settings/import", label: "Import" },
+  { path: "/settings/cursor", label: "Cursor" },
 ];
 
 export default function SettingsLayout({
@@ -36,31 +38,24 @@ export default function SettingsLayout({
       {/* Horizontal tabs on mobile, side nav on md+ */}
       <nav className="flex shrink-0 gap-1 overflow-x-auto border-b border-border px-3 py-2 md:hidden">
         {tabs.map((t) => (
-          <Link
+          <SettingsTabLink
             key={t.href}
             href={t.href}
-            className={cn(
-              "whitespace-nowrap rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-              pathname === t.href && "bg-accent text-foreground"
-            )}
-          >
-            {t.label}
-          </Link>
+            label={t.label}
+            active={pathname === t.href}
+            scrollActive
+          />
         ))}
       </nav>
       <div className="flex min-h-0 flex-1">
         <nav className="hidden w-48 shrink-0 flex-col gap-0.5 border-r border-border p-3 md:flex">
           {tabs.map((t) => (
-            <Link
+            <SettingsTabLink
               key={t.href}
               href={t.href}
-              className={cn(
-                "rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-                pathname === t.href && "bg-accent text-foreground"
-              )}
-            >
-              {t.label}
-            </Link>
+              label={t.label}
+              active={pathname === t.href}
+            />
           ))}
         </nav>
         <div className="flex-1 overflow-y-auto">
@@ -70,5 +65,36 @@ export default function SettingsLayout({
         </div>
       </div>
     </div>
+  );
+}
+
+function SettingsTabLink({
+  href,
+  label,
+  active,
+  scrollActive = false,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  scrollActive?: boolean;
+}) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (!active || !scrollActive) return;
+    ref.current?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [active, scrollActive]);
+
+  return (
+    <Link
+      ref={ref}
+      href={href}
+      className={cn(
+        "shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+        active && "bg-accent text-foreground"
+      )}
+    >
+      {label}
+    </Link>
   );
 }

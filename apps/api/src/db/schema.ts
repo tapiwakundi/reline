@@ -316,6 +316,34 @@ export type NotificationType =
   | "status_changed"
   | "mentioned";
 
+/**
+ * Personal credentials for the read-only MCP server.
+ * `scope` is always "read" — these tokens cannot create or change issues.
+ * Only a hash of the secret is stored.
+ */
+export const mcpTokens = pgTable(
+  "mcp_tokens",
+  {
+    id: id(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    scope: text("scope").notNull().default("read"),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+    revokedAt: timestamp("revoked_at"),
+  },
+  (t) => [
+    uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
+    index("mcp_tokens_user_idx").on(t.userId),
+  ]
+);
+
 export const notifications = pgTable(
   "notifications",
   {
@@ -449,4 +477,9 @@ export const workspacesRelations = relations(workspaces, ({ many }) => ({
 
 export const userRelations = relations(user, ({ many }) => ({
   memberships: many(memberships),
+  mcpTokens: many(mcpTokens),
+}));
+
+export const mcpTokensRelations = relations(mcpTokens, ({ one }) => ({
+  user: one(user, { fields: [mcpTokens.userId], references: [user.id] }),
 }));

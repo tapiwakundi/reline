@@ -57,6 +57,13 @@
       "when": 1790783828267,
       "tag": "0007_workspace_logo",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790810853276,
+      "tag": "0008_mcp_tokens",
+      "breakpoints": true
     }
   ]
 }
