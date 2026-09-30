@@ -668,6 +668,7 @@ export async function addComment(
       name: workspace.name,
       slug: workspace.slug,
       prefix: workspace.prefix,
+      logo: workspace.logo ?? null,
     },
     user.id
   );

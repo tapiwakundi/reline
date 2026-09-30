@@ -50,6 +50,13 @@
       "when": 1787093529564,
       "tag": "0006_calm_selene",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790783828267,
+      "tag": "0007_workspace_logo",
+      "breakpoints": true
     }
   ]
 }

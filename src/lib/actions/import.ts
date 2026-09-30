@@ -210,6 +210,7 @@ async function runImport(rows: ImportRow[]): Promise<ImportReport> {
       name: workspace.name,
       slug: workspace.slug,
       prefix: workspace.prefix,
+      logo: workspace.logo ?? null,
     },
     user.id
   );

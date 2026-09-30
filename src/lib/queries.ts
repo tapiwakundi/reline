@@ -31,7 +31,13 @@ import type {
 } from "@/lib/types";
 
 export async function getWorkspaceData(
-  workspace: { id: string; name: string; slug: string; prefix: string },
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    prefix: string;
+    logo: string | null;
+  },
   meId: string
 ): Promise<Omit<WorkspaceData, "workspaces">> {
   const [memberRows, statusRows, labelRows, cycleRows] = await Promise.all([
@@ -366,6 +372,7 @@ export async function getWorkspaceSettings(
     name: string;
     slug: string;
     prefix: string;
+    logo: string | null;
     createdAt: Date;
   },
   membershipRole: string,
@@ -377,6 +384,7 @@ export async function getWorkspaceSettings(
       name: workspace.name,
       slug: workspace.slug,
       prefix: workspace.prefix,
+      logo: workspace.logo ?? null,
     },
     meId
   );
@@ -385,6 +393,7 @@ export async function getWorkspaceSettings(
       id: workspace.id,
       name: workspace.name,
       prefix: workspace.prefix,
+      logo: workspace.logo ?? null,
       createdAt: workspace.createdAt.toISOString(),
     },
     role: membershipRole,

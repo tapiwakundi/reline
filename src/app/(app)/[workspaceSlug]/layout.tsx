@@ -21,6 +21,7 @@ export default async function WorkspaceLayout({
         name: workspace.name,
         slug: workspace.slug,
         prefix: workspace.prefix,
+        logo: workspace.logo ?? null,
       },
       user.id
     ),

@@ -86,6 +86,7 @@ export const workspaces = pgTable("workspaces", {
   slug: text("slug").notNull().unique(),
   // Issue identifier prefix, e.g. "REL" -> REL-123
   prefix: text("prefix").notNull().default("REL"),
+  logo: text("logo"),
   issueCounter: integer("issue_counter").notNull().default(0),
   cycleCounter: integer("cycle_counter").notNull().default(0),
   createdAt: timestamp("created_at")

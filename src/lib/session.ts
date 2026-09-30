@@ -22,6 +22,7 @@ export type WorkspaceListItem = {
   name: string;
   slug: string;
   prefix: string;
+  logo: string | null;
 };
 
 /** All workspaces the signed-in user belongs to, ordered by name. */
@@ -37,6 +38,7 @@ export const getUserWorkspaces = cache(
         name: m.workspace.name,
         slug: m.workspace.slug,
         prefix: m.workspace.prefix,
+        logo: m.workspace.logo ?? null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }

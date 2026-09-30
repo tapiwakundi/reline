@@ -52,6 +52,7 @@ export type WorkspaceSummary = {
   name: string;
   slug: string;
   prefix: string;
+  logo: string | null;
 };
 
 export type WorkspaceData = {
@@ -141,6 +142,7 @@ export type WorkspaceSettings = {
     id: string;
     name: string;
     prefix: string;
+    logo: string | null;
     createdAt: string;
   };
   role: string;

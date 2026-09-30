@@ -75,6 +75,17 @@ export function avatarPrefix(userId: string) {
   return `avatars/${userId}/`;
 }
 
+export function logoObjectKey(workspaceId: string, ext: string) {
+  return `${logoPrefix(workspaceId)}${nanoid()}.${ext}`;
+}
+
+export function logoPrefix(workspaceId: string) {
+  if (!/^[A-Za-z0-9_-]+$/.test(workspaceId)) {
+    throw new Error("Invalid workspace");
+  }
+  return `logos/${workspaceId}/`;
+}
+
 export function publicUrl(key: string) {
   return `${env("R2_PUBLIC_URL").replace(/\/$/, "")}/${key}`;
 }

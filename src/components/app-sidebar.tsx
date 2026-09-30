@@ -36,6 +36,7 @@ import { wsPath } from "@/lib/workspace-paths";
 import { useUnreadCount } from "@/lib/hooks/queries";
 import { useShortcuts } from "@/components/global-shortcuts";
 import { UserAvatar } from "@/components/user-avatar";
+import { WorkspaceMark } from "@/components/workspace-mark";
 import { CreateWorkspaceDialog } from "@/components/create-workspace-dialog";
 
 function NavItem({
@@ -114,9 +115,11 @@ export function SidebarContent({
       <div className="flex items-center gap-1 px-3 pt-3">
         <DropdownMenu>
           <DropdownMenuTrigger className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-sidebar-accent">
-            <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary text-[11px] font-bold text-primary-foreground">
-              {workspace.name[0]?.toUpperCase()}
-            </span>
+            <WorkspaceMark
+              name={workspace.name}
+              logo={workspace.logo}
+              className="font-bold"
+            />
             <span className="truncate text-[13px] font-semibold text-foreground">
               {workspace.name}
             </span>
@@ -129,9 +132,11 @@ export function SidebarContent({
                 onClick={() => switchTo(ws.slug)}
                 className="gap-2"
               >
-                <span className="flex size-5 shrink-0 items-center justify-center rounded bg-primary/15 text-[11px] font-bold text-foreground">
-                  {ws.name[0]?.toUpperCase()}
-                </span>
+                <WorkspaceMark
+                  name={ws.name}
+                  logo={ws.logo}
+                  className="bg-primary/15 font-bold text-foreground"
+                />
                 <span className="min-w-0 flex-1 truncate">{ws.name}</span>
                 {ws.id === workspace.id && (
                   <CheckIcon className="size-3.5 shrink-0 text-primary" />
