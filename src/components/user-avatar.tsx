@@ -13,9 +13,11 @@ function hueFor(id: string) {
 export function UserAvatar({
   user,
   className,
+  fallbackClassName,
 }: {
   user: Member | null | undefined;
   className?: string;
+  fallbackClassName?: string;
 }) {
   if (!user) {
     return (
@@ -36,7 +38,7 @@ export function UserAvatar({
     <Avatar className={cn("size-5", className)}>
       {user.image ? <AvatarImage src={user.image} alt={user.name} /> : null}
       <AvatarFallback
-        className="text-[10px] font-medium text-white"
+        className={cn("text-[10px] font-medium text-white", fallbackClassName)}
         style={{ background: `hsl(${hue} 45% 45%)` }}
       >
         {user.name

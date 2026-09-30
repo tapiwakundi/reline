@@ -8,6 +8,7 @@ import { wsPath } from "@/lib/workspace-paths";
 import { MobileNavButton } from "@/components/mobile-nav";
 
 const tabDefs = [
+  { path: "/settings/profile", label: "Profile" },
   { path: "/settings", label: "General" },
   { path: "/settings/members", label: "Members" },
   { path: "/settings/labels", label: "Labels" },

@@ -18,6 +18,7 @@ export const VIDEO_TYPES: Record<string, string> = {
 
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB
 export const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100 MB
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
 export const MAX_ATTACHMENTS = 10;
 
 export type AttachmentKind = "image" | "video";
@@ -62,8 +63,34 @@ export function objectKey(workspaceId: string, ext: string) {
   return `${workspaceId}/${nanoid()}.${ext}`;
 }
 
+/** Per-user prefix so a profile upload can only replace that user's own photo. */
+export function avatarObjectKey(userId: string, ext: string) {
+  return `${avatarPrefix(userId)}${nanoid()}.${ext}`;
+}
+
+export function avatarPrefix(userId: string) {
+  if (!/^[A-Za-z0-9_-]+$/.test(userId)) {
+    throw new Error("Invalid user");
+  }
+  return `avatars/${userId}/`;
+}
+
 export function publicUrl(key: string) {
   return `${env("R2_PUBLIC_URL").replace(/\/$/, "")}/${key}`;
+}
+
+/** Object key when `url` is one of our public R2 URLs; otherwise null. */
+export function keyFromPublicUrl(url: string): string | null {
+  const base = process.env.R2_PUBLIC_URL?.replace(/\/$/, "");
+  if (!base || !url.startsWith(`${base}/`)) return null;
+  let key = url.slice(base.length + 1);
+  try {
+    key = decodeURIComponent(key);
+  } catch {
+    return null;
+  }
+  if (!key || key.startsWith("/") || key.includes("..")) return null;
+  return key;
 }
 
 export async function presignPut(key: string, contentType: string, size: number) {

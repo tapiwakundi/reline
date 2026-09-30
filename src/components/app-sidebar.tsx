@@ -260,6 +260,13 @@ export function SidebarContent({
             </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              onClick={() =>
+                router.push(wsPath(workspace.slug, "/settings/profile"))
+              }
+            >
+              <UserIcon /> Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
               onClick={() => router.push(wsPath(workspace.slug, "/settings"))}
             >
               <SettingsIcon /> Settings

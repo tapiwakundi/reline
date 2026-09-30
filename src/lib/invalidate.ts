@@ -56,6 +56,18 @@ export function invalidateAfterLabelChange(
   ]);
 }
 
+/** After the signed-in user changes their profile photo. */
+export function invalidateAfterProfileChange(
+  qc: QueryClient,
+  workspaceId: string
+) {
+  return Promise.all([
+    invalidateIssues(qc, workspaceId),
+    invalidateInbox(qc, workspaceId),
+    invalidateWorkspace(qc, workspaceId),
+  ]);
+}
+
 /** After notification read. */
 export function invalidateAfterNotificationChange(
   qc: QueryClient,
