@@ -4,7 +4,7 @@ services:
     name: reline-api
     runtime: node
     plan: starter
-    buildCommand: npm ci --include=dev && npm run build -w @reline/api
+    buildCommand: npm ci && npm run build -w @reline/api
     preDeployCommand: npm run db:migrate -w @reline/api
     startCommand: npm run start -w @reline/api
     healthCheckPath: /api/health
@@ -44,7 +44,7 @@ services:
     name: reline-web
     runtime: node
     plan: starter
-    buildCommand: npm ci --include=dev && npm run build -w @reline/web
+    buildCommand: npm ci && npm run build -w @reline/web
     startCommand: npm run start -w @reline/web
     healthCheckPath: /health
     buildFilter:
