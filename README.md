@@ -44,8 +44,7 @@ docker run -d --name reline-pg \
   -p 5433:5432 postgres:16-alpine
 
 cp apps/api/.env.example apps/api/.env
-cp apps/web/.env.example apps/web/.env
-# fill in values (API defaults work with the docker command above)
+# fill in values (defaults work with the docker command above)
 
 npm run db:migrate
 npm run dev
@@ -69,15 +68,11 @@ npm run dev -w @reline/web
 2. Add authorized redirect URI:
    `{BETTER_AUTH_URL}/api/auth/callback/google`
    (e.g. `http://localhost:4000/api/auth/callback/google` in local dev).
-3. Put the values in `apps/api/.env` and `apps/web/.env`:
+3. Put the values in `apps/api/.env`:
 
 ```bash
-# apps/api/.env
 GOOGLE_CLIENT_ID=....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=....
-
-# apps/web/.env
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=....apps.googleusercontent.com  # same as GOOGLE_CLIENT_ID
 ```
 
 4. Restart the dev servers. Login/signup will show **Continue with Google**.
@@ -129,12 +124,11 @@ with a clear error.
    (Render reads `render.yaml`). This creates two web services: `reline-api`
    and `reline-web`. Set the env vars when prompted:
    - `DATABASE_URL` — your Neon connection string (API)
-   - `BETTER_AUTH_URL` / `NEXT_PUBLIC_APP_URL` — `https://<reline-web>.onrender.com`
+   - `BETTER_AUTH_URL` — `https://<reline-web>.onrender.com` (the public web URL)
    - `BETTER_AUTH_SECRET` / `BETTER_AUTH_API_KEY` are generated automatically
-   - `API_INTERNAL_URL` is wired to the API's private host
-   - Optional Google: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-     `NEXT_PUBLIC_GOOGLE_CLIENT_ID` (same as client id), and add
-     `https://<reline-web>.onrender.com/api/auth/callback/google` in Google Cloud
+   - `API_INTERNAL_URL` on the web service is wired to the API's private host
+   - Optional Google (API only): `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+     and add `https://<reline-web>.onrender.com/api/auth/callback/google` in Google Cloud
    - Attachments: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
      `R2_BUCKET_NAME`, `R2_PUBLIC_URL` (see the R2 section above), and add your
      web URL to the bucket's CORS policy

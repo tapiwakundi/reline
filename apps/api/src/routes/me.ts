@@ -16,6 +16,14 @@ import { requireUser, type AuthEnv } from "@/middleware/auth";
 
 export const meRoutes = new Hono<AuthEnv>();
 
+meRoutes.get("/config", (c) =>
+  c.json({
+    googleAuth: Boolean(
+      process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+    ),
+  })
+);
+
 meRoutes.get("/me", requireUser, async (c) => {
   const user = c.get("user");
   const workspaces = await getUserWorkspaces(user.id);

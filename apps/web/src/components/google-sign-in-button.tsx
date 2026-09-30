@@ -1,11 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { signIn } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
-const googleEnabled = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+function useGoogleAuth() {
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { googleAuth?: boolean } | null) => {
+        if (!cancelled && data?.googleAuth) setEnabled(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return enabled;
+}
 
 function GoogleIcon() {
   return (
@@ -37,6 +52,7 @@ export function GoogleSignInButton({
   callbackURL?: string;
   label?: string;
 }) {
+  const googleEnabled = useGoogleAuth();
   const [loading, setLoading] = useState(false);
 
   if (!googleEnabled) return null;
@@ -69,6 +85,7 @@ export function GoogleSignInButton({
 }
 
 export function AuthDivider() {
+  const googleEnabled = useGoogleAuth();
   if (!googleEnabled) return null;
   return (
     <div className="flex w-full items-center gap-3 text-xs text-muted-foreground">

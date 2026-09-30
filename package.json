@@ -12,8 +12,7 @@
     "lint": "npm run lint -w @reline/api && npm run lint -w @reline/web",
     "db:generate": "npm run db:generate -w @reline/api",
     "db:migrate": "npm run db:migrate -w @reline/api",
-    "db:studio": "npm run db:studio -w @reline/api",
-    "db:seed": "npm run db:seed -w @reline/api"
+    "db:studio": "npm run db:studio -w @reline/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
