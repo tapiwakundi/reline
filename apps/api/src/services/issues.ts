@@ -6,6 +6,7 @@ import {
   cycles,
   issueLabels,
   issues,
+  memberships,
   notifications,
   statuses,
   workspaces,
@@ -16,13 +17,13 @@ import {
   classifyContentType,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
-  resolveMentions,
+  mentionsAdded,
   todoStatusIdForCycleEntry,
   type AttachmentInput,
   type BoardMoveTarget,
   type IssueUpdatePatch,
+  type Member,
 } from "@reline/shared";
-import { getWorkspaceData } from "@/lib/queries";
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
 import { deleteObjects } from "@/lib/r2";
 import { HttpError, type WorkspaceContext } from "@/lib/context";
@@ -127,6 +128,45 @@ async function cycleIdWhenEnteringBacklog(
   );
 }
 
+/** Notify people newly @mentioned in an issue description or comment. */
+async function notifyNewMentions(opts: {
+  workspaceId: string;
+  issueId: string;
+  actorId: string;
+  before: string;
+  after: string;
+}): Promise<Set<string>> {
+  const after = opts.after.trim();
+  if (!after.includes("@")) return new Set();
+
+  const memberRows = await db.query.memberships.findMany({
+    where: eq(memberships.workspaceId, opts.workspaceId),
+    with: { user: true },
+  });
+  const members: Member[] = memberRows.map((row) => ({
+    id: row.user.id,
+    name: row.user.name,
+    email: row.user.email,
+    image: row.user.image ?? null,
+  }));
+  const mentioned = mentionsAdded(opts.before, after, members).filter(
+    (member) => member.id !== opts.actorId
+  );
+  if (mentioned.length === 0) return new Set();
+
+  await db.insert(notifications).values(
+    mentioned.map((member) => ({
+      userId: member.id,
+      workspaceId: opts.workspaceId,
+      issueId: opts.issueId,
+      actorId: opts.actorId,
+      type: "mentioned" as const,
+      payload: { preview: after.slice(0, 80) },
+    }))
+  );
+  return new Set(mentioned.map((member) => member.id));
+}
+
 export async function createIssue(ctx: WorkspaceContext, input: {
   title: string;
   description?: string;
@@ -202,6 +242,14 @@ export async function createIssue(ctx: WorkspaceContext, input: {
     issueId: issue.id,
     actorId: user.id,
     type: "created",
+  });
+
+  await notifyNewMentions({
+    workspaceId: workspace.id,
+    issueId: issue.id,
+    actorId: user.id,
+    before: "",
+    after: issue.description,
   });
 
   if (issue.assigneeId && issue.assigneeId !== user.id) {
@@ -311,6 +359,19 @@ async function applyIssueUpdate(
       workspaceId: workspace.id,
       actorId: user.id,
       type: "assigned",
+    });
+  }
+
+  if (
+    fields.description !== undefined &&
+    fields.description !== before.description
+  ) {
+    await notifyNewMentions({
+      workspaceId: workspace.id,
+      issueId,
+      actorId: user.id,
+      before: before.description,
+      after: fields.description,
     });
   }
 }
@@ -617,34 +678,14 @@ export async function addComment(
     });
   }
 
-  const data = await getWorkspaceData(
-    {
-      id: workspace.id,
-      name: workspace.name,
-      slug: workspace.slug,
-      prefix: workspace.prefix,
-      logo: workspace.logo ?? null,
-    },
-    user.id
-  );
-  const mentioned = resolveMentions(trimmed, data.members).filter(
-    (m) => m.id !== user.id
-  );
-  const mentionedIds = new Set(mentioned.map((m) => m.id));
-
   // Mentions get a dedicated notification (takes priority over "commented")
-  if (mentioned.length > 0) {
-    await db.insert(notifications).values(
-      mentioned.map((m) => ({
-        userId: m.id,
-        workspaceId: workspace.id,
-        issueId,
-        actorId: user.id,
-        type: "mentioned" as const,
-        payload: { preview: trimmed.slice(0, 80) },
-      }))
-    );
-  }
+  const mentionedIds = await notifyNewMentions({
+    workspaceId: workspace.id,
+    issueId,
+    actorId: user.id,
+    before: "",
+    after: trimmed,
+  });
 
   const otherCommenters = await db
     .selectDistinct({ authorId: comments.authorId })

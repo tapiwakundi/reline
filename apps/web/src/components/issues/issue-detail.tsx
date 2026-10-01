@@ -304,7 +304,7 @@ export function IssueDetail({
               members={members}
               autoFocus
               initialBlockIndex={descriptionFocus}
-              placeholder="Add description… Type / for headings, lists, checkboxes"
+              placeholder="Add description… Type / to format, @ to mention"
               onBlur={saveText}
               onPasteFiles={(files) => {
                 const media = mediaFiles(files);
@@ -349,7 +349,7 @@ export function IssueDetail({
                 />
               ) : (
                 <span className="text-muted-foreground/50">
-                  Add description… Type / for headings, lists, checkboxes
+                  Add description… Type / to format, @ to mention
                 </span>
               )}
             </div>

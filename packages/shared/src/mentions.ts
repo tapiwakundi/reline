@@ -46,13 +46,35 @@ function findMentionHits(body: string, members: Member[]): Hit[] {
   return hits.sort((a, b) => a.start - b.start);
 }
 
-/** Workspace members referenced via @Name / @email in comment text. */
+/** Workspace members referenced via @Name / @email in text. */
 export function resolveMentions(body: string, members: Member[]): Member[] {
   const seen = new Map<string, Member>();
   for (const hit of findMentionHits(body, members)) {
     seen.set(hit.member.id, hit.member);
   }
   return [...seen.values()];
+}
+
+/** Members mentioned in `after` who were not already mentioned in `before`. */
+export function mentionsAdded(
+  before: string,
+  after: string,
+  members: Member[]
+): Member[] {
+  const previous = new Set(resolveMentions(before, members).map((member) => member.id));
+  return resolveMentions(after, members).filter((member) => !previous.has(member.id));
+}
+
+/** Character ranges of @mentions, using the text as it appears in the source. */
+export function mentionSpans(
+  body: string,
+  members: Member[]
+): Array<{ start: number; end: number; member: Member }> {
+  return findMentionHits(body, members).map((hit) => ({
+    start: hit.start,
+    end: hit.end,
+    member: hit.member,
+  }));
 }
 
 /** Split comment body into plain text and @mention segments for rendering. */

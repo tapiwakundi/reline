@@ -42,6 +42,7 @@ import {
   type SlashCommand,
   type SlashCommandId,
 } from "@/lib/editor-document";
+import { mentionSpans } from "@/lib/mentions";
 import type { Member } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -157,6 +158,32 @@ function AnchoredMenu({
   );
 }
 
+/** Same characters as the field, with resolved @mentions painted in place. */
+function MentionOverlay({ text, members }: { text: string; members: Member[] }) {
+  const spans = mentionSpans(text, members);
+  if (spans.length === 0) return <>{text}</>;
+
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  spans.forEach((span, index) => {
+    if (span.start > cursor) {
+      nodes.push(text.slice(cursor, span.start));
+    }
+    nodes.push(
+      <span
+        key={index}
+        className="-mx-0.5 rounded bg-primary/15 px-0.5 text-primary"
+        title={span.member.email}
+      >
+        {text.slice(span.start, span.end)}
+      </span>
+    );
+    cursor = span.end;
+  });
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return <>{nodes}</>;
+}
+
 function blockPlaceholder(block: Block, loneEmpty: boolean, placeholder?: string) {
   if (loneEmpty && block.type === "paragraph") return placeholder ?? "";
   switch (block.type) {
@@ -183,7 +210,7 @@ export function BlockEditor({
   value,
   onChange,
   members = [],
-  placeholder = "Type / for headings, lists, and more",
+  placeholder = "Type / to format, @ to mention",
   autoFocus = false,
   initialBlockIndex = null,
   onBlur,
@@ -670,6 +697,16 @@ export function BlockEditor({
                       }
                     />
                   ) : null}
+                  <div className="relative min-w-0 flex-1">
+                  <div
+                    aria-hidden
+                    className={cn(
+                      textClass,
+                      "pointer-events-none absolute inset-0 whitespace-pre-wrap break-words"
+                    )}
+                  >
+                    <MentionOverlay text={block.text} members={members} />
+                  </div>
                   <textarea
                     ref={(node) => {
                       if (node) {
@@ -682,7 +719,10 @@ export function BlockEditor({
                     value={block.text}
                     rows={1}
                     placeholder={blockPlaceholder(block, loneEmpty, placeholder)}
-                    className={textClass}
+                    className={cn(
+                      textClass,
+                      "relative z-10 whitespace-pre-wrap break-words text-transparent caret-foreground selection:bg-foreground/15 selection:text-transparent"
+                    )}
                     onChange={(event) => {
                       const nextText = event.target.value;
                       const caret = event.target.selectionStart;
@@ -757,6 +797,7 @@ export function BlockEditor({
                       if (result.handled) event.preventDefault();
                     }}
                   />
+                  </div>
                 </div>
               )}
             </div>

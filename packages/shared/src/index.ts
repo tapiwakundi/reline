@@ -81,7 +81,7 @@ export {
   todoStatusIdForCycleEntry,
 } from "./issue-cycle";
 
-export { resolveMentions, splitMentions } from "./mentions";
+export { mentionSpans, mentionsAdded, resolveMentions, splitMentions } from "./mentions";
 
 export { RESERVED_SLUGS, WORKSPACE_SLUG_COOKIE, wsPath } from "./workspace-paths";
 

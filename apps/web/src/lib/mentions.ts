@@ -1,1 +1,1 @@
-export { resolveMentions, splitMentions } from "@reline/shared";
+export { mentionSpans, resolveMentions, splitMentions } from "@reline/shared";

@@ -157,7 +157,7 @@ export function CreateIssueDialog({
             value={description}
             onChange={setDescription}
             members={members}
-            placeholder="Add description… Type / for headings, lists, checkboxes"
+            placeholder="Add description… Type / to format, @ to mention"
             onSubmit={submit}
             onPasteFiles={(files) => {
               const media = mediaFiles(files);
@@ -195,7 +195,7 @@ export function CreateIssueDialog({
         <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
           <AttachButton onFiles={uploads.addFiles} disabled={pending} />
           <span className="mr-auto text-[11px] text-muted-foreground">
-            / to format · ⌘↵ to create
+            / to format · @ to mention · ⌘↵ to create
           </span>
           <Button
             variant="ghost"
