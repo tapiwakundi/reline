@@ -5,7 +5,7 @@ const GOOGLE_LINK_ERRORS = new Set([
   "account_already_linked_to_different_user",
 ]);
 
-export type GoogleLinkStep = "password" | "confirm" | "conflict";
+export type GoogleLinkStep = "link" | "confirm" | "conflict";
 
 /** Same-origin path for post-login redirects. */
 export function safeInternalPath(
@@ -48,8 +48,7 @@ export function isGoogleLinkError(code: string | null): boolean {
 
 /**
  * How to continue when Google sign-in finds an existing password account.
- * Implicit linking is refused until the user proves they know the password,
- * then Google is linked onto that signed-in user.
+ * Logged-out users confirm the link. Signed-in users finish with linkSocial.
  */
 export function googleLinkStep(
   error: string | null,
@@ -58,11 +57,11 @@ export function googleLinkStep(
   if (error === "account_already_linked_to_different_user") {
     return hasSession ? "conflict" : null;
   }
-  if (error === "email_doesn't_match" || error === "unable_to_link_account") {
+  if (error === "email_doesn't_match") {
     return hasSession ? "confirm" : null;
   }
-  if (error === "account_not_linked") {
-    return hasSession ? "confirm" : "password";
+  if (error === "account_not_linked" || error === "unable_to_link_account") {
+    return hasSession ? "confirm" : "link";
   }
   return null;
 }
@@ -70,7 +69,7 @@ export function googleLinkStep(
 export function oauthErrorMessage(code: string): string {
   switch (code) {
     case "account_not_linked":
-      return "This email already has a password account. Sign in to connect Google.";
+      return "This email already has a password account. Link Google to continue.";
     case "unable_to_link_account":
       return "Could not connect Google. Try again.";
     case "email_doesn't_match":

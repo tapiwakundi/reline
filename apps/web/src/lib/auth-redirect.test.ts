@@ -41,11 +41,13 @@ test("googleErrorCallbackURL round-trips a safe next path", () => {
   assert.equal(blocked.searchParams.get("next"), "/");
 });
 
-test("googleLinkStep asks for the password before linking", () => {
-  assert.equal(googleLinkStep("account_not_linked", false), "password");
+test("googleLinkStep asks to link without a password", () => {
+  assert.equal(googleLinkStep("account_not_linked", false), "link");
   assert.equal(googleLinkStep("account_not_linked", true), "confirm");
   assert.equal(googleLinkStep("email_doesn't_match", true), "confirm");
   assert.equal(googleLinkStep("email_doesn't_match", false), null);
+  assert.equal(googleLinkStep("unable_to_link_account", false), "link");
+  assert.equal(googleLinkStep("unable_to_link_account", true), "confirm");
   assert.equal(
     googleLinkStep("account_already_linked_to_different_user", true),
     "conflict"

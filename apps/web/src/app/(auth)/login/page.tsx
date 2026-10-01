@@ -18,6 +18,7 @@ import { Logo } from "@/components/logo";
 import {
   AuthDivider,
   GoogleSignInButton,
+  confirmGoogleLink,
   linkGoogleAccount,
   signInWithGoogle,
 } from "@/components/google-sign-in-button";
@@ -27,8 +28,8 @@ function connectCopy(
   error: string | null,
   email: string | undefined
 ): string {
-  if (step === "password") {
-    return "This email already has a password account. Sign in with that password to connect Google and continue.";
+  if (step === "link") {
+    return "This email already has a password account. Link Google to it?";
   }
   if (step === "conflict") {
     return "That Google account is already connected to a different user. Continue into the app with this login, or try another Google account.";
@@ -67,6 +68,18 @@ function LoginForm() {
     }
   }
 
+  async function linkExistingAccount() {
+    setLoading(true);
+    const { error: linkError } = await confirmGoogleLink();
+    if (linkError) {
+      setLoading(false);
+      toast.error(linkError.message ?? "Could not connect Google");
+      return;
+    }
+    router.push(destination);
+    router.refresh();
+  }
+
   async function tryDifferentGoogle() {
     setLoading(true);
     const { error: googleError } = await signInWithGoogle(destination);
@@ -87,15 +100,6 @@ function LoginForm() {
     if (signInError) {
       setLoading(false);
       toast.error(signInError.message ?? "Invalid email or password");
-      return;
-    }
-    if (step === "password") {
-      const { error: linkError } = await linkGoogleAccount(destination);
-      if (linkError) {
-        setLoading(false);
-        toast.error(linkError.message ?? "Could not connect Google");
-        return;
-      }
       return;
     }
     router.push(destination);
@@ -141,7 +145,33 @@ function LoginForm() {
         ) : null}
       </div>
       <div className="flex w-full flex-col gap-3">
-        {step === "confirm" || step === "conflict" ? (
+        {step === "link" ? (
+          <>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={loading}
+              onClick={() => {
+                void linkExistingAccount();
+              }}
+            >
+              {loading ? "Linking…" : "Link and continue"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={loading}
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (destination !== "/") params.set("next", destination);
+                router.replace(params.size ? `/login?${params.toString()}` : "/login");
+              }}
+            >
+              Sign in with email instead
+            </Button>
+          </>
+        ) : step === "confirm" || step === "conflict" ? (
           <>
             {step === "confirm" ? (
               <Button
@@ -179,12 +209,8 @@ function LoginForm() {
           </>
         ) : (
           <>
-            {step !== "password" ? (
-              <>
-                <GoogleSignInButton callbackURL={destination} />
-                <AuthDivider />
-              </>
-            ) : null}
+            <GoogleSignInButton callbackURL={destination} />
+            <AuthDivider />
             <form onSubmit={onSubmit} className="flex w-full flex-col gap-3">
               <Input
                 name="email"
@@ -202,19 +228,13 @@ function LoginForm() {
                 autoComplete="current-password"
               />
               <Button type="submit" disabled={loading} className="mt-1 w-full">
-                {loading
-                  ? step === "password"
-                    ? "Connecting…"
-                    : "Logging in…"
-                  : step === "password"
-                    ? "Sign in and connect Google"
-                    : "Continue"}
+                {loading ? "Logging in…" : "Continue"}
               </Button>
             </form>
           </>
         )}
       </div>
-      {step === "password" ? (
+      {step === "link" ? (
         <button
           type="button"
           className="text-sm text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"

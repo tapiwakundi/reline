@@ -18,6 +18,25 @@ export async function signInWithGoogle(callbackURL: string) {
   });
 }
 
+/** Finish linking with the Google sign-in that just completed. */
+export async function confirmGoogleLink() {
+  const ready = await fetch("/api/auth/google-link-confirm", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!ready.ok) {
+    const body = (await ready.json().catch(() => null)) as { message?: string } | null;
+    return {
+      error: {
+        message: body?.message ?? "Could not connect Google",
+      },
+    };
+  }
+  return { error: null };
+}
+
 /** Attach Google to the current session. The Google email must match. */
 export async function linkGoogleAccount(callbackURL: string) {
   const destination = safeInternalPath(callbackURL);
