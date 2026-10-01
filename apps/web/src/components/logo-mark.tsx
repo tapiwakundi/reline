@@ -11,8 +11,11 @@ export function LogoMark({ className }: { className?: string }) {
     >
       <path
         fill={LOGO_ACCENT}
-        fillRule="evenodd"
-        d="M12 1a11 11 0 1 1 0 22 11 11 0 0 1 0-22Zm-3.482-2.489 16.971 16.971-1.495 1.495L7.023.006Z"
+        d="M8.567 1.549A11 11 0 1 0 22.451 15.433Z"
+      />
+      <path
+        fill={LOGO_ACCENT}
+        d="M11.048 1.041A11 11 0 0 1 22.959 12.952Z"
       />
     </svg>
   );
