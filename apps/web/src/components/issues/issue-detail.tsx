@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { attachToIssue, type AttachmentInput } from "@/lib/api/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
@@ -388,9 +387,7 @@ export function IssueDetail({
             <CyclePicker value={issue.cycleId} onChange={(cycleId) => patch({ cycleId })} />
           </div>
 
-          <Separator className="my-6" />
-
-          <h2 className="mb-4 text-sm font-medium">Activity</h2>
+          <h2 className="mt-8 mb-4 text-sm font-medium">Activity</h2>
           <div className="flex flex-col gap-4">
             {feed.map((item) =>
               item.kind === "comment" ? (
