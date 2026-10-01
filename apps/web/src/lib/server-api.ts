@@ -2,11 +2,23 @@ import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
 export function apiInternalUrl() {
-  const raw = process.env.API_INTERNAL_URL ?? "http://localhost:4001";
+  const raw = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:4001";
   if (raw.startsWith("http://") || raw.startsWith("https://")) {
     return raw.replace(/\/$/, "");
   }
   return `http://${raw}`;
+}
+
+function fetchErrorMessage(url: string, err: unknown) {
+  const cause =
+    err instanceof Error && "cause" in err ? (err as Error & { cause?: unknown }).cause : err;
+  const detail =
+    cause instanceof Error
+      ? cause.message
+      : err instanceof Error
+        ? err.message
+        : "fetch failed";
+  return `Could not reach the API at ${url} (${detail}). Start it with npm run dev — it listens on port 4001.`;
 }
 
 export async function serverApi<T>(
@@ -24,11 +36,17 @@ export async function serverApi<T>(
   if (workspaceSlug) {
     headers.set("x-workspace-slug", workspaceSlug);
   }
-  const res = await fetch(`${apiInternalUrl()}${path}`, {
-    ...rest,
-    headers,
-    cache: "no-store",
-  });
+  const url = `${apiInternalUrl()}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...rest,
+      headers,
+      cache: "no-store",
+    });
+  } catch (err) {
+    throw new Error(fetchErrorMessage(url, err));
+  }
 
   if (res.status === 401) {
     if (optionalAuth) {
