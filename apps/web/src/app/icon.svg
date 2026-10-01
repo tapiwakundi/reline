@@ -1,4 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Reline">
   <rect width="32" height="32" rx="8" fill="#17181b"/>
-  <path d="M 13 21 L 17.4 4.6 L 25 9 Z" fill="#f2c94c"/>
+  <path
+    fill="#ECB22E"
+    fill-rule="evenodd"
+    d="M16 6.45a9.55 9.55 0 1 1 0 19.1 9.55 9.55 0 0 1 0-19.1ZM13.273 4.585l14.142 14.142-1.298 1.298-14.142-14.142Z"
+  />
 </svg>
