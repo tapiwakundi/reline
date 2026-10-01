@@ -61,7 +61,8 @@ app.route("/api", attachmentsRoutes);
 app.route("/api", importRoutes);
 
 const port = Number(process.env.PORT ?? 4001);
+const hostname = process.env.HOST ?? "0.0.0.0";
 
-serve({ fetch: app.fetch, port, hostname: "0.0.0.0" }, (info) => {
-  console.log(`API listening on http://0.0.0.0:${info.port}`);
+serve({ fetch: app.fetch, port, hostname }, (info) => {
+  console.log(`API listening on http://${info.address}:${info.port}`);
 });

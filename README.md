@@ -53,7 +53,7 @@ npm run dev
 ```
 
 This starts the API on http://localhost:4001 and the web app on
-http://localhost:4000. Open the web URL, sign up, and create your workspace.
+http://localhost:4002. Open the web URL, sign up, and create your workspace.
 Invite your teammate from Settings → Members.
 
 `npm run dev` runs both apps. You can also start them separately:
@@ -69,7 +69,7 @@ npm run dev -w @reline/web
    create an **OAuth 2.0 Client ID** (Web application).
 2. Add authorized redirect URI:
    `{BETTER_AUTH_URL}/api/auth/callback/google`
-   (e.g. `http://localhost:4000/api/auth/callback/google` in local dev).
+   (e.g. `http://localhost:4002/api/auth/callback/google` in local dev).
 3. Put the values in `apps/api/.env`:
 
 ```bash
@@ -93,7 +93,7 @@ through the API in local/dev (avoids browser CORS) or via presigned URLs.
 ```json
 [
   {
-    "AllowedOrigins": ["http://localhost:4000", "https://<your-web-domain>"],
+    "AllowedOrigins": ["http://localhost:4002", "https://<your-web-domain>"],
     "AllowedMethods": ["PUT"],
     "AllowedHeaders": ["content-type"],
     "MaxAgeSeconds": 3600
@@ -161,7 +161,9 @@ In Cursor, add a remote MCP server (or paste this into `~/.cursor/mcp.json`):
 }
 ```
 
-Use the web app origin. Next.js forwards `/api/mcp` to the API. Then paste an
+Locally, with `npm run dev`, use `http://localhost:4002/api/mcp` (or
+`http://localhost:4001/api/mcp` to hit the API directly). Use the web app
+origin in production. Next.js forwards `/api/mcp` to the API. Then paste an
 issue link such as `https://<your-web-app>/acme/issue/REL-42` in chat. Cursor
 calls `get_issue` for the title, description, comments, and attachments, and
 `get_attachment` to refetch one file. Images are returned inline. Videos stay

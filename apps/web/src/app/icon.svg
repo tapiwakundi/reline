@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Reline">
   <rect width="32" height="32" rx="8" fill="#17181b"/>
-  <path d="M 13 21 L 17.4 4.6 L 25 9 Z" fill="#f2c94c"/>
+  <g fill="#ECB22E">
+    <path d="M13.02 6.927A9.55 9.55 0 1 0 25.073 18.98Z"/>
+    <path d="M15.173 6.486A9.55 9.55 0 0 1 25.514 16.827Z"/>
+  </g>
 </svg>

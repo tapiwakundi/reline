@@ -9,7 +9,7 @@ export function Logo({ className }: { className?: string }) {
         className
       )}
     >
-      <LogoMark className="size-5" />
+      <LogoMark className="size-[78%]" />
     </div>
   );
 }

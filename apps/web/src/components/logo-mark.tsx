@@ -1,16 +1,22 @@
 import { cn } from "@/lib/utils";
 
-/** Narrow yellow In Progress cone (30°), elongated up-right. */
-export const LOGO_ACCENT = "#f2c94c";
+export const LOGO_ACCENT = "#ECB22E";
 
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 14 14"
+      viewBox="0 0 24 24"
       className={cn(className)}
       aria-hidden
     >
-      <path d="M 5.5 9.2 L 7.7 1 L 11.5 3.2 Z" fill={LOGO_ACCENT} />
+      <path
+        fill={LOGO_ACCENT}
+        d="M8.567 1.549A11 11 0 1 0 22.451 15.433Z"
+      />
+      <path
+        fill={LOGO_ACCENT}
+        d="M11.048 1.041A11 11 0 0 1 22.959 12.952Z"
+      />
     </svg>
   );
 }
