@@ -2,8 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { signIn } from "@/lib/auth-client";
+import { authClient, signIn } from "@/lib/auth-client";
+import {
+  googleErrorCallbackURL,
+  safeInternalPath,
+} from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
+
+export async function signInWithGoogle(callbackURL: string) {
+  const destination = safeInternalPath(callbackURL);
+  return signIn.social({
+    provider: "google",
+    callbackURL: destination,
+    errorCallbackURL: googleErrorCallbackURL(destination),
+  });
+}
+
+/** Attach Google to the current session. The Google email must match. */
+export async function linkGoogleAccount(callbackURL: string) {
+  const destination = safeInternalPath(callbackURL);
+  return authClient.linkSocial({
+    provider: "google",
+    callbackURL: destination,
+    errorCallbackURL: googleErrorCallbackURL(destination),
+  });
+}
 
 function useGoogleAuth() {
   const [enabled, setEnabled] = useState(false);
@@ -59,10 +82,7 @@ export function GoogleSignInButton({
 
   async function onClick() {
     setLoading(true);
-    const { error } = await signIn.social({
-      provider: "google",
-      callbackURL,
-    });
+    const { error } = await signInWithGoogle(callbackURL);
     if (error) {
       setLoading(false);
       toast.error(error.message ?? "Google sign-in failed");
