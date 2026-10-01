@@ -12,6 +12,8 @@ import { importRoutes } from "@/routes/import";
 import { invitesRoutes } from "@/routes/invites";
 import { issuesRoutes } from "@/routes/issues";
 import { labelsRoutes } from "@/routes/labels";
+import { mcpRoutes } from "@/routes/mcp";
+import { mcpTokenRoutes } from "@/routes/mcp-tokens";
 import { meRoutes } from "@/routes/me";
 import { notificationsRoutes } from "@/routes/notifications";
 import { profileRoutes } from "@/routes/profile";
@@ -46,6 +48,8 @@ app.use("/api/workspace/logo", bodyLimit({ maxSize: 6 * 1024 * 1024 }));
 app.use("/api/import/*", bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
 app.route("/api", meRoutes);
+app.route("/api", mcpTokenRoutes);
+app.route("/api", mcpRoutes);
 app.route("/api", invitesRoutes);
 app.route("/api", workspaceRoutes);
 app.route("/api", issuesRoutes);
