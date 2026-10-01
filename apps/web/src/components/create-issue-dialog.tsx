@@ -19,6 +19,7 @@ import {
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
 import { showIssueCreatedToast } from "@/components/issue-created-toast";
+import { BlockEditor } from "@/components/block-editor";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
 import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
 import { wsPath } from "@/lib/workspace-paths";
@@ -36,7 +37,7 @@ export function CreateIssueDialog({
   /** When set (including `null` for "no cycle"), prefill the cycle picker. */
   defaultCycleId?: string | null;
 }) {
-  const { workspace, statuses } = useWorkspace();
+  const { workspace, statuses, members } = useWorkspace();
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
@@ -152,22 +153,19 @@ export function CreateIssueDialog({
             autoFocus
             className="w-full bg-transparent text-lg font-medium outline-none placeholder:text-muted-foreground/60"
           />
-          <textarea
+          <BlockEditor
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
+            onChange={setDescription}
+            members={members}
+            placeholder="Add description… Type / for headings, lists, checkboxes"
+            onSubmit={submit}
+            onPasteFiles={(files) => {
+              const media = mediaFiles(files);
+              if (!media.length) return false;
+              uploads.addFiles(media);
+              return true;
             }}
-            onPaste={(e) => {
-              const files = mediaFiles(e.clipboardData.files);
-              if (files.length) {
-                e.preventDefault();
-                uploads.addFiles(files);
-              }
-            }}
-            placeholder="Add description…"
-            rows={4}
-            className="mt-2 w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+            className="mt-2 min-h-24"
           />
           <AttachmentThumbnails
             pending={uploads.items}
@@ -197,7 +195,7 @@ export function CreateIssueDialog({
         <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2.5">
           <AttachButton onFiles={uploads.addFiles} disabled={pending} />
           <span className="mr-auto text-[11px] text-muted-foreground">
-            ⌘↵ to create
+            / to format · ⌘↵ to create
           </span>
           <Button
             variant="ghost"

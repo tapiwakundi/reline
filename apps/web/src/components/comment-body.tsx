@@ -1,5 +1,5 @@
 import type { Member } from "@/lib/types";
-import { RichText } from "@/components/rich-text";
+import { FormattedText } from "@/components/formatted-text";
 
 export function CommentBody({
   body,
@@ -9,10 +9,10 @@ export function CommentBody({
   members: Member[];
 }) {
   return (
-    <RichText
+    <FormattedText
       text={body}
       members={members}
-      className="mt-2 whitespace-pre-wrap text-[13px] leading-6 text-foreground/90"
+      className="mt-2 text-[13px] leading-6 text-foreground/90"
     />
   );
 }
