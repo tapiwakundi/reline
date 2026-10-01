@@ -35,8 +35,10 @@ import {
 } from "@/components/pickers";
 import { UserAvatar } from "@/components/user-avatar";
 import { CommentBody } from "@/components/comment-body";
-import { RichText } from "@/components/rich-text";
+import { FormattedText } from "@/components/formatted-text";
+import { BlockEditor } from "@/components/block-editor";
 import { CommentComposer } from "@/components/comment-composer";
+import { toggleTodo } from "@/lib/editor-document";
 import { AttachButton } from "@/components/attachments/attach-button";
 import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbnails";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
@@ -92,6 +94,7 @@ export function IssueDetail({
   const [title, setTitle] = useState(issue.title);
   const [description, setDescription] = useState(issue.description);
   const [editingDescription, setEditingDescription] = useState(false);
+  const [descriptionFocus, setDescriptionFocus] = useState<number | null>(null);
   const [syncedFrom, setSyncedFrom] = useState({
     id: issue.id,
     title: issue.title,
@@ -120,24 +123,15 @@ export function IssueDetail({
     document.title = `${issue.identifier} · ${label} · Reline`;
   }, [issue.identifier, title]);
 
-  // Auto-grow textareas so content isn't clipped behind an inner scrollbar.
+  // Grow the title with its content. The description editor must not move
+  // the caret on each change; that used to type at the end of long text.
   const titleRef = useRef<HTMLTextAreaElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = titleRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [title]);
-  useEffect(() => {
-    const el = descriptionRef.current;
-    if (!el || !editingDescription) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.max(el.scrollHeight, 96)}px`;
-    el.focus();
-    const len = el.value.length;
-    el.setSelectionRange(len, len);
-  }, [description, editingDescription]);
 
   async function refreshDetail() {
     await invalidateAfterIssueChange(qc, workspace.id);
@@ -305,43 +299,59 @@ export function IssueDetail({
             placeholder="Issue title"
           />
           {editingDescription ? (
-            <textarea
-              ref={descriptionRef}
+            <BlockEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={setDescription}
+              members={members}
+              autoFocus
+              initialBlockIndex={descriptionFocus}
+              placeholder="Add description… Type / for headings, lists, checkboxes"
               onBlur={saveText}
-              onPaste={(e) => {
-                const files = mediaFiles(e.clipboardData.files);
-                if (files.length) {
-                  e.preventDefault();
-                  uploads.addFiles(files);
-                }
+              onPasteFiles={(files) => {
+                const media = mediaFiles(files);
+                if (!media.length) return false;
+                uploads.addFiles(media);
+                return true;
               }}
-              placeholder="Add description…"
-              rows={4}
-              className="mt-3 w-full resize-none overflow-hidden bg-transparent text-sm leading-6 text-foreground/90 outline-none placeholder:text-muted-foreground/50"
+              className="mt-3 min-h-24 text-foreground/90"
             />
           ) : (
             <div
-              role="button"
               tabIndex={0}
-              onClick={() => setEditingDescription(true)}
+              onClick={(e) => {
+                const target = e.target as HTMLElement;
+                if (target.closest("button, a")) return;
+                const holder = target.closest("[data-block-index]");
+                const raw = holder?.getAttribute("data-block-index");
+                const index = raw == null ? null : Number(raw);
+                setDescriptionFocus(
+                  index != null && Number.isFinite(index) ? index : null
+                );
+                setEditingDescription(true);
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
+                  setDescriptionFocus(null);
                   setEditingDescription(true);
                 }
               }}
               className="mt-3 block w-full cursor-text rounded-md text-left text-sm leading-6 text-foreground/90 outline-none hover:bg-foreground/[0.03] focus-visible:ring-2 focus-visible:ring-ring"
             >
               {description.trim() ? (
-                <RichText
+                <FormattedText
                   text={description}
                   members={members}
-                  className="whitespace-pre-wrap"
+                  onToggleTodo={(index) => {
+                    const next = toggleTodo(description, index);
+                    setDescription(next);
+                    patch({ description: next });
+                  }}
                 />
               ) : (
-                <span className="text-muted-foreground/50">Add description…</span>
+                <span className="text-muted-foreground/50">
+                  Add description… Type / for headings, lists, checkboxes
+                </span>
               )}
             </div>
           )}
