@@ -39,10 +39,6 @@ services:
         value: reline
       - key: R2_PUBLIC_URL
         sync: false
-      - key: POSTHOG_PROJECT_TOKEN
-        sync: false
-      - key: POSTHOG_HOST
-        value: https://us.i.posthog.com
 
   - type: web
     name: reline-web

@@ -124,7 +124,7 @@ with a clear error.
 the tokens unset and the app runs without sending anything.
 
 1. Create a PostHog project and copy the project token from Project Settings.
-2. Web — `cp apps/web/.env.example apps/web/.env.local`:
+2. `cp apps/web/.env.example apps/web/.env.local`:
 
 ```bash
 NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_...
@@ -133,22 +133,13 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 
 Use `https://eu.i.posthog.com` for EU Cloud. The host is read at build time.
 
-3. API — same project, in `apps/api/.env`:
-
-```bash
-POSTHOG_PROJECT_TOKEN=phc_...
-POSTHOG_HOST=https://us.i.posthog.com
-```
-
 The browser sends events to `/ingest` on the web origin, and Next.js forwards
 them to PostHog. Page views, autocaptured clicks, and unhandled browser
 exceptions are captured. Signed-in users are identified by their user id, with
 email and name stored as person properties. The open workspace is sent as a
-`workspace` group. Signing out resets the browser identity.
-
-Unexpected API failures (HTTP 500s and uncaught exceptions) are reported with
-the same user id when the session is available. Expected 4xx responses are not
-reported. Next.js server errors are reported from the web service.
+`workspace` group. Signing out resets the browser identity. Next.js server
+errors in the web app are reported on the same person. The API does not send
+events.
 
 For readable production stack traces, set these on the web service before the
 build. The personal API key needs error-tracking write access, and the
@@ -177,11 +168,10 @@ Source maps upload only when both are set.
    - Attachments: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
      `R2_BUCKET_NAME`, `R2_PUBLIC_URL` (see the R2 section above), and add your
      web URL to the bucket's CORS policy
-   - PostHog (optional): `POSTHOG_PROJECT_TOKEN` and `POSTHOG_HOST` on the API;
-     `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and `NEXT_PUBLIC_POSTHOG_HOST` on the
-     web service (the public host is baked in at build time). For unminified
-     stack traces, also set `POSTHOG_PERSONAL_API_KEY` and `POSTHOG_ENV_ID` on
-     the web service before the build
+   - PostHog (optional, web service only): `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN`
+     and `NEXT_PUBLIC_POSTHOG_HOST` (the public host is baked in at build time).
+     For unminified stack traces, also set `POSTHOG_PERSONAL_API_KEY` and
+     `POSTHOG_ENV_ID` before the build
 3. Deploy. Migrations run as the API pre-deploy command. The API binds to
    `0.0.0.0:$PORT` and health-checks at `/api/health`; the web app health-checks
    at `/health`.
