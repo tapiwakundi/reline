@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   isNextControlFlowError,
   normalizePostHogHost,
+  POSTHOG_PROXY_PATH,
   posthogAssetsHost,
   posthogRewrites,
   posthogUiHost,
@@ -34,18 +35,19 @@ test("cloud hosts map to the app and asset origins", () => {
   );
 });
 
-test("posthogRewrites send assets to the asset host and events to ingest", () => {
+test("posthogRewrites stay on a first-party path blockers do not list", () => {
+  assert.equal(POSTHOG_PROXY_PATH, "/rline");
   assert.deepEqual(posthogRewrites("https://eu.i.posthog.com"), [
     {
-      source: "/ingest/static/:path*",
+      source: "/rline/static/:path*",
       destination: "https://eu-assets.i.posthog.com/static/:path*",
     },
     {
-      source: "/ingest/array/:path*",
+      source: "/rline/array/:path*",
       destination: "https://eu-assets.i.posthog.com/array/:path*",
     },
     {
-      source: "/ingest/:path*",
+      source: "/rline/:path*",
       destination: "https://eu.i.posthog.com/:path*",
     },
   ]);

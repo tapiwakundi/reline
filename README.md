@@ -133,9 +133,11 @@ NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 
 Use `https://eu.i.posthog.com` for EU Cloud. The host is read at build time.
 
-The browser sends events to `/ingest` on the web origin, and Next.js forwards
-them to PostHog. Page views, autocaptured clicks, and unhandled browser
-exceptions are captured. Signed-in users are identified by their user id, with
+The browser never calls PostHog directly. Events go to `/rline` on the web
+origin, and Next.js forwards them server-side. That keeps requests first-party,
+so Chrome and filter lists that block `posthog.com` or the well-known `/ingest`
+path still let them through. Page views, autocaptured clicks, and unhandled
+browser exceptions are captured. Signed-in users are identified by their user id, with
 email and name stored as person properties. The open workspace is sent as a
 `workspace` group. Signing out resets the browser identity. Next.js server
 errors in the web app are reported on the same person. The API does not send

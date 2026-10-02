@@ -1,5 +1,11 @@
 export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
 
+/**
+ * First-party path the browser uses instead of posthog.com.
+ * `/ingest` is on ad-block lists, so this name stays specific to Reline.
+ */
+export const POSTHOG_PROXY_PATH = "/rline";
+
 export function normalizePostHogHost(raw: string | undefined): string {
   const value = (raw || DEFAULT_POSTHOG_HOST).trim().replace(/\/$/, "");
   return value || DEFAULT_POSTHOG_HOST;
@@ -33,7 +39,7 @@ export function posthogAssetsHost(ingestHost: string): string {
   return ingestHost;
 }
 
-/** First-party `/ingest` proxy. Static bundles come from the asset host. */
+/** Same-origin rewrites. Static bundles come from the asset host. */
 export function posthogRewrites(ingestHost: string): {
   source: string;
   destination: string;
@@ -41,15 +47,15 @@ export function posthogRewrites(ingestHost: string): {
   const assets = posthogAssetsHost(ingestHost);
   return [
     {
-      source: "/ingest/static/:path*",
+      source: `${POSTHOG_PROXY_PATH}/static/:path*`,
       destination: `${assets}/static/:path*`,
     },
     {
-      source: "/ingest/array/:path*",
+      source: `${POSTHOG_PROXY_PATH}/array/:path*`,
       destination: `${assets}/array/:path*`,
     },
     {
-      source: "/ingest/:path*",
+      source: `${POSTHOG_PROXY_PATH}/:path*`,
       destination: `${ingestHost}/:path*`,
     },
   ];
