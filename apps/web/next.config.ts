@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+import { withPostHogConfig } from "@posthog/nextjs-config";
+import { normalizePostHogHost, posthogRewrites } from "./src/lib/posthog-config";
 
 function apiInternalUrl() {
   const raw = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:4001";
@@ -23,10 +25,31 @@ const nextConfig: NextConfig = {
       dynamic: 30,
     },
   },
+  // PostHog's ingest API uses trailing slashes. Redirecting them strips the slash
+  // and drops the event.
+  skipTrailingSlashRedirect: true,
   async rewrites() {
     const api = apiInternalUrl();
-    return [{ source: "/api/:path*", destination: `${api}/api/:path*` }];
+    const ingest = normalizePostHogHost(process.env.NEXT_PUBLIC_POSTHOG_HOST);
+    return [
+      ...posthogRewrites(ingest),
+      { source: "/api/:path*", destination: `${api}/api/:path*` },
+    ];
   },
 };
 
-export default nextConfig;
+const personalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+const envId = process.env.POSTHOG_ENV_ID;
+
+export default personalApiKey && envId
+  ? withPostHogConfig(nextConfig, {
+      personalApiKey,
+      envId,
+      host: normalizePostHogHost(process.env.NEXT_PUBLIC_POSTHOG_HOST),
+      sourcemaps: {
+        enabled: true,
+        project: "reline",
+        deleteAfterUpload: true,
+      },
+    })
+  : nextConfig;

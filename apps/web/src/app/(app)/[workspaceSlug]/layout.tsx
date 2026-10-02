@@ -1,3 +1,4 @@
+import { PostHogWorkspace } from "@/components/posthog-workspace";
 import { QueryProvider } from "@/components/query-provider";
 import { GlobalShortcuts } from "@/components/global-shortcuts";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -31,6 +32,7 @@ export default async function WorkspaceLayout({
           cycles: data.cycles,
         }}
       >
+        <PostHogWorkspace user={data.me} workspace={data.workspace} />
         <GlobalShortcuts>
           <div className="flex h-dvh overflow-hidden bg-sidebar">
             <AppSidebar initialUnread={data.unread} />
