@@ -26,17 +26,30 @@ import {
   TypeIcon,
 } from "lucide-react";
 import { TodoCheckbox } from "@/components/formatted-text";
+import {
+  SelectionToolbar,
+  measureTextareaSelection,
+  uniformBlockType,
+  unionRect,
+  type InlineMarker,
+} from "@/components/selection-toolbar";
 import { UserAvatar } from "@/components/user-avatar";
 import {
+  adjacentBlockId,
+  blockIdsBetween,
+  blockIsWrapped,
   detectMention,
   detectSlash,
+  edgeBlockId,
   enumerateBlocks,
   filterSlashCommands,
   parseBlocks,
+  rangeIsWrapped,
   reduceEditor,
   serializeBlocks,
   valueMatchesEditor,
   type Block,
+  type BlockType,
   type EditorAction,
   type EditorSelection,
   type SlashCommand,
@@ -45,6 +58,26 @@ import {
 import { mentionSpans } from "@/lib/mentions";
 import type { Member } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+type Highlight =
+  | {
+      mode: "text";
+      blockId: string;
+      start: number;
+      end: number;
+      anchorId: string;
+    }
+  | { mode: "blocks"; ids: string[]; anchorId: string };
+
+type DragState = {
+  pointerId: number;
+  anchorId: string;
+  startX: number;
+  startY: number;
+  moved: boolean;
+};
+
+const INLINE_MARKERS = ["**", "*", "~~", "`"] as const;
 
 type MenuState =
   | {
@@ -240,6 +273,8 @@ export function BlockEditor({
   const [blocks, setBlocks] = useState(() => parseBlocks(value));
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [active, setActive] = useState(0);
+  const [highlight, setHighlight] = useState<Highlight | null>(null);
+  const [selecting, setSelecting] = useState(false);
   const blocksRef = useRef(blocks);
   const onChangeRef = useRef(onChange);
   const onBlurRef = useRef(onBlur);
@@ -255,6 +290,18 @@ export function BlockEditor({
   const composing = useRef(false);
   const didAutoFocus = useRef(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const highlightRef = useRef<Highlight | null>(null);
+  const selectionLock = useRef(false);
+  const blockGesture = useRef(false);
+  const dragRef = useRef<DragState | null>(null);
+  const focusedIdRef = useRef<string | null>(null);
+  const retainFocus = useRef(false);
+  const applyBlockHighlightRef = useRef<(ids: string[], anchorId: string) => void>(
+    () => {}
+  );
+  const blockIdAtPointRef = useRef<(x: number, y: number) => string | null>(() => null);
+
+  highlightRef.current = highlight;
 
   blocksRef.current = blocks;
   onChangeRef.current = onChange;
@@ -270,6 +317,7 @@ export function BlockEditor({
     blocksRef.current = parsed;
     setBlocks(parsed);
     setMenu(null);
+    setHighlight(null);
   }, [value]);
 
   useLayoutEffect(() => {
@@ -313,7 +361,99 @@ export function BlockEditor({
     applyingSelection.current = false;
   }, [autoFocus, initialBlockIndex]);
 
+  useLayoutEffect(() => {
+    if (retainFocus.current) {
+      retainFocus.current = false;
+      const root = rootRef.current;
+      if (root && !root.contains(document.activeElement)) root.focus();
+    }
+    const current = highlightRef.current;
+    if (!current || current.mode !== "text" || selecting) return;
+    const el = areaRefs.current.get(current.blockId);
+    if (!el || document.activeElement !== el) return;
+    if (el.selectionStart !== el.selectionEnd) return;
+    if (current.start === current.end) return;
+    applyingSelection.current = true;
+    const start = Math.max(0, Math.min(current.start, el.value.length));
+    const end = Math.max(start, Math.min(current.end, el.value.length));
+    el.setSelectionRange(start, end);
+    applyingSelection.current = false;
+  }, [blocks, highlight, selecting]);
+
+  useEffect(() => {
+    function onMove(event: PointerEvent | MouseEvent) {
+      const drag = dragRef.current;
+      if (!drag) return;
+      if ("pointerId" in event && event.pointerId !== drag.pointerId) return;
+      // A textarea text-selection drag often reports buttons as 0 on later moves.
+      const blockId = blockIdAtPointRef.current(event.clientX, event.clientY);
+      if (!blockId || blockId === drag.anchorId) return;
+      if (!drag.moved) {
+        const dy = Math.abs(event.clientY - drag.startY);
+        if (dy < 4) return;
+      }
+      drag.moved = true;
+      blockGesture.current = true;
+      const ids = blockIdsBetween(blocksRef.current, drag.anchorId, blockId);
+      const current = highlightRef.current;
+      if (
+        current?.mode === "blocks" &&
+        current.ids.length === ids.length &&
+        current.ids.every((id, index) => id === ids[index])
+      ) {
+        return;
+      }
+      applyBlockHighlightRef.current(ids, drag.anchorId);
+    }
+
+    function onUp() {
+      const drag = dragRef.current;
+      if (!drag) return;
+      dragRef.current = null;
+      if (drag.moved) {
+        selectionLock.current = true;
+        requestAnimationFrame(() => {
+          selectionLock.current = false;
+          blockGesture.current = false;
+        });
+      } else {
+        blockGesture.current = false;
+      }
+      setSelecting(false);
+    }
+
+    function onDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (rootRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest("[data-selection-toolbar]")) return;
+      setHighlight(null);
+    }
+
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("pointercancel", onUp);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, []);
+
   function commit(action: EditorAction) {
+    const active = document.activeElement;
+    let activeId: string | null = null;
+    if (active instanceof HTMLTextAreaElement) {
+      for (const [id, el] of areaRefs.current) {
+        if (el === active) activeId = id;
+      }
+    }
     const result = reduceEditor(blocksRef.current, action);
     if (!result.handled) return result;
     blocksRef.current = result.blocks;
@@ -321,7 +461,110 @@ export function BlockEditor({
     onChangeRef.current(serializeBlocks(result.blocks));
     if (result.selection) pendingCaret.current = result.selection;
     if (action.type !== "text" || result.selection) setMenu(null);
+    const keepHighlight =
+      action.type === "set-type" ||
+      action.type === "wrap" ||
+      action.type === "wrap-many";
+    if (!keepHighlight) setHighlight(null);
+    if (activeId) {
+      const updated = result.blocks.find((block) => block.id === activeId);
+      if (!updated || updated.type === "divider") retainFocus.current = true;
+    }
     return result;
+  }
+
+  function applyBlockHighlight(ids: string[], anchorId: string) {
+    if (ids.length === 0) return;
+    selectionLock.current = true;
+    setMenu(null);
+    setHighlight({ mode: "blocks", ids, anchorId });
+    const active = document.activeElement;
+    if (
+      active instanceof HTMLTextAreaElement &&
+      rootRef.current?.contains(active)
+    ) {
+      const pos = active.selectionStart;
+      active.setSelectionRange(pos, pos);
+    }
+    requestAnimationFrame(() => {
+      selectionLock.current = false;
+    });
+  }
+  applyBlockHighlightRef.current = applyBlockHighlight;
+
+  function blockIdAtPoint(x: number, y: number): string | null {
+    const root = rootRef.current;
+    const stack = document.elementsFromPoint(x, y);
+    for (const el of stack) {
+      if (el.closest("[data-selection-toolbar]")) continue;
+      if (!root?.contains(el)) continue;
+      const direct = el.closest("[data-block-id]")?.getAttribute("data-block-id");
+      if (direct) return direct;
+    }
+    let best: { id: string; dist: number } | null = null;
+    for (const [id, node] of rowRefs.current) {
+      const rect = node.getBoundingClientRect();
+      if (y < rect.top - 12 || y > rect.bottom + 12) continue;
+      const dist = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+      if (!best || dist < best.dist) best = { id, dist };
+    }
+    return best?.id ?? null;
+  }
+  blockIdAtPointRef.current = blockIdAtPoint;
+
+  function highlightRect(): DOMRect | null {
+    const current = highlightRef.current;
+    if (!current) return null;
+    if (current.mode === "text") {
+      const el = areaRefs.current.get(current.blockId);
+      if (!el) return null;
+      return measureTextareaSelection(el, current.start, current.end);
+    }
+    const rects: DOMRect[] = [];
+    for (const id of current.ids) {
+      const row = rowRefs.current.get(id);
+      if (row) rects.push(row.getBoundingClientRect());
+    }
+    return unionRect(rects);
+  }
+
+  function onTurnInto(blockType: BlockType) {
+    const current = highlightRef.current;
+    if (!current) return;
+    const ids = current.mode === "text" ? [current.blockId] : current.ids;
+    if (blockType === "divider") {
+      setHighlight({ mode: "blocks", ids, anchorId: current.anchorId });
+    }
+    commit({ type: "set-type", blockIds: ids, blockType });
+  }
+
+  function formatRange(
+    blockId: string,
+    start: number,
+    end: number,
+    marker: string
+  ) {
+    const result = commit({ type: "wrap", blockId, start, end, marker });
+    if (result.selection && start !== end) {
+      setHighlight({
+        mode: "text",
+        blockId: result.selection.id,
+        start: result.selection.start,
+        end: result.selection.end,
+        anchorId: result.selection.id,
+      });
+    }
+    return result;
+  }
+
+  function onInline(marker: InlineMarker) {
+    const current = highlightRef.current;
+    if (!current) return;
+    if (current.mode === "text") {
+      formatRange(current.blockId, current.start, current.end, marker);
+      return;
+    }
+    commit({ type: "wrap-many", blockIds: current.ids, marker });
   }
 
   function focusBlock(id: string, caret: number) {
@@ -431,13 +674,8 @@ export function BlockEditor({
       event.key.toLowerCase() === "b"
     ) {
       event.preventDefault();
-      commit({
-        type: "wrap",
-        blockId: block.id,
-        start: el.selectionStart,
-        end: el.selectionEnd,
-        marker: "**",
-      });
+      if (highlightRef.current?.mode === "blocks") onInline("**");
+      else formatRange(block.id, el.selectionStart, el.selectionEnd, "**");
       return;
     }
     if (
@@ -447,14 +685,24 @@ export function BlockEditor({
       event.key.toLowerCase() === "i"
     ) {
       event.preventDefault();
-      commit({
-        type: "wrap",
-        blockId: block.id,
-        start: el.selectionStart,
-        end: el.selectionEnd,
-        marker: "*",
-      });
+      if (highlightRef.current?.mode === "blocks") onInline("*");
+      else formatRange(block.id, el.selectionStart, el.selectionEnd, "*");
       return;
+    }
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      !event.altKey &&
+      event.key.toLowerCase() === "a"
+    ) {
+      const coversBlock = el.selectionStart === 0 && el.selectionEnd === el.value.length;
+      if (coversBlock && blocksRef.current.length > 1) {
+        event.preventDefault();
+        applyBlockHighlight(
+          blocksRef.current.map((item) => item.id),
+          block.id
+        );
+        return;
+      }
     }
 
     if (menuForBlock?.kind === "slash" && slashMatches.length > 0) {
@@ -505,10 +753,44 @@ export function BlockEditor({
       }
     }
 
+    if (event.key === "Escape" && highlightRef.current) {
+      event.preventDefault();
+      setHighlight(null);
+      return;
+    }
+
     if (event.key === "Escape" && onCancelRef.current) {
       event.preventDefault();
       onCancelRef.current();
       return;
+    }
+
+    if (
+      (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+      event.shiftKey &&
+      !event.altKey &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !menuForBlock
+    ) {
+      const direction = event.key === "ArrowUp" ? -1 : 1;
+      const atEdge =
+        direction < 0 ? el.selectionStart === 0 : el.selectionEnd === el.value.length;
+      if (atEdge) {
+        const anchor = highlightRef.current?.anchorId ?? block.id;
+        const edge =
+          highlightRef.current?.mode === "blocks"
+            ? edgeBlockId(blocksRef.current, highlightRef.current.ids, direction)
+            : block.id;
+        const neighbor = edge
+          ? adjacentBlockId(blocksRef.current, edge, direction)
+          : null;
+        if (neighbor) {
+          event.preventDefault();
+          applyBlockHighlight(blockIdsBetween(blocksRef.current, anchor, neighbor), anchor);
+          return;
+        }
+      }
     }
 
     if (event.key === "Enter" && !event.shiftKey && block.type !== "code") {
@@ -596,20 +878,69 @@ export function BlockEditor({
     index,
     showGroup: index === 0 || command.group !== slashMatches[index - 1]!.group,
   }));
+  const toolbarBlocks = toolbarTargetBlocks(blocks, highlight, selecting, menu != null);
+  const inlineActive = inlineFlags(toolbarBlocks, highlight);
+  const inlineDisabled =
+    highlight?.mode === "blocks" &&
+    toolbarBlocks.every((block) => block.type === "divider" || block.text.length === 0);
 
   return (
     <div
       ref={rootRef}
-      className={cn("relative", className)}
+      tabIndex={-1}
+      className={cn(
+        "relative outline-none",
+        highlight?.mode === "blocks" && selecting && "select-none",
+        className
+      )}
+      onPointerDown={(event) => {
+        if (event.button !== 0 || event.shiftKey) return;
+        const target = event.target as HTMLElement;
+        if (target.closest("button, a, input")) return;
+        const blockId = target.closest("[data-block-id]")?.getAttribute("data-block-id");
+        if (!blockId) return;
+        dragRef.current = {
+          pointerId: event.pointerId,
+          anchorId: blockId,
+          startX: event.clientX,
+          startY: event.clientY,
+          moved: false,
+        };
+        setSelecting(true);
+      }}
       onMouseDown={(event) => {
         const target = event.target as HTMLElement;
+        if (event.shiftKey && event.button === 0) {
+          const blockId = target.closest("[data-block-id]")?.getAttribute("data-block-id");
+          if (blockId) {
+            event.preventDefault();
+            const anchor =
+              highlightRef.current?.anchorId ?? focusedIdRef.current ?? blockId;
+            applyBlockHighlight(
+              blockIdsBetween(blocksRef.current, anchor, blockId),
+              anchor
+            );
+            return;
+          }
+        }
         if (target.closest("textarea, button, a, input")) return;
         event.preventDefault();
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Escape" && highlightRef.current) {
+          event.preventDefault();
+          setHighlight(null);
+        }
       }}
       onBlur={(event) => {
         const root = event.currentTarget;
         requestAnimationFrame(() => {
-          if (root.contains(document.activeElement)) return;
+          const active = document.activeElement;
+          if (active && root.contains(active)) return;
+          if (active instanceof Element && active.closest("[data-selection-toolbar]")) {
+            return;
+          }
           onBlurRef.current?.();
         });
       }}
@@ -637,6 +968,12 @@ export function BlockEditor({
           return (
             <div
               key={block.id}
+              data-block-id={block.id}
+              data-selected={
+                highlight?.mode === "blocks" && highlight.ids.includes(block.id)
+                  ? "true"
+                  : undefined
+              }
               ref={(node) => {
                 if (node) rowRefs.current.set(block.id, node);
                 else rowRefs.current.delete(block.id);
@@ -644,7 +981,10 @@ export function BlockEditor({
               className={cn(
                 index > 0 && block.type === "h1" && "mt-3",
                 index > 0 && block.type === "h2" && "mt-2",
-                index > 0 && block.type === "h3" && "mt-2"
+                index > 0 && block.type === "h3" && "mt-2",
+                highlight?.mode === "blocks" &&
+                  highlight.ids.includes(block.id) &&
+                  "rounded-md bg-foreground/10"
               )}
             >
               {block.type === "divider" ? (
@@ -697,7 +1037,7 @@ export function BlockEditor({
                       }
                     />
                   ) : null}
-                  <div className="relative min-w-0 flex-1">
+                  <div key="field" className="relative min-w-0 flex-1">
                   <div
                     aria-hidden
                     className={cn(
@@ -748,17 +1088,56 @@ export function BlockEditor({
                         syncMenu(updated, updated.text, caret);
                       }
                     }}
+                    onFocus={() => {
+                      focusedIdRef.current = block.id;
+                    }}
+                    onMouseDown={(event) => {
+                      if (event.shiftKey || blockGesture.current || selecting) return;
+                      if (highlightRef.current?.mode === "blocks") setHighlight(null);
+                    }}
                     onKeyDown={(event) => onKeyDown(event, block)}
-                    onClick={(event) =>
-                      syncMenu(block, event.currentTarget.value, event.currentTarget.selectionStart)
-                    }
+                    onClick={(event) => {
+                      const el = event.currentTarget;
+                      if (el.selectionStart !== el.selectionEnd) return;
+                      syncMenu(block, el.value, el.selectionStart);
+                    }}
                     onSelect={(event) => {
-                      if (applyingSelection.current) return;
-                      syncMenu(
-                        block,
-                        event.currentTarget.value,
-                        event.currentTarget.selectionStart
-                      );
+                      if (
+                        applyingSelection.current ||
+                        selectionLock.current ||
+                        blockGesture.current
+                      ) {
+                        return;
+                      }
+                      const el = event.currentTarget;
+                      const start = el.selectionStart;
+                      const end = el.selectionEnd;
+                      if (start !== end) {
+                        setMenu(null);
+                        setHighlight((current) => {
+                          if (
+                            current?.mode === "text" &&
+                            current.blockId === block.id &&
+                            current.start === start &&
+                            current.end === end
+                          ) {
+                            return current;
+                          }
+                          return {
+                            mode: "text",
+                            blockId: block.id,
+                            start,
+                            end,
+                            anchorId: block.id,
+                          };
+                        });
+                        return;
+                      }
+                      setHighlight((current) => {
+                        if (!current || current.mode === "blocks") return current;
+                        return current.blockId === block.id ? null : current;
+                      });
+                      syncMenu(block, el.value, start);
                     }}
                     onCompositionStart={() => {
                       composing.current = true;
@@ -903,6 +1282,57 @@ export function BlockEditor({
           </ul>
         </AnchoredMenu>
       ) : null}
+
+      {toolbarBlocks.length > 0 && highlight ? (
+        <SelectionToolbar
+          getRect={highlightRect}
+          blockType={uniformBlockType(toolbarBlocks)}
+          inlineActive={inlineActive}
+          inlineDisabled={inlineDisabled}
+          onTurnInto={onTurnInto}
+          onInline={onInline}
+        />
+      ) : null}
     </div>
   );
+}
+
+function toolbarTargetBlocks(
+  blocks: Block[],
+  highlight: Highlight | null,
+  selecting: boolean,
+  menuOpen: boolean
+): Block[] {
+  if (!highlight || menuOpen) return [];
+  // Keep the bar hidden while a text drag is still moving. A multi-block
+  // highlight should show the bar as soon as the sections are chosen.
+  if (selecting && highlight.mode === "text") return [];
+  if (highlight.mode === "text") {
+    const block = blocks.find((item) => item.id === highlight.blockId);
+    return block ? [block] : [];
+  }
+  const idSet = new Set(highlight.ids);
+  return blocks.filter((block) => idSet.has(block.id));
+}
+
+function inlineFlags(
+  list: Block[],
+  highlight: Highlight | null
+): Partial<Record<InlineMarker, boolean>> {
+  const flags: Partial<Record<InlineMarker, boolean>> = {};
+  for (const marker of INLINE_MARKERS) {
+    if (highlight?.mode === "text" && list.length === 1) {
+      flags[marker] = rangeIsWrapped(
+        list[0]!.text,
+        highlight.start,
+        highlight.end,
+        marker
+      );
+    } else {
+      const texts = list.filter((block) => block.type !== "divider" && block.text);
+      flags[marker] =
+        texts.length > 0 && texts.every((block) => blockIsWrapped(block.text, marker));
+    }
+  }
+  return flags;
 }

@@ -34,8 +34,8 @@ import {
 } from "@/components/pickers";
 import { UserAvatar } from "@/components/user-avatar";
 import { CommentBody } from "@/components/comment-body";
-import { FormattedText } from "@/components/formatted-text";
 import { BlockEditor } from "@/components/block-editor";
+import { ReadableDescription } from "@/components/issues/readable-description";
 import { CommentComposer } from "@/components/comment-composer";
 import { toggleTodo } from "@/lib/editor-document";
 import { AttachButton } from "@/components/attachments/attach-button";
@@ -315,44 +315,23 @@ export function IssueDetail({
               className="mt-3 min-h-24 text-foreground/90"
             />
           ) : (
-            <div
-              tabIndex={0}
-              onClick={(e) => {
-                const target = e.target as HTMLElement;
-                if (target.closest("button, a")) return;
-                const holder = target.closest("[data-block-index]");
-                const raw = holder?.getAttribute("data-block-index");
-                const index = raw == null ? null : Number(raw);
-                setDescriptionFocus(
-                  index != null && Number.isFinite(index) ? index : null
-                );
+            <ReadableDescription
+              text={description}
+              members={members}
+              onChange={(next) => {
+                setDescription(next);
+                patch({ description: next });
+              }}
+              onEdit={(index) => {
+                setDescriptionFocus(index);
                 setEditingDescription(true);
               }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  setDescriptionFocus(null);
-                  setEditingDescription(true);
-                }
+              onToggleTodo={(index) => {
+                const next = toggleTodo(description, index);
+                setDescription(next);
+                patch({ description: next });
               }}
-              className="mt-3 block w-full cursor-text rounded-md text-left text-sm leading-6 text-foreground/90 outline-none hover:bg-foreground/[0.03] focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {description.trim() ? (
-                <FormattedText
-                  text={description}
-                  members={members}
-                  onToggleTodo={(index) => {
-                    const next = toggleTodo(description, index);
-                    setDescription(next);
-                    patch({ description: next });
-                  }}
-                />
-              ) : (
-                <span className="text-muted-foreground/50">
-                  Add description… Type / to format, @ to mention
-                </span>
-              )}
-            </div>
+            />
           )}
 
           <div
