@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  normalizePostHogHost,
   pathWithoutSearch,
+  posthogAssetsHost,
   posthogDistinctIdFromCookie,
+  posthogProxyTarget,
+  posthogUiHost,
   resolvePostHogDistinctId,
   sanitizeDistinctId,
 } from "./posthog";
@@ -53,6 +57,36 @@ test("resolvePostHogDistinctId prefers the authenticated user", () => {
   assert.equal(
     resolvePostHogDistinctId({ cookie: `ph_phc_tok_posthog=${payload}` }),
     "anon"
+  );
+});
+
+test("normalizePostHogHost falls back to US Cloud", () => {
+  assert.equal(normalizePostHogHost(undefined), "https://us.i.posthog.com");
+  assert.equal(normalizePostHogHost(" https://eu.i.posthog.com/ "), "https://eu.i.posthog.com");
+  assert.equal(posthogUiHost("https://eu.i.posthog.com"), "https://eu.posthog.com");
+  assert.equal(
+    posthogAssetsHost("https://eu.i.posthog.com"),
+    "https://eu-assets.i.posthog.com"
+  );
+});
+
+test("posthogProxyTarget only forwards the analytics prefix", () => {
+  assert.equal(
+    posthogProxyTarget("/api/rline/e/", "?ip=0", "https://us.i.posthog.com"),
+    "https://us.i.posthog.com/e/?ip=0"
+  );
+  assert.equal(
+    posthogProxyTarget("/api/rline/static/array.js", "", "https://eu.i.posthog.com"),
+    "https://eu-assets.i.posthog.com/static/array.js"
+  );
+  assert.equal(
+    posthogProxyTarget("/api/rline/array/phc_x/config.js", "", "https://us.i.posthog.com"),
+    "https://us-assets.i.posthog.com/array/phc_x/config.js"
+  );
+  assert.equal(posthogProxyTarget("/api/issues", "", "https://us.i.posthog.com"), null);
+  assert.equal(
+    posthogProxyTarget("/api/rline/../secrets", "", "https://us.i.posthog.com"),
+    null
   );
 });
 

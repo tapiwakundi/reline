@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import { withPostHogConfig } from "@posthog/nextjs-config";
-import { normalizePostHogHost, posthogRewrites } from "./src/lib/posthog-config";
+import { normalizePostHogHost } from "./src/lib/posthog-config";
 
 function apiInternalUrl() {
   const raw = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:4001";
@@ -25,16 +25,12 @@ const nextConfig: NextConfig = {
       dynamic: 30,
     },
   },
-  // PostHog's ingest API uses trailing slashes. Redirecting them strips the slash
-  // and drops the event.
+  // `/api/rline/e/` must keep its trailing slash on the way to the API.
+  // PostHog drops the event when that slash is redirected away.
   skipTrailingSlashRedirect: true,
   async rewrites() {
     const api = apiInternalUrl();
-    const ingest = normalizePostHogHost(process.env.NEXT_PUBLIC_POSTHOG_HOST);
-    return [
-      ...posthogRewrites(ingest),
-      { source: "/api/:path*", destination: `${api}/api/:path*` },
-    ];
+    return [{ source: "/api/:path*", destination: `${api}/api/:path*` }];
   },
 };
 

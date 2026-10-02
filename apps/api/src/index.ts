@@ -16,6 +16,7 @@ import { mcpRoutes } from "@/routes/mcp";
 import { mcpTokenRoutes } from "@/routes/mcp-tokens";
 import { meRoutes } from "@/routes/me";
 import { notificationsRoutes } from "@/routes/notifications";
+import { posthogProxyRoutes } from "@/routes/posthog-proxy";
 import { profileRoutes } from "@/routes/profile";
 import { workspaceRoutes } from "@/routes/workspace";
 
@@ -36,6 +37,8 @@ app.onError((err, c) => {
 app.notFound((c) => c.json({ error: "Not found" }, 404));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
+
+app.route("/api", posthogProxyRoutes);
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 

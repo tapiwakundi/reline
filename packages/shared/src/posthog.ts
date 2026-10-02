@@ -1,5 +1,64 @@
 const MAX_DISTINCT_ID_LENGTH = 200;
 
+export const DEFAULT_POSTHOG_HOST = "https://us.i.posthog.com";
+
+/** Browser path. The API forwards this to PostHog, so the static app never calls posthog.com. */
+export const POSTHOG_PROXY_PATH = "/api/rline";
+
+export function normalizePostHogHost(raw: string | undefined): string {
+  const value = (raw || DEFAULT_POSTHOG_HOST).trim().replace(/\/$/, "");
+  return value || DEFAULT_POSTHOG_HOST;
+}
+
+/** Toolbar links use the PostHog app, not the ingest host. */
+export function posthogUiHost(ingestHost: string): string {
+  if (
+    ingestHost.includes("eu.i.posthog.com") ||
+    ingestHost.includes("eu.posthog.com")
+  ) {
+    return "https://eu.posthog.com";
+  }
+  if (
+    ingestHost.includes("us.i.posthog.com") ||
+    ingestHost.includes("us.posthog.com")
+  ) {
+    return "https://us.posthog.com";
+  }
+  return ingestHost;
+}
+
+/** Session replay and remote config are served from the asset host. */
+export function posthogAssetsHost(ingestHost: string): string {
+  if (ingestHost.includes("eu.i.posthog.com")) {
+    return "https://eu-assets.i.posthog.com";
+  }
+  if (ingestHost.includes("us.i.posthog.com")) {
+    return "https://us-assets.i.posthog.com";
+  }
+  return ingestHost;
+}
+
+/**
+ * Map `/api/rline/...` onto PostHog. Returns null for every other path so the
+ * route cannot be used as an open proxy.
+ */
+export function posthogProxyTarget(
+  pathname: string,
+  search: string,
+  ingestHost: string
+): string | null {
+  if (pathname.includes("..")) return null;
+  if (pathname !== POSTHOG_PROXY_PATH && !pathname.startsWith(`${POSTHOG_PROXY_PATH}/`)) {
+    return null;
+  }
+  const rest = pathname.slice(POSTHOG_PROXY_PATH.length) || "/";
+  const assets = rest.startsWith("/static/") || rest.startsWith("/array/");
+  const url = new URL(assets ? posthogAssetsHost(ingestHost) : ingestHost);
+  url.pathname = rest;
+  url.search = search;
+  return url.toString();
+}
+
 /** Drop blank, oversized, or control-character ids so a spoofed header cannot poison events. */
 export function sanitizeDistinctId(
   value: string | null | undefined

@@ -5,7 +5,6 @@ export const RESERVED_SLUGS = new Set([
   "onboarding",
   "invite",
   "api",
-  "rline",
   "_next",
   "favicon.ico",
   "robots.txt",
