@@ -138,7 +138,10 @@ export function parseBlocks(markdown: string): Block[] {
     i += 1;
   }
 
-  return blocks.length > 0 ? blocks : [createBlock("paragraph")];
+  const list = blocks.length > 0 ? blocks : [createBlock("paragraph")];
+  // Index ids stay the same on the server and client. Random ids here mismatch
+  // hydration and break selection, which looks blocks up by id.
+  return list.map((block, index) => ({ ...block, id: `p${index}` }));
 }
 
 export function serializeBlocks(blocks: Block[]): string {
@@ -612,7 +615,87 @@ export type EditorAction =
       start: number;
       end: number;
       insertion: string;
-    };
+    }
+  | { type: "set-type"; blockIds: string[]; blockType: BlockType }
+  | { type: "wrap-many"; blockIds: string[]; marker: string };
+
+/** Inclusive block ids from `fromId` through `toId`, in document order. */
+export function blockIdsBetween(
+  blocks: { id: string }[],
+  fromId: string,
+  toId: string
+): string[] {
+  const start = blocks.findIndex((block) => block.id === fromId);
+  const end = blocks.findIndex((block) => block.id === toId);
+  if (start < 0 || end < 0) return [];
+  const [from, to] = start <= end ? [start, end] : [end, start];
+  return blocks.slice(from, to + 1).map((block) => block.id);
+}
+
+export function edgeBlockId(
+  blocks: { id: string }[],
+  ids: string[],
+  direction: -1 | 1
+): string | null {
+  const idSet = new Set(ids);
+  let chosen: string | null = null;
+  let chosenIndex = direction < 0 ? Number.POSITIVE_INFINITY : -1;
+  blocks.forEach((block, index) => {
+    if (!idSet.has(block.id)) return;
+    if (direction < 0 ? index < chosenIndex : index > chosenIndex) {
+      chosen = block.id;
+      chosenIndex = index;
+    }
+  });
+  return chosen;
+}
+
+export function adjacentBlockId(
+  blocks: { id: string }[],
+  id: string,
+  direction: -1 | 1
+): string | null {
+  const index = blocks.findIndex((block) => block.id === id);
+  if (index < 0) return null;
+  return blocks[index + direction]?.id ?? null;
+}
+
+/**
+ * Inner text when `text` is fully wrapped in `marker`. A single `*` does not
+ * match bold (`**`).
+ */
+export function unwrapOuterMarker(text: string, marker: string): string | null {
+  if (!marker || text.length < marker.length * 2) return null;
+  if (!text.startsWith(marker) || !text.endsWith(marker)) return null;
+  if (marker === "*" && text.startsWith("**") && text.endsWith("**")) return null;
+  const inner = text.slice(marker.length, text.length - marker.length);
+  if (!inner) return null;
+  return inner;
+}
+
+export function blockIsWrapped(text: string, marker: string): boolean {
+  return unwrapOuterMarker(text, marker) !== null;
+}
+
+/** True when the caret range sits inside a matching pair of markers. */
+export function rangeIsWrapped(
+  text: string,
+  start: number,
+  end: number,
+  marker: string
+): boolean {
+  const from = Math.min(start, end);
+  const to = Math.max(start, end);
+  if (!marker || from === to) return false;
+  if (from < marker.length || to + marker.length > text.length) return false;
+  if (text.slice(from - marker.length, from) !== marker) return false;
+  if (text.slice(to, to + marker.length) !== marker) return false;
+  if (marker === "*") {
+    if (text[from - marker.length - 1] === "*") return false;
+    if (text[to + marker.length] === "*") return false;
+  }
+  return true;
+}
 
 export type EditorResult = {
   handled: boolean;
@@ -625,6 +708,13 @@ export type EditorResult = {
 };
 
 export function reduceEditor(blocks: Block[], action: EditorAction): EditorResult {
+  if (action.type === "set-type") {
+    return applySetType(blocks, action.blockIds, action.blockType);
+  }
+  if (action.type === "wrap-many") {
+    return applyWrapMany(blocks, action.blockIds, action.marker);
+  }
+
   const index = blocks.findIndex((block) => block.id === action.blockId);
   if (index === -1) return { handled: false, blocks };
 
@@ -648,6 +738,45 @@ export function reduceEditor(blocks: Block[], action: EditorAction): EditorResul
     case "insert":
       return applyInsert(blocks, index, action.start, action.end, action.insertion);
   }
+}
+
+function applySetType(
+  blocks: Block[],
+  ids: string[],
+  blockType: BlockType
+): EditorResult {
+  const idSet = new Set(ids);
+  if (idSet.size === 0) return { handled: false, blocks };
+  let matched = false;
+  const next = blocks.map((block) => {
+    if (!idSet.has(block.id)) return block;
+    matched = true;
+    if (block.type === blockType) return block;
+    return {
+      ...block,
+      type: blockType,
+      checked: false,
+      language: "",
+    };
+  });
+  if (!matched) return { handled: false, blocks };
+  return { handled: true, blocks: next };
+}
+
+function applyWrapMany(blocks: Block[], ids: string[], marker: string): EditorResult {
+  const idSet = new Set(ids);
+  if (idSet.size === 0 || !marker) return { handled: false, blocks };
+  let changed = false;
+  const next = blocks.map((block) => {
+    if (!idSet.has(block.id) || block.type === "divider" || !block.text) return block;
+    const unwrapped = unwrapOuterMarker(block.text, marker);
+    const text = unwrapped ?? `${marker}${block.text}${marker}`;
+    if (text === block.text) return block;
+    changed = true;
+    return { ...block, text };
+  });
+  if (!changed) return { handled: false, blocks };
+  return { handled: true, blocks: next };
 }
 
 function applyText(

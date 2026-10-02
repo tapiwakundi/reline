@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  adjacentBlockId,
+  blockIdsBetween,
+  blockIsWrapped,
   blocksContentEqual,
   detectMention,
   detectSlash,
+  edgeBlockId,
   filterSlashCommands,
   isPlainDocument,
   parseBlocks,
   parseInline,
+  rangeIsWrapped,
   reduceEditor,
   serializeBlocks,
   toggleTodo,
@@ -296,9 +301,93 @@ test("multiline paste splits blocks and a code block stays one block", () => {
   }).handled, false);
 });
 
-test("content equality ignores ids", () => {
-  const left = parseBlocks("- [ ] a");
-  const right = parseBlocks("- [ ] a");
-  assert.equal(left[0]!.id === right[0]!.id, false);
+test("set-type converts one block or a run of them", () => {
+  const blocks = parseBlocks("Hello\nWorld\n- item\n> quoted");
+  const ids = [blocks[0]!.id, blocks[1]!.id];
+  const result = reduceEditor(blocks, {
+    type: "set-type",
+    blockIds: ids,
+    blockType: "h2",
+  });
+  assert.deepEqual(
+    result.blocks.map((block) => block.type),
+    ["h2", "h2", "bullet", "quote"]
+  );
+  assert.equal(result.blocks[0]!.text, "Hello");
+  assert.equal(result.blocks[0]!.id, blocks[0]!.id);
+  assert.equal(result.selection, undefined);
+
+  const one = reduceEditor(result.blocks, {
+    type: "set-type",
+    blockIds: [result.blocks[2]!.id],
+    blockType: "todo",
+  });
+  assert.equal(one.blocks[2]!.type, "todo");
+  assert.equal(one.blocks[2]!.text, "item");
+  assert.equal(one.blocks[2]!.checked, false);
+
+  const same = reduceEditor(one.blocks, {
+    type: "set-type",
+    blockIds: [one.blocks[2]!.id],
+    blockType: "todo",
+  });
+  assert.equal(same.blocks[2], one.blocks[2]);
+  assert.equal(
+    reduceEditor(blocks, { type: "set-type", blockIds: ["missing"], blockType: "h1" })
+      .handled,
+    false
+  );
+});
+
+test("wrap-many toggles each selected section", () => {
+  const blocks = parseBlocks("one\ntwo\n---\nthree");
+  const ids = blocks.map((block) => block.id);
+  const bold = reduceEditor(blocks, { type: "wrap-many", blockIds: ids, marker: "**" });
+  assert.deepEqual(textOf(bold.blocks), [
+    "paragraph::**one**",
+    "paragraph::**two**",
+    "divider::",
+    "paragraph::**three**",
+  ]);
+  const plain = reduceEditor(bold.blocks, {
+    type: "wrap-many",
+    blockIds: ids,
+    marker: "**",
+  });
+  assert.deepEqual(textOf(plain.blocks), [
+    "paragraph::one",
+    "paragraph::two",
+    "divider::",
+    "paragraph::three",
+  ]);
+  assert.equal(blockIsWrapped("**one**", "**"), true);
+  assert.equal(blockIsWrapped("**one**", "*"), false);
+  assert.equal(rangeIsWrapped("say **hi** now", 6, 8, "**"), true);
+  assert.equal(rangeIsWrapped("say **hi** now", 4, 10, "*"), false);
+});
+
+test("block id span follows document order", () => {
+  const blocks = parseBlocks("a\nb\nc\nd");
+  const ids = blocks.map((block) => block.id);
+  assert.deepEqual(blockIdsBetween(blocks, ids[2]!, ids[0]!), [ids[0], ids[1], ids[2]]);
+  assert.equal(edgeBlockId(blocks, [ids[1]!, ids[3]!], 1), ids[3]);
+  assert.equal(edgeBlockId(blocks, [ids[1]!, ids[3]!], -1), ids[1]);
+  assert.equal(adjacentBlockId(blocks, ids[1]!, 1), ids[2]);
+  assert.equal(adjacentBlockId(blocks, ids[0]!, -1), null);
+  assert.deepEqual(blockIdsBetween(blocks, "missing", ids[0]!), []);
+});
+
+test("parsed ids are stable and content equality ignores them", () => {
+  const left = parseBlocks("- [ ] a\n- [ ] b");
+  const right = parseBlocks("- [ ] a\n- [ ] b");
+  assert.deepEqual(
+    left.map((block) => block.id),
+    ["p0", "p1"]
+  );
+  assert.deepEqual(
+    right.map((block) => block.id),
+    left.map((block) => block.id)
+  );
+  right[0]!.id = "other";
   assert.equal(blocksContentEqual(left, right), true);
 });

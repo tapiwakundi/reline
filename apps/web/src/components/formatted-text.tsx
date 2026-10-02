@@ -256,13 +256,18 @@ export function FormattedText({
   members = [],
   className,
   onToggleTodo,
+  asBlocks = false,
+  selectedIndexes,
 }: {
   text: string;
   members?: Member[];
   className?: string;
   onToggleTodo?: (index: number) => void;
+  /** Render each line as its own block so a selection can span sections. */
+  asBlocks?: boolean;
+  selectedIndexes?: readonly number[];
 }) {
-  if (isPlainDocument(text)) {
+  if (isPlainDocument(text) && !asBlocks) {
     return (
       <RichText
         text={text}
@@ -273,11 +278,16 @@ export function FormattedText({
   }
 
   const blocks = enumerateBlocks(parseBlocks(text));
+  const selected = new Set(selectedIndexes ?? []);
 
   return (
     <div className={cn("flex flex-col", className)}>
       {blocks.map(({ block, number, todoIndex }, index) => (
-        <div key={index} data-block-index={index}>
+        <div
+          key={index}
+          data-block-index={index}
+          className={cn(selected.has(index) && "rounded-md bg-foreground/10")}
+        >
           <BlockView
             block={block}
             number={number}
