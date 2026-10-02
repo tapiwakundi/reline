@@ -39,6 +39,8 @@ services:
         value: reline
       - key: R2_PUBLIC_URL
         sync: false
+      - key: POSTHOG_HOST
+        value: https://us.i.posthog.com
 
   - type: web
     name: reline-web
@@ -61,3 +63,11 @@ services:
           name: reline-api
           type: web
           property: hostport
+      - key: NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
+        sync: false
+      - key: NEXT_PUBLIC_POSTHOG_HOST
+        value: https://us.i.posthog.com
+      - key: POSTHOG_PERSONAL_API_KEY
+        sync: false
+      - key: POSTHOG_ENV_ID
+        sync: false

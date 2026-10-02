@@ -83,6 +83,19 @@ export {
 
 export { mentionSpans, mentionsAdded, resolveMentions, splitMentions } from "./mentions";
 
+export {
+  DEFAULT_POSTHOG_HOST,
+  pathWithoutSearch,
+  POSTHOG_PROXY_PATH,
+  posthogAssetsHost,
+  posthogDistinctIdFromCookie,
+  posthogProxyTarget,
+  posthogUiHost,
+  normalizePostHogHost,
+  resolvePostHogDistinctId,
+  sanitizeDistinctId,
+} from "./posthog";
+
 export { RESERVED_SLUGS, WORKSPACE_SLUG_COOKIE, wsPath } from "./workspace-paths";
 
 export {

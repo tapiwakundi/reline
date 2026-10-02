@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { signIn, signOut, useSession } from "@/lib/auth-client";
+import { resetPostHog } from "@/lib/posthog";
 import {
   googleLinkStep,
   isGoogleLinkError,
@@ -109,6 +110,7 @@ function LoginForm() {
   async function signInAsDifferentAccount() {
     setLoading(true);
     await signOut();
+    resetPostHog();
     const params = new URLSearchParams();
     if (destination !== "/") params.set("next", destination);
     params.set("error", "account_not_linked");

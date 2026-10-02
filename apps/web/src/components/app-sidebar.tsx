@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { resetPostHog } from "@/lib/posthog";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -106,6 +107,7 @@ export function SidebarContent({
 
   async function logout() {
     await authClient.signOut();
+    resetPostHog();
     router.push("/login");
     router.refresh();
   }

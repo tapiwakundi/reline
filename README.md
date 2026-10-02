@@ -118,6 +118,45 @@ R2_PUBLIC_URL=https://pub-xxxxxxxx.r2.dev
 If the R2 vars are unset the app still runs — attachment uploads just fail
 with a clear error.
 
+### Analytics and error tracking (PostHog)
+
+[PostHog](https://posthog.com) records product analytics and exceptions. Leave
+the tokens unset and the app runs without sending anything.
+
+1. Create a PostHog project and copy the project token from Project Settings.
+2. `cp apps/web/.env.example apps/web/.env.local`:
+
+```bash
+NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_...
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+Use `https://eu.i.posthog.com` for EU Cloud. The host is read at build time.
+
+The static app never calls PostHog directly. The browser sends events to
+`/api/rline` on the web origin, Next.js forwards that to the API like every
+other `/api` call, and the API proxies it to PostHog. Requests stay on your
+domain, so Chrome and filter lists that block `posthog.com` or `/ingest` still
+let them through. Set `POSTHOG_HOST` on the API to the same region
+(`https://us.i.posthog.com`, or `https://eu.i.posthog.com`).
+
+Page views, autocaptured clicks, and unhandled browser exceptions are captured.
+Signed-in users are identified by their user id, with email and name stored as
+person properties. The open workspace is sent as a `workspace` group. Signing
+out resets the browser identity. Next.js server errors in the web app are
+reported on the same person. The API does not record its own events.
+
+For readable production stack traces, set these on the web service before the
+build. The personal API key needs error-tracking write access, and the
+environment id is under PostHog Settings → Environment:
+
+```bash
+POSTHOG_PERSONAL_API_KEY=phx_...
+POSTHOG_ENV_ID=
+```
+
+Source maps upload only when both are set.
+
 ## Deploy (Render + Neon)
 
 1. **Neon**: create a project at [console.neon.tech](https://console.neon.tech),
@@ -134,6 +173,12 @@ with a clear error.
    - Attachments: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
      `R2_BUCKET_NAME`, `R2_PUBLIC_URL` (see the R2 section above), and add your
      web URL to the bucket's CORS policy
+   - PostHog (optional): `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` and
+     `NEXT_PUBLIC_POSTHOG_HOST` on the web service (the public host is baked in
+     at build time), and `POSTHOG_HOST` on the API (where `/api/rline` proxies).
+     Use the same region on both. For unminified stack traces, also set
+     `POSTHOG_PERSONAL_API_KEY` and `POSTHOG_ENV_ID` on the web service before
+     the build
 3. Deploy. Migrations run as the API pre-deploy command. The API binds to
    `0.0.0.0:$PORT` and health-checks at `/api/health`; the web app health-checks
    at `/health`.
