@@ -15,6 +15,7 @@ const tabDefs = [
   { path: "/settings/labels", label: "Labels" },
   { path: "/settings/import", label: "Import" },
   { path: "/settings/cursor", label: "Cursor" },
+  { path: "/settings/slack", label: "Slack" },
 ];
 
 export default function SettingsLayout({

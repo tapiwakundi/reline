@@ -34,6 +34,7 @@ export const requireWorkspace = createMiddleware<WorkspaceEnv>(async (c, next) =
 
   const slug =
     c.req.header("x-workspace-slug")?.trim() ||
+    c.req.query("workspace")?.trim() ||
     cookieValue(c.req.header("cookie"), WORKSPACE_SLUG_COOKIE);
   if (!slug) {
     throw new HttpError(400, "Workspace required");

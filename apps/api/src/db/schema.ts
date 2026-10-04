@@ -268,6 +268,11 @@ export const comments = pgTable(
       onDelete: "cascade",
     }),
     body: text("body").notNull(),
+    source: text("source", { enum: ["app", "slack"] })
+      .notNull()
+      .default("app"),
+    slackChannelId: text("slack_channel_id"),
+    slackTs: text("slack_ts"),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),
@@ -275,6 +280,7 @@ export const comments = pgTable(
   (t) => [
     index("comments_issue_idx").on(t.issueId),
     index("comments_parent_idx").on(t.parentId),
+    uniqueIndex("comments_slack_msg_idx").on(t.slackChannelId, t.slackTs),
   ]
 );
 
@@ -370,6 +376,76 @@ export const notifications = pgTable(
       .notNull(),
   },
   (t) => [index("notifications_user_idx").on(t.userId, t.readAt)]
+);
+
+export const slackInstallations = pgTable(
+  "slack_installations",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    teamId: text("team_id").notNull(),
+    teamName: text("team_name").notNull(),
+    botUserId: text("bot_user_id").notNull(),
+    botTokenEncrypted: text("bot_token_encrypted").notNull(),
+    installedBy: text("installed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: timestamp("updated_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [uniqueIndex("slack_installations_ws_idx").on(t.workspaceId)]
+);
+
+export const slackUserLinks = pgTable(
+  "slack_user_links",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    slackUserId: text("slack_user_id").notNull(),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("slack_user_links_ws_user_idx").on(t.workspaceId, t.userId),
+    uniqueIndex("slack_user_links_ws_slack_idx").on(
+      t.workspaceId,
+      t.slackUserId
+    ),
+  ]
+);
+
+export const slackChannels = pgTable(
+  "slack_channels",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    issueId: text("issue_id")
+      .notNull()
+      .references(() => issues.id, { onDelete: "cascade" }),
+    slackChannelId: text("slack_channel_id").notNull(),
+    archivedAt: timestamp("archived_at"),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("slack_channels_issue_idx").on(t.issueId),
+    uniqueIndex("slack_channels_channel_idx").on(t.slackChannelId),
+  ]
 );
 
 export const activities = pgTable(
@@ -473,11 +549,51 @@ export const workspacesRelations = relations(workspaces, ({ many }) => ({
   issues: many(issues),
   labels: many(labels),
   cycles: many(cycles),
+  slackInstallations: many(slackInstallations),
+  slackUserLinks: many(slackUserLinks),
+  slackChannels: many(slackChannels),
 }));
 
 export const userRelations = relations(user, ({ many }) => ({
   memberships: many(memberships),
   mcpTokens: many(mcpTokens),
+  slackUserLinks: many(slackUserLinks),
+}));
+
+export const slackInstallationsRelations = relations(
+  slackInstallations,
+  ({ one }) => ({
+    workspace: one(workspaces, {
+      fields: [slackInstallations.workspaceId],
+      references: [workspaces.id],
+    }),
+    installer: one(user, {
+      fields: [slackInstallations.installedBy],
+      references: [user.id],
+    }),
+  })
+);
+
+export const slackUserLinksRelations = relations(slackUserLinks, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [slackUserLinks.workspaceId],
+    references: [workspaces.id],
+  }),
+  user: one(user, {
+    fields: [slackUserLinks.userId],
+    references: [user.id],
+  }),
+}));
+
+export const slackChannelsRelations = relations(slackChannels, ({ one }) => ({
+  workspace: one(workspaces, {
+    fields: [slackChannels.workspaceId],
+    references: [workspaces.id],
+  }),
+  issue: one(issues, {
+    fields: [slackChannels.issueId],
+    references: [issues.id],
+  }),
 }));
 
 export const mcpTokensRelations = relations(mcpTokens, ({ one }) => ({

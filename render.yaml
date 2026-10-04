@@ -25,6 +25,8 @@ services:
         generateValue: true
       - key: BETTER_AUTH_URL
         sync: false
+      - key: API_PUBLIC_URL
+        value: https://reline-api.onrender.com
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
@@ -41,6 +43,14 @@ services:
         sync: false
       - key: POSTHOG_HOST
         value: https://us.i.posthog.com
+      - key: SLACK_CLIENT_ID
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+      - key: SLACK_SIGNING_SECRET
+        sync: false
+      - key: SLACK_TOKEN_ENCRYPTION_KEY
+        sync: false
 
   - type: web
     name: reline-web

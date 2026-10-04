@@ -1,0 +1,37 @@
+{
+  "display_information": {
+    "name": "Reline",
+    "description": "Private Slack channels for Reline tickets"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Reline",
+      "always_online": true
+    }
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://reline-api.onrender.com/api/slack/oauth/callback",
+      "https://reline-api.onrender.com/api/slack/user/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "groups:read",
+        "groups:write",
+        "users:read",
+        "users:read.email"
+      ],
+      "user": ["openid", "email", "profile"]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://reline-api.onrender.com/api/slack/events",
+      "bot_events": ["message.groups"]
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": false
+  }
+}

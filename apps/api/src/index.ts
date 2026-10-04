@@ -18,6 +18,7 @@ import { meRoutes } from "@/routes/me";
 import { notificationsRoutes } from "@/routes/notifications";
 import { posthogProxyRoutes } from "@/routes/posthog-proxy";
 import { profileRoutes } from "@/routes/profile";
+import { slackRoutes } from "@/routes/slack";
 import { workspaceRoutes } from "@/routes/workspace";
 
 const app = new Hono();
@@ -55,6 +56,7 @@ app.route("/api", mcpTokenRoutes);
 app.route("/api", mcpRoutes);
 app.route("/api", invitesRoutes);
 app.route("/api", workspaceRoutes);
+app.route("/api", slackRoutes);
 app.route("/api", issuesRoutes);
 app.route("/api", cyclesRoutes);
 app.route("/api", labelsRoutes);

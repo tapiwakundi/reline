@@ -64,6 +64,13 @@
       "when": 1790810853276,
       "tag": "0008_mcp_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791133260207,
+      "tag": "0009_slack",
+      "breakpoints": true
     }
   ]
 }

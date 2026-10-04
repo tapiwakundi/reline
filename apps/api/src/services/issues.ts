@@ -27,6 +27,35 @@ import {
 import { notifyIssueEvent, recordActivity } from "@/lib/notify";
 import { deleteObjects } from "@/lib/r2";
 import { HttpError, type WorkspaceContext } from "@/lib/context";
+import {
+  setIssueSlackChannelArchived,
+  syncSlackAfterWrite,
+} from "@/services/slack";
+
+async function runSlack(fn: () => Promise<void>) {
+  try {
+    await fn();
+  } catch (error) {
+    console.error("[slack]", error);
+  }
+}
+
+async function syncSlackArchiveForStatus(
+  workspaceId: string,
+  issueId: string,
+  statusId: string
+) {
+  const status = await db.query.statuses.findFirst({
+    where: eq(statuses.id, statusId),
+    columns: { type: true },
+  });
+  if (!status) return;
+  await setIssueSlackChannelArchived({
+    workspaceId,
+    issueId,
+    archived: status.type === "done" || status.type === "canceled",
+  });
+}
 
 async function insertAttachments(
   input: AttachmentInput[],
@@ -251,6 +280,16 @@ export async function createIssue(ctx: WorkspaceContext, input: {
     before: "",
     after: issue.description,
   });
+  await runSlack(() =>
+    syncSlackAfterWrite({
+      workspaceId: workspace.id,
+      issueId: issue.id,
+      actorId: user.id,
+      text: issue.description,
+      mentionBefore: "",
+      kind: "description",
+    })
+  );
 
   if (issue.assigneeId && issue.assigneeId !== user.id) {
     await notifyIssueEvent({
@@ -341,6 +380,9 @@ async function applyIssueUpdate(
       type: "status_changed",
       payload: { to: to?.name ?? "" },
     });
+    await runSlack(() =>
+      syncSlackArchiveForStatus(workspace.id, issueId, nextStatusId)
+    );
   }
 
   if (
@@ -366,13 +408,24 @@ async function applyIssueUpdate(
     fields.description !== undefined &&
     fields.description !== before.description
   ) {
+    const description = fields.description;
     await notifyNewMentions({
       workspaceId: workspace.id,
       issueId,
       actorId: user.id,
       before: before.description,
-      after: fields.description,
+      after: description,
     });
+    await runSlack(() =>
+      syncSlackAfterWrite({
+        workspaceId: workspace.id,
+        issueId,
+        actorId: user.id,
+        text: description,
+        mentionBefore: before.description,
+        kind: "description",
+      })
+    );
   }
 }
 
@@ -476,6 +529,9 @@ export async function moveIssueOnBoard(
       type: "status_changed",
       payload: { to: to?.name ?? "" },
     });
+    await runSlack(() =>
+      syncSlackArchiveForStatus(workspace.id, issueId, statusId)
+    );
   }
 }
 
@@ -570,8 +626,9 @@ export async function moveIssueOnBoardGrouped(
   }
 
   if (fields.statusId && fields.statusId !== before.statusId) {
+    const nextStatusId = fields.statusId;
     const to = await db.query.statuses.findFirst({
-      where: eq(statuses.id, fields.statusId),
+      where: eq(statuses.id, nextStatusId),
     });
     await recordActivity({
       issueId,
@@ -586,6 +643,9 @@ export async function moveIssueOnBoardGrouped(
       type: "status_changed",
       payload: { to: to?.name ?? "" },
     });
+    await runSlack(() =>
+      syncSlackArchiveForStatus(workspace.id, issueId, nextStatusId)
+    );
   }
 }
 
@@ -647,16 +707,24 @@ export async function addComment(
   issueId: string,
   body: string,
   attachmentInput?: AttachmentInput[],
-  parentId?: string | null
+  parentId?: string | null,
+  slack?: {
+    source?: "app" | "slack";
+    slackChannelId?: string;
+    slackTs?: string;
+  }
 ) {
   const { workspace, user } = ctx;
-  const issue = await ownedIssue(issueId, workspace.id);
+  await ownedIssue(issueId, workspace.id);
   const trimmed = body.trim();
   if (!trimmed && !attachmentInput?.length) return;
 
+  const source = slack?.source ?? "app";
+
   // Replies attach to the thread's root comment (threads are one level deep).
+  // Slack replies stay a flat ticket transcript.
   let resolvedParentId: string | null = null;
-  if (parentId) {
+  if (parentId && source !== "slack") {
     const parent = await db.query.comments.findFirst({
       where: and(eq(comments.id, parentId), eq(comments.issueId, issueId)),
     });
@@ -664,10 +732,21 @@ export async function addComment(
     resolvedParentId = parent.parentId ?? parent.id;
   }
 
-  const [comment] = await db
+  const inserted = await db
     .insert(comments)
-    .values({ issueId, authorId: user.id, body: trimmed, parentId: resolvedParentId })
+    .values({
+      issueId,
+      authorId: user.id,
+      body: trimmed,
+      parentId: resolvedParentId,
+      source,
+      slackChannelId: slack?.slackChannelId ?? null,
+      slackTs: slack?.slackTs ?? null,
+    })
+    .onConflictDoNothing()
     .returning();
+  const comment = inserted[0];
+  if (!comment) return;
 
   if (attachmentInput?.length) {
     await insertAttachments(attachmentInput, {
@@ -702,4 +781,18 @@ export async function addComment(
     excludeRecipients: mentionedIds,
   });
 
+  if (source !== "slack") {
+    await runSlack(() =>
+      syncSlackAfterWrite({
+        workspaceId: workspace.id,
+        issueId,
+        actorId: user.id,
+        text: trimmed,
+        mentionBefore: "",
+        kind: "comment",
+        commentId: comment.id,
+        source,
+      })
+    );
+  }
 }
