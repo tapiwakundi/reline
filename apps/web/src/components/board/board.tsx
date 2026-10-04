@@ -586,11 +586,26 @@ export function Board({
 
   useEffect(() => {
     if (activeId) return;
-    const next: Record<string, string[]> = {};
-    for (const c of boardColumns) {
-      next[c.key] = (byGroup.get(c.key) ?? []).map((i) => i.id);
-    }
-    setColumns(next);
+    setColumns((prev) => {
+      const next: Record<string, string[]> = {};
+      for (const c of boardColumns) {
+        next[c.key] = (byGroup.get(c.key) ?? []).map((i) => i.id);
+      }
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      const same =
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((key) => {
+          if (!Object.prototype.hasOwnProperty.call(prev, key)) return false;
+          const before = prev[key] ?? [];
+          const after = next[key] ?? [];
+          return (
+            before.length === after.length &&
+            before.every((id, index) => id === after[index])
+          );
+        });
+      return same ? prev : next;
+    });
   }, [byGroup, boardColumns, activeId]);
 
   const issueMap = useMemo(() => {
@@ -712,73 +727,12 @@ export function Board({
     const overContainer = findContainer(overId);
     if (!activeContainer || !overContainer) return;
 
-    // Same-column reorders (single or multi) use sortable transforms /
-    // drop finalization only. Live list mutation mid-drag thrashes
-    // SortableContext and frequently crashes the board.
-    if (activeContainer === overContainer) {
-      return;
-    }
-
+    // Remember the target only. Moving cards between columns here changes
+    // each SortableContext item list while a drag is active. dnd-kit then
+    // remeasures in a layout effect and calls setState before its previous-items
+    // ref can catch up, so React hits maximum update depth (minified error 185).
+    // Placement is committed once, in onDragEnd.
     lastOverId.current = over.id;
-
-    const orderedBlock =
-      block.length > 0
-        ? block.filter((id) => blockSet.has(id))
-        : [activeIssueId];
-
-    setColumns((prev) => {
-      const cleaned: Record<string, string[]> = {};
-      for (const [key, ids] of Object.entries(prev)) {
-        cleaned[key] = ids.filter((id) => !blockSet.has(id));
-      }
-      const overItems = cleaned[overContainer] ?? [];
-      let newIndex: number;
-      if (overId.startsWith("col-")) {
-        newIndex = overItems.length;
-      } else {
-        const overIndex = overItems.indexOf(overId);
-        newIndex = overIndex >= 0 ? overIndex : overItems.length;
-      }
-      const nextIds = [
-        ...overItems.slice(0, newIndex),
-        ...orderedBlock,
-        ...overItems.slice(newIndex),
-      ];
-      const prevIds = prev[overContainer] ?? [];
-      if (
-        prevIds.length === nextIds.length &&
-        prevIds.every((id, i) => id === nextIds[i]) &&
-        Object.keys(cleaned).every((key) => {
-          if (key === overContainer) return true;
-          const a = cleaned[key] ?? [];
-          const b = prev[key] ?? [];
-          return a.length === b.length && a.every((id, i) => id === b[i]);
-        })
-      ) {
-        return prev;
-      }
-      return {
-        ...cleaned,
-        [overContainer]: nextIds,
-      };
-    });
-
-    setIssues((prev) => {
-      let changed = false;
-      const next = prev.map((i) => {
-        if (!blockSet.has(i.id)) return i;
-        if (groupKeyOf(i, prefs.columns) === overContainer) return i;
-        changed = true;
-        return applyGroupToIssue(
-          i,
-          prefs.columns,
-          overContainer,
-          statuses,
-          activeCycleId
-        );
-      });
-      return changed ? next : prev;
-    });
   }
 
   function onDragEnd(e: DragEndEvent) {
