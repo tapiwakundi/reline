@@ -17,6 +17,7 @@
     "scopes": {
       "bot": [
         "chat:write",
+        "groups:history",
         "groups:read",
         "groups:write",
         "users:read",

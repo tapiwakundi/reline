@@ -93,7 +93,7 @@ export function slackAuthorizeUrl(kind: "install" | "user", state: string): stri
   const client = encodeURIComponent(slackClientId());
   if (kind === "install") {
     const scopes = encodeURIComponent(
-      "groups:write,groups:read,chat:write,users:read,users:read.email"
+      "groups:write,groups:read,groups:history,chat:write,users:read,users:read.email"
     );
     return `https://slack.com/oauth/v2/authorize?client_id=${client}&scope=${scopes}&redirect_uri=${redirect}&state=${st}`;
   }
