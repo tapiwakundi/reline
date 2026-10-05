@@ -41,6 +41,20 @@ export function formatSlackIssueMessage(opts: {
   return body ? `${header}\n${link}\n\n${body}` : `${header}\n${link}`;
 }
 
+/** First message in a new issue channel: key, title, description, then the link. */
+export function formatSlackChannelOpenedMessage(opts: {
+  identifier: string;
+  title: string;
+  url: string;
+  description: string;
+}): string {
+  const header = `*${opts.identifier}* ${opts.title}`.trim();
+  const link = `<${opts.url}|Open in Reline>`;
+  const description = opts.description.trim();
+  if (!description) return `${header}\n${link}`;
+  return `${header}\n${description}\n\n${link}`;
+}
+
 export function relineCommentIdFromSlackMetadata(
   metadata:
     | { event_type?: string; event_payload?: { comment_id?: unknown } }
