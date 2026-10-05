@@ -16,6 +16,7 @@ function stubClient(onPost: () => void): SlackClient {
     postEphemeral: async () => undefined,
     archiveChannel: async () => undefined,
     unarchiveChannel: async () => undefined,
+    deleteMessage: async () => undefined,
   };
 }
 

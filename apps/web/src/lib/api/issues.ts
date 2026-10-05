@@ -119,3 +119,13 @@ export async function addComment(
     ...ws(),
   });
 }
+
+export async function deleteComment(
+  issueId: string,
+  commentId: string
+): Promise<void> {
+  await fetchJson<{ ok: true }>(
+    `/api/issues/${issueId}/comments/${commentId}`,
+    { method: "DELETE", ...ws() }
+  );
+}

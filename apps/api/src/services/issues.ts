@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   attachments,
@@ -28,6 +28,7 @@ import { notifyIssueEvent, recordActivity } from "@/lib/notify";
 import { deleteObjects } from "@/lib/r2";
 import { HttpError, type WorkspaceContext } from "@/lib/context";
 import {
+  deleteMirroredSlackComments,
   setIssueSlackChannelArchived,
   syncSlackAfterWrite,
 } from "@/services/slack";
@@ -795,4 +796,54 @@ export async function addComment(
       })
     );
   }
+}
+
+export async function deleteComment(
+  ctx: WorkspaceContext,
+  issueId: string,
+  commentId: string
+) {
+  const { workspace, user } = ctx;
+  await ownedIssue(issueId, workspace.id);
+
+  const comment = await db.query.comments.findFirst({
+    where: and(eq(comments.id, commentId), eq(comments.issueId, issueId)),
+    columns: { id: true, authorId: true },
+  });
+  if (!comment) throw new HttpError(404, "Comment not found");
+  if (comment.authorId !== user.id) {
+    throw new HttpError(403, "You can only delete your own comments");
+  }
+
+  const thread = await db
+    .select({
+      id: comments.id,
+      authorId: comments.authorId,
+      slackChannelId: comments.slackChannelId,
+      slackTs: comments.slackTs,
+    })
+    .from(comments)
+    .where(or(eq(comments.id, commentId), eq(comments.parentId, commentId)));
+
+  const ids = thread.map((row) => row.id);
+  const files =
+    ids.length === 0
+      ? []
+      : await db.query.attachments.findMany({
+          where: inArray(attachments.commentId, ids),
+          columns: { key: true },
+        });
+
+  await db.delete(comments).where(eq(comments.id, commentId));
+
+  if (files.length) {
+    await deleteObjects(files.map((file) => file.key));
+  }
+
+  await runSlack(() =>
+    deleteMirroredSlackComments({
+      workspaceId: workspace.id,
+      messages: thread,
+    })
+  );
 }

@@ -14,6 +14,7 @@ import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   optimisticAddComment,
   optimisticDeleteAttachment,
+  optimisticDeleteComment,
   optimisticDeleteIssue,
   optimisticUpdateIssue,
   type IssuePatch,
@@ -242,6 +243,26 @@ export function IssueDetail({
       .map((c) => ({ kind: "comment" as const, at: c.createdAt, c })),
   ].sort((x, y) => new Date(x.at).getTime() - new Date(y.at).getTime());
 
+  function onDeleteComment(comment: CommentItem) {
+    const replyCount = repliesByParent.get(comment.id)?.length ?? 0;
+    const prompt =
+      replyCount === 0
+        ? "Delete this comment?"
+        : replyCount === 1
+          ? "Delete this comment and its reply?"
+          : `Delete this comment and its ${replyCount} replies?`;
+    if (!window.confirm(prompt)) return;
+    if (replyingTo === comment.id) setReplyingTo(null);
+    startTransition(async () => {
+      await optimisticDeleteComment(
+        qc,
+        workspace.id,
+        { id: issue.id, identifier: issue.identifier },
+        comment.id
+      );
+    });
+  }
+
   if (isPending && !data) {
     return <IssueDetailSkeleton />;
   }
@@ -371,43 +392,26 @@ export function IssueDetail({
             {feed.map((item) =>
               item.kind === "comment" ? (
                 <div key={`c-${item.c.id}`} className="rounded-lg border border-border bg-card p-3">
-                  <div className="flex items-center gap-2">
-                    <UserAvatar user={item.c.author} className="size-5" />
-                    <span className="text-[13px] font-medium">
-                      {item.c.author?.name ?? "Unknown"}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {timeAgo(item.c.createdAt)}
-                    </span>
-                  </div>
-                  <CommentBody body={item.c.body} members={members} />
-                  <AttachmentThumbnails
-                    saved={item.c.attachments}
-                    onDeleteSaved={onDeleteAttachment}
-                    className="mt-2"
+                  <CommentView
+                    comment={item.c}
+                    members={members}
+                    mine={item.c.author?.id === me.id}
+                    pending={pending}
+                    onDelete={() => onDeleteComment(item.c)}
+                    onDeleteAttachment={onDeleteAttachment}
                   />
 
                   {(repliesByParent.get(item.c.id) ?? []).map((reply) => (
-                    <div
+                    <CommentView
                       key={reply.id}
-                      className="mt-3 border-l-2 border-border/70 pl-3"
-                    >
-                      <div className="flex items-center gap-2">
-                        <UserAvatar user={reply.author} className="size-4.5" />
-                        <span className="text-[13px] font-medium">
-                          {reply.author?.name ?? "Unknown"}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">
-                          {timeAgo(reply.createdAt)}
-                        </span>
-                      </div>
-                      <CommentBody body={reply.body} members={members} />
-                      <AttachmentThumbnails
-                        saved={reply.attachments}
-                        onDeleteSaved={onDeleteAttachment}
-                        className="mt-2"
-                      />
-                    </div>
+                      comment={reply}
+                      members={members}
+                      mine={reply.author?.id === me.id}
+                      pending={pending}
+                      nested
+                      onDelete={() => onDeleteComment(reply)}
+                      onDeleteAttachment={onDeleteAttachment}
+                    />
                   ))}
 
                   {replyingTo === item.c.id ? (
@@ -521,6 +525,62 @@ export function IssueDetail({
           </aside>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CommentView({
+  comment,
+  members,
+  mine,
+  pending,
+  nested = false,
+  onDelete,
+  onDeleteAttachment,
+}: {
+  comment: CommentItem;
+  members: Member[];
+  mine: boolean;
+  pending: boolean;
+  nested?: boolean;
+  onDelete: () => void;
+  onDeleteAttachment: (id: string) => void;
+}) {
+  const saving = comment.id.startsWith("temp-");
+  return (
+    <div className={nested ? "mt-3 border-l-2 border-border/70 pl-3" : undefined}>
+      <div className="flex items-center gap-2">
+        <UserAvatar
+          user={comment.author}
+          className={nested ? "size-4.5" : "size-5"}
+        />
+        <span className="min-w-0 truncate text-[13px] font-medium">
+          {comment.author?.name ?? "Unknown"}
+        </span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">
+          {timeAgo(comment.createdAt)}
+        </span>
+        {mine ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="ml-auto shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+            disabled={pending || saving}
+            title={saving ? "Saving comment…" : "Delete comment"}
+            aria-label="Delete comment"
+          >
+            <Trash2Icon />
+          </Button>
+        ) : null}
+      </div>
+      <CommentBody body={comment.body} members={members} />
+      <AttachmentThumbnails
+        saved={comment.attachments}
+        onDeleteSaved={onDeleteAttachment}
+        className="mt-2"
+      />
     </div>
   );
 }
