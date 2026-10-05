@@ -6,6 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { attachToIssue, type AttachmentInput } from "@/lib/api/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
@@ -95,6 +103,9 @@ export function IssueDetail({
   const [description, setDescription] = useState(issue.description);
   const [editingDescription, setEditingDescription] = useState(false);
   const [descriptionFocus, setDescriptionFocus] = useState<number | null>(null);
+  const [confirmingComment, setConfirmingComment] = useState<CommentItem | null>(
+    null
+  );
   const [syncedFrom, setSyncedFrom] = useState({
     id: issue.id,
     title: issue.title,
@@ -244,14 +255,13 @@ export function IssueDetail({
   ].sort((x, y) => new Date(x.at).getTime() - new Date(y.at).getTime());
 
   function onDeleteComment(comment: CommentItem) {
-    const replyCount = repliesByParent.get(comment.id)?.length ?? 0;
-    const prompt =
-      replyCount === 0
-        ? "Delete this comment?"
-        : replyCount === 1
-          ? "Delete this comment and its reply?"
-          : `Delete this comment and its ${replyCount} replies?`;
-    if (!window.confirm(prompt)) return;
+    setConfirmingComment(comment);
+  }
+
+  function confirmDeleteComment() {
+    if (!confirmingComment) return;
+    const comment = confirmingComment;
+    setConfirmingComment(null);
     if (replyingTo === comment.id) setReplyingTo(null);
     startTransition(async () => {
       await optimisticDeleteComment(
@@ -262,6 +272,17 @@ export function IssueDetail({
       );
     });
   }
+
+  const replyCount = confirmingComment
+    ? (repliesByParent.get(confirmingComment.id)?.length ?? 0)
+    : 0;
+  const deleteCommentTarget =
+    replyCount === 0
+      ? "This comment"
+      : replyCount === 1
+        ? "This comment and its reply"
+        : `This comment and its ${replyCount} replies`;
+  const deleteCommentWarning = `${deleteCommentTarget} will be permanently deleted. You can't undo these changes.`;
 
   if (isPending && !data) {
     return <IssueDetailSkeleton />;
@@ -525,6 +546,37 @@ export function IssueDetail({
           </aside>
         </div>
       </div>
+      <Dialog
+        open={confirmingComment !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingComment(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete comment</DialogTitle>
+            <DialogDescription>{deleteCommentWarning}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingComment(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={confirmDeleteComment}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
