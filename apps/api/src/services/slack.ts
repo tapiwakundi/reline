@@ -29,6 +29,7 @@ import {
 import { decryptSecret, encryptSecret } from "@/lib/slack/crypto";
 import {
   appMentionsToSlack,
+  formatSlackChannelOpenedMessage,
   formatSlackIssueMessage,
 } from "@/lib/slack/mentions";
 import { readSlackOAuthState, signSlackOAuthState } from "@/lib/slack/oauth";
@@ -523,14 +524,34 @@ export async function syncSlackAfterWrite(
 
   if (opts.kind === "comment") {
     if (!channelRow) {
+      const descriptionIds = new Map(slackIds);
+      const missing = resolveMentions(issue.description, members).filter(
+        (member) => !descriptionIds.has(member.id)
+      );
+      if (missing.length > 0) {
+        const extra = await resolveSlackIds({
+          workspaceId: opts.workspaceId,
+          token,
+          members: missing,
+          client,
+        });
+        const inviteMore: string[] = [];
+        for (const [userId, slackId] of extra) {
+          descriptionIds.set(userId, slackId);
+          if (slackId !== installation.botUserId && !inviteIds.includes(slackId)) {
+            inviteMore.push(slackId);
+          }
+        }
+        await client.invite(token, channelId, inviteMore);
+      }
       await client.postMessage(
         token,
         channelId,
-        formatSlackIssueMessage({
+        formatSlackChannelOpenedMessage({
           identifier,
           title: issue.title,
           url,
-          body: "",
+          description: appMentionsToSlack(issue.description, members, descriptionIds),
         })
       );
     }
@@ -584,12 +605,19 @@ export async function syncSlackAfterWrite(
     return;
   }
 
-  const message = formatSlackIssueMessage({
-    identifier,
-    title: issue.title,
-    url,
-    body: mirroredBody,
-  });
+  const message = channelRow
+    ? formatSlackIssueMessage({
+        identifier,
+        title: issue.title,
+        url,
+        body: mirroredBody,
+      })
+    : formatSlackChannelOpenedMessage({
+        identifier,
+        title: issue.title,
+        url,
+        description: mirroredBody,
+      });
   await client.postMessage(token, channelId, message);
 }
 

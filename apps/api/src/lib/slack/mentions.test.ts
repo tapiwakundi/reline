@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Member } from "@reline/shared";
 import {
   appMentionsToSlack,
+  formatSlackChannelOpenedMessage,
   formatSlackIssueMessage,
   relineCommentIdFromSlackMetadata,
   slackMentionsToApp,
@@ -51,6 +52,31 @@ test("formatSlackIssueMessage includes the key, title, and link", () => {
   assert.match(text, /Fix login/);
   assert.match(text, /<https:\/\/app.example.com\/acme\/issue\/REL-42\|Open in Reline>/);
   assert.match(text, /Hey <@U123>/);
+});
+
+test("formatSlackChannelOpenedMessage puts the description under the key and title", () => {
+  const url = "https://app.example.com/acme/issue/REL-42";
+  const text = formatSlackChannelOpenedMessage({
+    identifier: "REL-42",
+    title: "Fix login",
+    url,
+    description: "Users cannot sign in with SSO.",
+  });
+  assert.equal(
+    text,
+    `*REL-42* Fix login\nUsers cannot sign in with SSO.\n\n<${url}|Open in Reline>`
+  );
+});
+
+test("formatSlackChannelOpenedMessage skips a blank description", () => {
+  const url = "https://app.example.com/acme/issue/REL-42";
+  const text = formatSlackChannelOpenedMessage({
+    identifier: "REL-42",
+    title: "Fix login",
+    url,
+    description: "  \n",
+  });
+  assert.equal(text, `*REL-42* Fix login\n<${url}|Open in Reline>`);
 });
 
 test("relineCommentIdFromSlackMetadata reads only reline comment markers", () => {
