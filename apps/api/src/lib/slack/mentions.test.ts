@@ -3,7 +3,6 @@ import test from "node:test";
 import type { Member } from "@reline/shared";
 import {
   appMentionsToSlack,
-  formatSlackAttributedComment,
   formatSlackIssueMessage,
   relineCommentIdFromSlackMetadata,
   slackMentionsToApp,
@@ -52,14 +51,6 @@ test("formatSlackIssueMessage includes the key, title, and link", () => {
   assert.match(text, /Fix login/);
   assert.match(text, /<https:\/\/app.example.com\/acme\/issue\/REL-42\|Open in Reline>/);
   assert.match(text, /Hey <@U123>/);
-});
-
-test("formatSlackAttributedComment names the author above the comment", () => {
-  assert.equal(
-    formatSlackAttributedComment("Ada Lovelace", "Ship it"),
-    "*Ada Lovelace*\nShip it"
-  );
-  assert.equal(formatSlackAttributedComment("Ada *Lovelace*", ""), "*Ada Lovelace*");
 });
 
 test("relineCommentIdFromSlackMetadata reads only reline comment markers", () => {

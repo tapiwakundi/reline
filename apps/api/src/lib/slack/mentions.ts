@@ -41,13 +41,6 @@ export function formatSlackIssueMessage(opts: {
   return body ? `${header}\n${link}\n\n${body}` : `${header}\n${link}`;
 }
 
-/** Bot fallback when the author has not let Reline post as them. */
-export function formatSlackAttributedComment(authorName: string, body: string): string {
-  const name = authorName.replaceAll("*", "").trim() || "Someone";
-  const text = body.trim();
-  return text ? `*${name}*\n${text}` : `*${name}*`;
-}
-
 export function relineCommentIdFromSlackMetadata(
   metadata:
     | { event_type?: string; event_payload?: { comment_id?: unknown } }

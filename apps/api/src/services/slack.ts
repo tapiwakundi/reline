@@ -29,7 +29,6 @@ import {
 import { decryptSecret, encryptSecret } from "@/lib/slack/crypto";
 import {
   appMentionsToSlack,
-  formatSlackAttributedComment,
   formatSlackIssueMessage,
 } from "@/lib/slack/mentions";
 import { readSlackOAuthState, signSlackOAuthState } from "@/lib/slack/oauth";
@@ -551,6 +550,8 @@ export async function syncSlackAfterWrite(
       ? decryptSecret(authorLink.userTokenEncrypted)
       : null;
 
+    // Plain text on the user's own token. Blocks, username, icon, or metadata
+    // make Slack render an app card instead of a normal message.
     let posted: { ts: string } | null = null;
     if (userToken) {
       try {
@@ -561,7 +562,6 @@ export async function syncSlackAfterWrite(
           channelId,
           authorSlackId,
           text: mirroredBody,
-          metadata,
         });
       } catch (error) {
         if (!(error instanceof SlackApiError)) throw error;
@@ -571,7 +571,7 @@ export async function syncSlackAfterWrite(
       posted = await client.postMessage(
         token,
         channelId,
-        formatSlackAttributedComment(author?.name ?? "Someone", mirroredBody),
+        mirroredBody,
         metadata ? { metadata } : undefined
       );
     }
@@ -600,16 +600,9 @@ async function postWithUserToken(opts: {
   channelId: string;
   authorSlackId: string | undefined;
   text: string;
-  metadata?: { event_type: string; event_payload: Record<string, string> };
 }): Promise<{ ts: string }> {
-  const extra = opts.metadata ? { metadata: opts.metadata } : undefined;
   try {
-    return await opts.client.postMessage(
-      opts.userToken,
-      opts.channelId,
-      opts.text,
-      extra
-    );
+    return await opts.client.postMessage(opts.userToken, opts.channelId, opts.text);
   } catch (error) {
     if (
       !(error instanceof SlackApiError) ||
@@ -619,12 +612,7 @@ async function postWithUserToken(opts: {
       throw error;
     }
     await opts.client.invite(opts.botToken, opts.channelId, [opts.authorSlackId]);
-    return opts.client.postMessage(
-      opts.userToken,
-      opts.channelId,
-      opts.text,
-      extra
-    );
+    return opts.client.postMessage(opts.userToken, opts.channelId, opts.text);
   }
 }
 
