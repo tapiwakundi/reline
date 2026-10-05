@@ -5,6 +5,12 @@ export type Member = {
   image: string | null;
 };
 
+export type WorkspaceRole = "owner" | "member";
+
+export type WorkspaceMember = Member & {
+  role: WorkspaceRole;
+};
+
 export type StatusRow = {
   id: string;
   name: string;
@@ -146,7 +152,7 @@ export type WorkspaceSettings = {
     createdAt: string;
   };
   role: string;
-  members: Member[];
+  members: WorkspaceMember[];
   labels: LabelRow[];
 };
 

@@ -27,6 +27,13 @@ export async function acceptInvite(token: string) {
   );
 }
 
+export async function removeWorkspaceMember(userId: string) {
+  return fetchJson<{ slug: string | null }>(
+    `/api/workspace/members/${encodeURIComponent(userId)}`,
+    { method: "DELETE", ...ws() }
+  );
+}
+
 export async function deleteWorkspace(confirmName: string) {
   return fetchJson<{ slug: string | null }>("/api/workspace", {
     method: "DELETE",

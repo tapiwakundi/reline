@@ -21,9 +21,9 @@ import {
   type IssueDetailData,
   type IssueListItem,
   type LabelRow,
-  type Member,
   type StatusRow,
   type WorkspaceData,
+  type WorkspaceMember,
   type WorkspaceSettings,
 } from "@reline/shared";
 import { publicUrl } from "@/lib/r2";
@@ -37,7 +37,11 @@ export async function getWorkspaceData(
     logo: string | null;
   },
   meId: string
-): Promise<Omit<WorkspaceData, "workspaces">> {
+): Promise<
+  Omit<WorkspaceData, "workspaces" | "members"> & {
+    members: WorkspaceMember[];
+  }
+> {
   const [memberRows, statusRows, labelRows, cycleRows] = await Promise.all([
     db.query.memberships.findMany({
       where: eq(memberships.workspaceId, workspace.id),
@@ -57,11 +61,12 @@ export async function getWorkspaceData(
     }),
   ]);
 
-  const members: Member[] = memberRows.map((m) => ({
+  const members: WorkspaceMember[] = memberRows.map((m) => ({
     id: m.user.id,
     name: m.user.name,
     email: m.user.email,
     image: m.user.image ?? null,
+    role: m.role,
   }));
 
   return {

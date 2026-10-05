@@ -76,6 +76,10 @@ function activityText(a: ActivityItem, members: Member[]) {
       const m = members.find((x) => x.id === a.data.assigneeId);
       return `assigned to ${m?.name ?? "someone"}`;
     }
+    case "unassigned":
+      return a.data.name
+        ? `unassigned ${a.data.name}`
+        : "unassigned the issue";
     default:
       return a.type.replace(/_/g, " ");
   }

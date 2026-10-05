@@ -8,7 +8,7 @@
     "build": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/lib/mcp/*.test.ts src/lib/google-link.test.ts src/lib/posthog-proxy.test.ts src/lib/slack/*.test.ts ../../packages/shared/src/posthog.test.ts ../../apps/web/src/lib/posthog-config.test.ts",
+    "test": "tsx --test src/lib/mcp/*.test.ts src/lib/google-link.test.ts src/lib/membership-policy.test.ts src/lib/posthog-proxy.test.ts src/lib/slack/*.test.ts ../../packages/shared/src/posthog.test.ts ../../apps/web/src/lib/posthog-config.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio"
