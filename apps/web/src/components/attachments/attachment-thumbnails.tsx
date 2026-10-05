@@ -205,8 +205,8 @@ export function AttachmentThumbnails({
             <DialogDescription>
               <span className="font-medium text-foreground">
                 {confirming?.filename ?? "This attachment"}
-              </span>{" "}
-              will be permanently deleted. You can't undo these changes.
+              </span>
+              {" will be permanently deleted. You can't undo these changes."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
