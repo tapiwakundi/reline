@@ -8,6 +8,15 @@ import {
   AttachmentLightbox,
   type LightboxMedia,
 } from "@/components/attachments/attachment-lightbox";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export type SavedAttachment = {
   id: string;
@@ -25,6 +34,7 @@ function Tile({
   error,
   onOpen,
   onRemove,
+  removeLabel = "Remove",
 }: {
   url: string;
   kind: "image" | "video";
@@ -34,6 +44,7 @@ function Tile({
   error?: string;
   onOpen?: () => void;
   onRemove?: () => void;
+  removeLabel?: string;
 }) {
   return (
     <div
@@ -93,9 +104,12 @@ function Tile({
       {onRemove && (
         <button
           type="button"
-          onClick={onRemove}
-          className="absolute right-1 top-1 rounded bg-black/60 p-0.5 text-white/80 opacity-0 transition-opacity hover:text-white group-hover:opacity-100"
-          aria-label={`Remove ${filename}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="absolute right-1 top-1 rounded bg-black/60 p-0.5 text-white/80 opacity-0 transition-opacity hover:text-white group-hover:opacity-100 focus-visible:opacity-100"
+          aria-label={`${removeLabel} ${filename}`}
         >
           <XIcon className="size-3.5" />
         </button>
@@ -122,8 +136,16 @@ export function AttachmentThumbnails({
   className?: string;
 }) {
   const [lightbox, setLightbox] = useState<LightboxMedia | null>(null);
+  const [confirming, setConfirming] = useState<SavedAttachment | null>(null);
 
-  if (saved.length === 0 && pending.length === 0) return null;
+  function confirmDelete() {
+    if (!confirming || !onDeleteSaved) return;
+    const id = confirming.id;
+    setConfirming(null);
+    onDeleteSaved(id);
+  }
+
+  if (saved.length === 0 && pending.length === 0 && !confirming) return null;
 
   return (
     <>
@@ -137,7 +159,8 @@ export function AttachmentThumbnails({
             onOpen={() =>
               setLightbox({ url: a.url, kind: a.kind, filename: a.filename })
             }
-            onRemove={onDeleteSaved ? () => onDeleteSaved(a.id) : undefined}
+            onRemove={onDeleteSaved ? () => setConfirming(a) : undefined}
+            removeLabel="Delete"
           />
         ))}
         {pending.map((p) => (
@@ -170,6 +193,42 @@ export function AttachmentThumbnails({
       {lightbox && (
         <AttachmentLightbox media={lightbox} onClose={() => setLightbox(null)} />
       )}
+      <Dialog
+        open={confirming !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirming(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete attachment</DialogTitle>
+            <DialogDescription>
+              <span className="font-medium text-foreground">
+                {confirming?.filename ?? "This attachment"}
+              </span>
+              {" will be permanently deleted. You can't undo these changes."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirming(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={confirmDelete}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
