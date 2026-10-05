@@ -34,6 +34,7 @@ export type SlackClient = {
   ): Promise<void>;
   archiveChannel(token: string, channelId: string): Promise<void>;
   unarchiveChannel(token: string, channelId: string): Promise<void>;
+  deleteMessage(token: string, channelId: string, ts: string): Promise<void>;
 };
 
 type SlackResponse = {
@@ -175,6 +176,10 @@ export const liveSlackClient: SlackClient = {
       }
       throw error;
     }
+  },
+
+  async deleteMessage(token, channelId, ts) {
+    await slackMethod(token, "chat.delete", { channel: channelId, ts });
   },
 };
 

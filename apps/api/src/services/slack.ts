@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { mentionsAdded, resolveMentions, wsPath, type Member } from "@reline/shared";
 import { db } from "@/db";
 import {
@@ -33,6 +33,7 @@ import {
   formatSlackIssueMessage,
 } from "@/lib/slack/mentions";
 import { readSlackOAuthState, signSlackOAuthState } from "@/lib/slack/oauth";
+import { deleteSlackMessageWithTokens } from "@/lib/slack/delete-message";
 import { shouldSyncSlackWrite, type SlackWriteKind } from "@/lib/slack/policy";
 
 export type SlackSettingsStatus = {
@@ -641,6 +642,72 @@ async function postWithUserToken(opts: {
     }
     await opts.client.invite(opts.botToken, opts.channelId, [opts.authorSlackId]);
     return opts.client.postMessage(opts.userToken, opts.channelId, opts.text);
+  }
+}
+
+/** Remove mirrored Slack copies after a comment is deleted in Reline. */
+export async function deleteMirroredSlackComments(
+  opts: {
+    workspaceId: string;
+    messages: {
+      authorId: string | null;
+      slackChannelId: string | null;
+      slackTs: string | null;
+    }[];
+  },
+  client: SlackClient = liveSlackClient
+): Promise<void> {
+  const targets = opts.messages.filter(
+    (
+      message
+    ): message is {
+      authorId: string | null;
+      slackChannelId: string;
+      slackTs: string;
+    } => Boolean(message.slackChannelId && message.slackTs)
+  );
+  if (targets.length === 0) return;
+
+  const installation = await db.query.slackInstallations.findFirst({
+    where: eq(slackInstallations.workspaceId, opts.workspaceId),
+  });
+  if (!installation) return;
+
+  const botToken = decryptSecret(installation.botTokenEncrypted);
+  const authorIds = [
+    ...new Set(
+      targets
+        .map((message) => message.authorId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const links =
+    authorIds.length === 0
+      ? []
+      : await db.query.slackUserLinks.findMany({
+          where: and(
+            eq(slackUserLinks.workspaceId, opts.workspaceId),
+            inArray(slackUserLinks.userId, authorIds)
+          ),
+          columns: { userId: true, userTokenEncrypted: true },
+        });
+  const userTokens = new Map<string, string>();
+  for (const link of links) {
+    if (!link.userTokenEncrypted) continue;
+    userTokens.set(link.userId, decryptSecret(link.userTokenEncrypted));
+  }
+
+  for (const message of targets) {
+    const userToken = message.authorId
+      ? (userTokens.get(message.authorId) ?? null)
+      : null;
+    await deleteSlackMessageWithTokens(client, {
+      channelId: message.slackChannelId,
+      ts: message.slackTs,
+      tokens: [userToken, botToken].filter((token): token is string =>
+        Boolean(token)
+      ),
+    });
   }
 }
 
