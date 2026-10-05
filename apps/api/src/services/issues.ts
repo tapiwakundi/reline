@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   attachments,
@@ -682,6 +682,39 @@ export async function attachToIssue(
     uploaderId: user.id,
   });
 
+}
+
+export async function deleteComment(ctx: WorkspaceContext, commentId: string) {
+  const { workspace, user } = ctx;
+
+  const comment = await db.query.comments.findFirst({
+    where: eq(comments.id, commentId),
+  });
+  if (!comment) throw new HttpError(404, "Comment not found");
+
+  await ownedIssue(comment.issueId, workspace.id);
+  if (comment.authorId !== user.id) {
+    throw new HttpError(403, "You can only delete your own comments");
+  }
+
+  const thread = await db.query.comments.findMany({
+    where: or(eq(comments.id, commentId), eq(comments.parentId, commentId)),
+    columns: { id: true },
+  });
+  const ids = thread.map((row) => row.id);
+  const files = ids.length
+    ? await db.query.attachments.findMany({
+        where: inArray(attachments.commentId, ids),
+        columns: { key: true },
+      })
+    : [];
+
+  // Replies and their attachment rows cascade from this delete.
+  await db.delete(comments).where(eq(comments.id, commentId));
+
+  if (files.length) {
+    await deleteObjects(files.map((file) => file.key));
+  }
 }
 
 export async function deleteAttachment(ctx: WorkspaceContext, attachmentId: string) {

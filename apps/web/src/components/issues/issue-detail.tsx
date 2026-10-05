@@ -6,6 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRightIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { attachToIssue, type AttachmentInput } from "@/lib/api/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
@@ -14,6 +22,7 @@ import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   optimisticAddComment,
   optimisticDeleteAttachment,
+  optimisticDeleteComment,
   optimisticDeleteIssue,
   optimisticUpdateIssue,
   type IssuePatch,
@@ -215,6 +224,35 @@ export function IssueDetail({
     });
   }
 
+  const [confirmingComment, setConfirmingComment] = useState<CommentItem | null>(
+    null
+  );
+
+  function confirmDeleteComment() {
+    if (!confirmingComment) return;
+    const id = confirmingComment.id;
+    setConfirmingComment(null);
+    if (replyingTo === id) setReplyingTo(null);
+    startTransition(async () => {
+      await optimisticDeleteComment(
+        qc,
+        workspace.id,
+        { identifier: issue.identifier },
+        id
+      );
+    });
+  }
+
+  const deleteCommentWarning = comments.some(
+    (comment) => comment.parentId === confirmingComment?.id
+  )
+    ? "This comment and its replies will be permanently deleted. You can't undo these changes."
+    : "This comment will be permanently deleted. You can't undo these changes.";
+
+  function canDeleteComment(comment: CommentItem) {
+    return comment.author?.id === me.id && !comment.id.startsWith("temp-");
+  }
+
   function onDelete() {
     startTransition(async () => {
       await optimisticDeleteIssue(qc, workspace.id, {
@@ -379,6 +417,19 @@ export function IssueDetail({
                     <span className="text-[11px] text-muted-foreground">
                       {timeAgo(item.c.createdAt)}
                     </span>
+                    {canDeleteComment(item.c) && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="ml-auto size-6 text-muted-foreground hover:text-destructive"
+                        onClick={() => setConfirmingComment(item.c)}
+                        aria-label="Delete comment"
+                        title="Delete comment"
+                      >
+                        <Trash2Icon className="size-3.5" />
+                      </Button>
+                    )}
                   </div>
                   <CommentBody body={item.c.body} members={members} />
                   <AttachmentThumbnails
@@ -400,6 +451,19 @@ export function IssueDetail({
                         <span className="text-[11px] text-muted-foreground">
                           {timeAgo(reply.createdAt)}
                         </span>
+                        {canDeleteComment(reply) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="ml-auto size-6 text-muted-foreground hover:text-destructive"
+                            onClick={() => setConfirmingComment(reply)}
+                            aria-label="Delete comment"
+                            title="Delete comment"
+                          >
+                            <Trash2Icon className="size-3.5" />
+                          </Button>
+                        )}
                       </div>
                       <CommentBody body={reply.body} members={members} />
                       <AttachmentThumbnails
@@ -521,6 +585,37 @@ export function IssueDetail({
           </aside>
         </div>
       </div>
+      <Dialog
+        open={confirmingComment !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingComment(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete comment</DialogTitle>
+            <DialogDescription>{deleteCommentWarning}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingComment(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={confirmDeleteComment}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

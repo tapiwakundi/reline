@@ -101,6 +101,13 @@ export async function attachToIssue(
   });
 }
 
+export async function deleteComment(commentId: string): Promise<void> {
+  await fetchJson<{ ok: true }>(`/api/comments/${commentId}`, {
+    method: "DELETE",
+    ...ws(),
+  });
+}
+
 export async function deleteAttachment(attachmentId: string): Promise<void> {
   await fetchJson<{ ok: true }>(`/api/attachments/${attachmentId}`, {
     method: "DELETE",

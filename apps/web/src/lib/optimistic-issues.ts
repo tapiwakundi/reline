@@ -6,6 +6,7 @@ import {
   addComment,
   bulkUpdateIssues,
   deleteAttachment,
+  deleteComment,
   deleteIssue,
   updateIssue,
   type AttachmentInput,
@@ -310,6 +311,48 @@ export async function optimisticAddComment(
     toast.error(
       e instanceof Error ? e.message : "Couldn't post comment"
     );
+    throw e;
+  }
+
+  void invalidateAfterIssueChange(qc, workspaceId);
+}
+
+export async function optimisticDeleteComment(
+  qc: QueryClient,
+  workspaceId: string,
+  issue: { identifier: string },
+  commentId: string,
+  deleteFn: (id: string) => Promise<void> = deleteComment
+) {
+  await qc.cancelQueries({
+    queryKey: queryKeys.issues.detail(workspaceId, issue.identifier),
+  });
+  const previous = qc.getQueryData<IssueDetailData>(
+    queryKeys.issues.detail(workspaceId, issue.identifier)
+  );
+
+  qc.setQueryData<IssueDetailData>(
+    queryKeys.issues.detail(workspaceId, issue.identifier),
+    (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        comments: old.comments.filter(
+          (comment) =>
+            comment.id !== commentId && comment.parentId !== commentId
+        ),
+      };
+    }
+  );
+
+  try {
+    await deleteFn(commentId);
+  } catch (e) {
+    qc.setQueryData(
+      queryKeys.issues.detail(workspaceId, issue.identifier),
+      previous
+    );
+    toast.error(e instanceof Error ? e.message : "Couldn't delete comment");
     throw e;
   }
 

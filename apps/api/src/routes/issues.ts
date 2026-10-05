@@ -8,6 +8,7 @@ import {
   bulkUpdateIssues,
   createIssue,
   deleteAttachment,
+  deleteComment,
   deleteIssue,
   moveIssueOnBoard,
   moveIssueOnBoardGrouped,
@@ -159,6 +160,12 @@ issuesRoutes.post("/issues/:id/comments", requireWorkspace, async (c) => {
     body.attachments,
     body.parentId
   );
+  return c.json({ ok: true });
+});
+
+issuesRoutes.delete("/comments/:id", requireWorkspace, async (c) => {
+  const ctx = c.get("ctx");
+  await deleteComment(ctx, c.req.param("id"));
   return c.json({ ok: true });
 });
 
