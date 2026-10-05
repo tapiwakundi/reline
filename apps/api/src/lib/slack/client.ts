@@ -18,7 +18,13 @@ export type SlackClient = {
   postMessage(
     token: string,
     channelId: string,
-    text: string
+    text: string,
+    opts?: {
+      metadata?: {
+        event_type: string;
+        event_payload: Record<string, string>;
+      };
+    }
   ): Promise<{ ts: string }>;
   postEphemeral(
     token: string,
@@ -120,12 +126,13 @@ export const liveSlackClient: SlackClient = {
     }
   },
 
-  async postMessage(token, channelId, text) {
+  async postMessage(token, channelId, text, opts) {
     const data = await slackMethod(token, "chat.postMessage", {
       channel: channelId,
       text,
       unfurl_links: false,
       unfurl_media: false,
+      ...(opts?.metadata ? { metadata: opts.metadata } : {}),
     });
     const ts = typeof data.ts === "string" ? data.ts : null;
     if (!ts) throw new SlackApiError("no_ts");
@@ -204,43 +211,34 @@ export async function exchangeSlackInstallCode(opts: {
   };
 }
 
-export type SlackOpenIdUser = {
+export type SlackUserGrant = {
   slackUserId: string;
   teamId: string;
-  email: string | null;
+  accessToken: string;
 };
 
 export async function exchangeSlackUserCode(opts: {
   code: string;
   redirectUri: string;
-}): Promise<SlackOpenIdUser> {
-  const data = await slackForm("https://slack.com/api/openid.connect.token", {
+}): Promise<SlackUserGrant> {
+  const data = await slackForm("https://slack.com/api/oauth.v2.access", {
     client_id: slackClientId(),
     client_secret: slackClientSecret(),
     code: opts.code,
     redirect_uri: opts.redirectUri,
-    grant_type: "authorization_code",
   });
-  if (!data.ok) throw new SlackApiError(String(data.error ?? "openid_failed"));
-  const access = String(data.access_token ?? "");
-  if (!access) throw new SlackApiError("openid_incomplete");
-
-  const infoRes = await fetch("https://slack.com/api/openid.connect.userInfo", {
-    headers: { Authorization: `Bearer ${access}` },
-  });
-  const info = (await infoRes.json()) as SlackResponse & {
-    email?: string;
-    "https://slack.com/user_id"?: string;
-    "https://slack.com/team_id"?: string;
-  };
-  if (!info.ok) throw new SlackApiError(String(info.error ?? "userinfo_failed"));
-  const slackUserId = info["https://slack.com/user_id"];
-  const teamId = info["https://slack.com/team_id"];
-  if (!slackUserId || !teamId) throw new SlackApiError("userinfo_incomplete");
+  if (!data.ok) throw new SlackApiError(String(data.error ?? "oauth_failed"));
+  const team = data.team as { id?: string } | undefined;
+  const authed = data.authed_user as
+    | { id?: string; access_token?: string }
+    | undefined;
+  if (!authed?.id || !authed.access_token || !team?.id) {
+    throw new SlackApiError("oauth_incomplete");
+  }
   return {
-    slackUserId,
-    teamId,
-    email: info.email ?? null,
+    slackUserId: authed.id,
+    teamId: team.id,
+    accessToken: authed.access_token,
   };
 }
 

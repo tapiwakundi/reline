@@ -23,7 +23,7 @@
         "users:read",
         "users:read.email"
       ],
-      "user": ["openid", "email", "profile"]
+      "user": ["chat:write"]
     }
   },
   "settings": {

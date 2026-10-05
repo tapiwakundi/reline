@@ -29,6 +29,7 @@ import {
 import { decryptSecret, encryptSecret } from "@/lib/slack/crypto";
 import {
   appMentionsToSlack,
+  formatSlackAttributedComment,
   formatSlackIssueMessage,
 } from "@/lib/slack/mentions";
 import { readSlackOAuthState, signSlackOAuthState } from "@/lib/slack/oauth";
@@ -39,19 +40,23 @@ export type SlackSettingsStatus = {
   connected: boolean;
   teamName: string | null;
   linked: boolean;
+  /** This member granted Reline permission to post Slack messages as them. */
+  postsAsUser: boolean;
   canInstall: boolean;
 };
 
 export function getSlackSettingsStatus(
   ctx: WorkspaceContext,
   installation: { teamName: string } | null,
-  linked: boolean
+  linked: boolean,
+  postsAsUser: boolean
 ): SlackSettingsStatus {
   return {
     configured: slackAppConfigured(),
     connected: Boolean(installation),
     teamName: installation?.teamName ?? null,
     linked,
+    postsAsUser,
     canInstall: ctx.membership.role === "owner",
   };
 }
@@ -69,10 +74,15 @@ export async function loadSlackStatus(
         eq(slackUserLinks.workspaceId, ctx.workspace.id),
         eq(slackUserLinks.userId, ctx.user.id)
       ),
-      columns: { id: true },
+      columns: { id: true, userTokenEncrypted: true },
     }),
   ]);
-  return getSlackSettingsStatus(ctx, installation ?? null, Boolean(link));
+  return getSlackSettingsStatus(
+    ctx,
+    installation ?? null,
+    Boolean(link),
+    Boolean(link?.userTokenEncrypted)
+  );
 }
 
 function requireConfigured() {
@@ -97,8 +107,8 @@ export function slackAuthorizeUrl(kind: "install" | "user", state: string): stri
     );
     return `https://slack.com/oauth/v2/authorize?client_id=${client}&scope=${scopes}&redirect_uri=${redirect}&state=${st}`;
   }
-  const scopes = encodeURIComponent("openid email profile");
-  return `https://slack.com/openid/connect/authorize?response_type=code&client_id=${client}&scope=${scopes}&redirect_uri=${redirect}&state=${st}`;
+  const userScope = encodeURIComponent("chat:write");
+  return `https://slack.com/oauth/v2/authorize?client_id=${client}&user_scope=${userScope}&redirect_uri=${redirect}&state=${st}`;
 }
 
 export async function startSlackInstall(ctx: WorkspaceContext): Promise<string> {
@@ -258,7 +268,12 @@ export async function completeSlackUserLink(opts: {
     throw new HttpError(400, "That Slack account is from a different workspace");
   }
 
-  await upsertUserLink(workspace.id, parsed.userId, identity.slackUserId);
+  await upsertUserLink(
+    workspace.id,
+    parsed.userId,
+    identity.slackUserId,
+    encryptSecret(identity.accessToken)
+  );
   return slackSettingsRedirect(workspace.slug, "linked=1");
 }
 
@@ -278,14 +293,23 @@ export async function disconnectSlack(ctx: WorkspaceContext): Promise<void> {
 async function upsertUserLink(
   workspaceId: string,
   userId: string,
-  slackUserId: string
+  slackUserId: string,
+  userTokenEncrypted?: string
 ) {
   await db
     .insert(slackUserLinks)
-    .values({ workspaceId, userId, slackUserId })
+    .values({
+      workspaceId,
+      userId,
+      slackUserId,
+      userTokenEncrypted: userTokenEncrypted ?? null,
+    })
     .onConflictDoUpdate({
       target: [slackUserLinks.workspaceId, slackUserLinks.userId],
-      set: { slackUserId },
+      set: {
+        slackUserId,
+        ...(userTokenEncrypted ? { userTokenEncrypted } : {}),
+      },
     });
 }
 
@@ -489,18 +513,118 @@ export async function syncSlackAfterWrite(
   );
   await client.invite(token, channelId, inviteIds);
 
+  const url = `${publicAppUrl()}${wsPath(issue.workspace.slug, `/issue/${identifier}`)}`;
+  const mirroredBody = appMentionsToSlack(opts.text, members, slackIds).trim();
+  const metadata = opts.commentId
+    ? {
+        event_type: "reline_comment" as const,
+        event_payload: { comment_id: opts.commentId },
+      }
+    : undefined;
+
+  if (opts.kind === "comment") {
+    if (!channelRow) {
+      await client.postMessage(
+        token,
+        channelId,
+        formatSlackIssueMessage({
+          identifier,
+          title: issue.title,
+          url,
+          body: "",
+        })
+      );
+    }
+    if (!mirroredBody) return;
+
+    const authorSlackId = author ? slackIds.get(author.id) : undefined;
+    const authorLink = author
+      ? await db.query.slackUserLinks.findFirst({
+          where: and(
+            eq(slackUserLinks.workspaceId, opts.workspaceId),
+            eq(slackUserLinks.userId, author.id)
+          ),
+          columns: { userTokenEncrypted: true },
+        })
+      : null;
+    const userToken = authorLink?.userTokenEncrypted
+      ? decryptSecret(authorLink.userTokenEncrypted)
+      : null;
+
+    let posted: { ts: string } | null = null;
+    if (userToken) {
+      try {
+        posted = await postWithUserToken({
+          client,
+          botToken: token,
+          userToken,
+          channelId,
+          authorSlackId,
+          text: mirroredBody,
+          metadata,
+        });
+      } catch (error) {
+        if (!(error instanceof SlackApiError)) throw error;
+      }
+    }
+    if (!posted) {
+      posted = await client.postMessage(
+        token,
+        channelId,
+        formatSlackAttributedComment(author?.name ?? "Someone", mirroredBody),
+        metadata ? { metadata } : undefined
+      );
+    }
+    if (opts.commentId) {
+      await db
+        .update(comments)
+        .set({ slackChannelId: channelId, slackTs: posted.ts })
+        .where(eq(comments.id, opts.commentId));
+    }
+    return;
+  }
+
   const message = formatSlackIssueMessage({
     identifier,
     title: issue.title,
-    url: `${publicAppUrl()}${wsPath(issue.workspace.slug, `/issue/${identifier}`)}`,
-    body: appMentionsToSlack(opts.text, members, slackIds),
+    url,
+    body: mirroredBody,
   });
-  const posted = await client.postMessage(token, channelId, message);
-  if (opts.commentId) {
-    await db
-      .update(comments)
-      .set({ slackChannelId: channelId, slackTs: posted.ts })
-      .where(eq(comments.id, opts.commentId));
+  await client.postMessage(token, channelId, message);
+}
+
+async function postWithUserToken(opts: {
+  client: SlackClient;
+  botToken: string;
+  userToken: string;
+  channelId: string;
+  authorSlackId: string | undefined;
+  text: string;
+  metadata?: { event_type: string; event_payload: Record<string, string> };
+}): Promise<{ ts: string }> {
+  const extra = opts.metadata ? { metadata: opts.metadata } : undefined;
+  try {
+    return await opts.client.postMessage(
+      opts.userToken,
+      opts.channelId,
+      opts.text,
+      extra
+    );
+  } catch (error) {
+    if (
+      !(error instanceof SlackApiError) ||
+      error.slackError !== "not_in_channel" ||
+      !opts.authorSlackId
+    ) {
+      throw error;
+    }
+    await opts.client.invite(opts.botToken, opts.channelId, [opts.authorSlackId]);
+    return opts.client.postMessage(
+      opts.userToken,
+      opts.channelId,
+      opts.text,
+      extra
+    );
   }
 }
 

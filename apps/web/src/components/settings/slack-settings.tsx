@@ -12,6 +12,7 @@ type SlackStatus = {
   connected: boolean;
   teamName: string | null;
   linked: boolean;
+  postsAsUser: boolean;
   canInstall: boolean;
 };
 
@@ -49,6 +50,7 @@ export function SlackSettings() {
             connected: false,
             teamName: null,
             linked: false,
+            postsAsUser: false,
             canInstall: false,
           });
           toast.error(error instanceof Error ? error.message : "Could not load Slack");
@@ -70,7 +72,13 @@ export function SlackSettings() {
       });
       setStatus((current) =>
         current
-          ? { ...current, connected: false, teamName: null, linked: false }
+          ? {
+              ...current,
+              connected: false,
+              teamName: null,
+              linked: false,
+              postsAsUser: false,
+            }
           : current
       );
       toast.success("Slack disconnected");
@@ -139,8 +147,8 @@ export function SlackSettings() {
         <div>
           <div className="text-sm font-medium">Your account</div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Reline matches Slack users by email. If your Slack email is
-            different, connect your account here.
+            Connect Slack so comments you write in Reline show up as you, not
+            as the Reline app. Slack replies still come back as comments.
           </p>
         </div>
         {status === null ? (
@@ -149,8 +157,10 @@ export function SlackSettings() {
           <p className="text-sm text-muted-foreground">
             Connect Slack to this workspace first.
           </p>
-        ) : status.linked ? (
-          <p className="text-sm">Your Slack account is linked.</p>
+        ) : status.postsAsUser ? (
+          <p className="text-sm">
+            Comments you write in Reline are posted to Slack as you.
+          </p>
         ) : (
           <Button
             type="button"
@@ -159,7 +169,7 @@ export function SlackSettings() {
               window.location.href = slackStartUrl("user");
             }}
           >
-            Connect Slack
+            {status.linked ? "Reconnect Slack" : "Connect Slack"}
           </Button>
         )}
       </div>

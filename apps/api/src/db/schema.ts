@@ -413,6 +413,8 @@ export const slackUserLinks = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     slackUserId: text("slack_user_id").notNull(),
+    /** Lets Reline post issue comments as this Slack user. */
+    userTokenEncrypted: text("user_token_encrypted"),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),

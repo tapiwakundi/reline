@@ -40,3 +40,21 @@ export function formatSlackIssueMessage(opts: {
   const body = opts.body.trim();
   return body ? `${header}\n${link}\n\n${body}` : `${header}\n${link}`;
 }
+
+/** Bot fallback when the author has not let Reline post as them. */
+export function formatSlackAttributedComment(authorName: string, body: string): string {
+  const name = authorName.replaceAll("*", "").trim() || "Someone";
+  const text = body.trim();
+  return text ? `*${name}*\n${text}` : `*${name}*`;
+}
+
+export function relineCommentIdFromSlackMetadata(
+  metadata:
+    | { event_type?: string; event_payload?: { comment_id?: unknown } }
+    | null
+    | undefined
+): string | null {
+  if (!metadata || metadata.event_type !== "reline_comment") return null;
+  const id = metadata.event_payload?.comment_id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}

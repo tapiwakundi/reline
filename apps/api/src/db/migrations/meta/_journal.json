@@ -71,6 +71,13 @@
       "when": 1791133260207,
       "tag": "0009_slack",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791161033359,
+      "tag": "0010_slack_user_token",
+      "breakpoints": true
     }
   ]
 }

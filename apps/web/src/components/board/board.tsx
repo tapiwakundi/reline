@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -26,6 +27,7 @@ import {
   useDroppable,
   type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
   type DropAnimation,
@@ -75,7 +77,11 @@ import { PRIORITIES } from "@/lib/defaults";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
-import { BoardCard, BoardCardContent } from "@/components/board/board-card";
+import {
+  BoardCard,
+  BoardCardContent,
+  BoardDropSlot,
+} from "@/components/board/board-card";
 import { BoardBreadcrumbs } from "@/components/board/board-breadcrumbs";
 import { BoardDisplayMenu } from "@/components/board/board-display-menu";
 import { CompleteCycleDialog } from "@/components/cycles/complete-cycle-dialog";
@@ -231,6 +237,76 @@ function orderingComparator(
 const recencyComparator = (a: IssueListItem, b: IssueListItem) =>
   b.updatedAt.localeCompare(a.updatedAt);
 
+type DropPreview = { columnKey: string; index: number };
+
+type CardBox = { top: number; height: number };
+
+/**
+ * Index in `ids` where a card should land so its top sits above `pointerY`.
+ * `slot` is the placeholder already in the list (-1 if none). Cards at that
+ * index and after are shifted down by `shift`, so undo that before comparing.
+ */
+function dropInsertionIndex(
+  ids: string[],
+  rects: ReadonlyMap<string, CardBox>,
+  pointerY: number,
+  slot: number,
+  shift: number
+) {
+  for (let i = 0; i < ids.length; i++) {
+    const rect = rects.get(ids[i]!);
+    if (!rect || rect.height <= 0) continue;
+    const delta = slot >= 0 && i >= slot ? shift : 0;
+    const mid = rect.top - delta + rect.height / 2;
+    if (pointerY < mid) return i;
+  }
+  return ids.length;
+}
+
+/** Map a rendered-list insertion index onto the list with dragged ids removed. */
+function indexInFilteredColumn(
+  ids: string[],
+  insertionIndex: number,
+  hidden: Set<string>
+) {
+  let index = 0;
+  const end = Math.min(Math.max(insertionIndex, 0), ids.length);
+  for (let i = 0; i < end; i++) {
+    if (!hidden.has(ids[i]!)) index++;
+  }
+  return index;
+}
+
+function cardBoxes(columnEl: HTMLElement) {
+  const rects = new Map<string, CardBox>();
+  columnEl.querySelectorAll<HTMLElement>("[data-board-card-id]").forEach((node) => {
+    const id = node.dataset.boardCardId;
+    if (!id) return;
+    const rect = node.getBoundingClientRect();
+    rects.set(id, { top: rect.top, height: rect.height });
+  });
+  return rects;
+}
+
+/** Placeholder height plus the column's row gap — how far later cards move down. */
+function placeholderShift(columnEl: HTMLElement) {
+  const placeholder = columnEl.querySelector<HTMLElement>("[data-drop-placeholder]");
+  if (!placeholder) return 0;
+  const gap = Number.parseFloat(getComputedStyle(columnEl).rowGap);
+  return placeholder.getBoundingClientRect().height + (Number.isFinite(gap) ? gap : 0);
+}
+
+function eventPointerY(event: DragMoveEvent, collisionY: number | null) {
+  if (collisionY != null) return collisionY;
+  const translated = event.active.rect.current.translated;
+  if (translated) return translated.top + translated.height / 2;
+  const activator = event.activatorEvent;
+  if ("clientY" in activator && typeof activator.clientY === "number") {
+    return activator.clientY + event.delta.y;
+  }
+  return null;
+}
+
 const dropAnimation: DropAnimation = {
   duration: 120,
   easing: "ease-out",
@@ -290,6 +366,7 @@ function Column({
   dragging,
   selectedIds,
   dragIds,
+  dropIndex,
   onSelectClick,
   onNewIssue,
   properties,
@@ -297,12 +374,15 @@ function Column({
   onIssuePatch,
   onIssueDelete,
   scrollKey,
+  registerColumnNode,
 }: {
   column: BoardColumnDef;
   issues: IssueListItem[];
   dragging: boolean;
   selectedIds: Set<string>;
   dragIds: Set<string>;
+  /** Where to draw the cross-column drop slot, or null when this column is not the target. */
+  dropIndex: number | null;
   onSelectClick: (issueId: string, event: MouseEvent) => void;
   onNewIssue: () => void;
   properties: BoardCardProperty[];
@@ -310,6 +390,7 @@ function Column({
   onIssuePatch: (issueId: string, patch: IssuePatch) => void;
   onIssueDelete: (issueId: string) => void;
   scrollKey: string;
+  registerColumnNode: (key: string, node: HTMLElement | null) => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: `col-${column.key}`,
@@ -325,8 +406,9 @@ function Column({
     (el: HTMLDivElement | null) => {
       setScrollRef(el);
       setNodeRef(el);
+      registerColumnNode(column.key, el);
     },
-    [setScrollRef, setNodeRef]
+    [setScrollRef, setNodeRef, registerColumnNode, column.key]
   );
 
   return (
@@ -353,19 +435,22 @@ function Column({
           ref={setRefs}
           className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto rounded-lg p-1.5"
         >
-          {issues.map((issue) => (
-            <BoardCard
-              key={issue.id}
-              issue={issue}
-              properties={properties}
-              cycleIds={cycleIds}
-              selected={selectedIds.has(issue.id)}
-              isDragPlaceholder={dragIds.has(issue.id)}
-              onSelectClick={onSelectClick}
-              onOptimisticUpdate={(patch) => onIssuePatch(issue.id, patch)}
-              onOptimisticDelete={() => onIssueDelete(issue.id)}
-            />
+          {issues.map((issue, index) => (
+            <Fragment key={issue.id}>
+              {dropIndex === index && <BoardDropSlot marker />}
+              <BoardCard
+                issue={issue}
+                properties={properties}
+                cycleIds={cycleIds}
+                selected={selectedIds.has(issue.id)}
+                isDragPlaceholder={dragIds.has(issue.id)}
+                onSelectClick={onSelectClick}
+                onOptimisticUpdate={(patch) => onIssuePatch(issue.id, patch)}
+                onOptimisticDelete={() => onIssueDelete(issue.id)}
+              />
+            </Fragment>
           ))}
+          {dropIndex === issues.length && <BoardDropSlot marker />}
           {!dragging && (
             <button
               type="button"
@@ -422,7 +507,16 @@ export function Board({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set<string>());
   const [dragIds, setDragIds] = useState<string[]>([]);
+  const [dropPreview, setDropPreview] = useState<DropPreview | null>(null);
   const dragIdsRef = useRef<string[]>([]);
+  const activeIdRef = useRef<string | null>(null);
+  const dropPreviewRef = useRef<DropPreview | null>(null);
+  const pointerYRef = useRef<number | null>(null);
+  const columnNodesRef = useRef(new Map<string, HTMLElement>());
+  const registerColumnNode = useCallback((key: string, node: HTMLElement | null) => {
+    if (node) columnNodesRef.current.set(key, node);
+    else columnNodesRef.current.delete(key);
+  }, []);
   /** Snapshot so cancel can unwind live cross-column previews. */
   const dragSnapshotRef = useRef<{
     columns: Record<string, string[]>;
@@ -623,6 +717,7 @@ export function Board({
 
   const collisionDetection: CollisionDetection = useCallback(
     (args) => {
+      pointerYRef.current = args.pointerCoordinates?.y ?? null;
       const active = args.active.id;
       const dragging = new Set(dragIdsRef.current.map(String));
       dragging.add(String(active));
@@ -669,10 +764,28 @@ export function Board({
 
   function clearDragState() {
     setActiveId(null);
+    activeIdRef.current = null;
     setDragIds([]);
     dragIdsRef.current = [];
     lastOverId.current = null;
     dragSnapshotRef.current = null;
+    pointerYRef.current = null;
+    setDropPreviewIfChanged(null);
+  }
+
+  function setDropPreviewIfChanged(next: DropPreview | null) {
+    const prev = dropPreviewRef.current;
+    if (
+      prev === next ||
+      (prev != null &&
+        next != null &&
+        prev.columnKey === next.columnKey &&
+        prev.index === next.index)
+    ) {
+      return;
+    }
+    dropPreviewRef.current = next;
+    setDropPreview(next);
   }
 
   function restoreDragSnapshot() {
@@ -686,7 +799,9 @@ export function Board({
   function onDragStart(e: DragStartEvent) {
     lastOverId.current = null;
     const id = String(e.active.id);
+    activeIdRef.current = id;
     setActiveId(id);
+    setDropPreviewIfChanged(null);
 
     let block: string[];
     if (selectedIds.has(id) && selectedIds.size > 1) {
@@ -711,28 +826,57 @@ export function Board({
     };
   }
 
-  function onDragOver(e: DragOverEvent) {
-    const { active, over } = e;
-    if (!over) return;
+  // Column membership stays put for the whole drag. Moving sortable items
+  // between lists retriggers dnd-kit measurement and overflows React's update
+  // limit. The dashed slot is only a preview; onDragEnd commits the move.
+  function syncDropPreview(event: DragMoveEvent) {
+    const activeIssueId = activeIdRef.current;
+    const over = event.over;
+    if (!activeIssueId || !over) {
+      setDropPreviewIfChanged(null);
+      return;
+    }
 
-    const activeIssueId = String(active.id);
     const overId = String(over.id);
-    if (overId === activeIssueId) return;
-
-    const block = dragIdsRef.current;
-    const blockSet = new Set(block.length > 0 ? block : [activeIssueId]);
-    if (blockSet.has(overId) && !overId.startsWith("col-")) return;
-
     const activeContainer = findContainer(activeIssueId);
     const overContainer = findContainer(overId);
-    if (!activeContainer || !overContainer) return;
+    if (!activeContainer || !overContainer || activeContainer === overContainer) {
+      setDropPreviewIfChanged(null);
+      return;
+    }
 
-    // Remember the target only. Moving cards between columns here changes
-    // each SortableContext item list while a drag is active. dnd-kit then
-    // remeasures in a layout effect and calls setState before its previous-items
-    // ref can catch up, so React hits maximum update depth (minified error 185).
-    // Placement is committed once, in onDragEnd.
-    lastOverId.current = over.id;
+    const ids = columns[overContainer] ?? [];
+    const dragging = new Set(dragIdsRef.current);
+    dragging.add(activeIssueId);
+    const pointerY = eventPointerY(event, pointerYRef.current);
+    const columnEl = columnNodesRef.current.get(overContainer);
+    const current = dropPreviewRef.current;
+    const slot = current?.columnKey === overContainer ? current.index : -1;
+
+    let index = ids.length;
+    const rects = columnEl ? cardBoxes(columnEl) : null;
+    if (columnEl && pointerY != null && rects && rects.size > 0) {
+      const shift = slot >= 0 ? placeholderShift(columnEl) : 0;
+      index = dropInsertionIndex(ids, rects, pointerY, slot, shift);
+    } else if (!overId.startsWith("col-") && !dragging.has(overId)) {
+      const overIndex = ids.indexOf(overId);
+      if (overIndex >= 0) index = overIndex;
+    }
+
+    setDropPreviewIfChanged({ columnKey: overContainer, index });
+  }
+
+  function onDragMove(e: DragMoveEvent) {
+    syncDropPreview(e);
+  }
+
+  function onDragOver(e: DragOverEvent) {
+    if (!e.over) {
+      setDropPreviewIfChanged(null);
+      return;
+    }
+    lastOverId.current = e.over.id;
+    syncDropPreview(e);
   }
 
   function onDragEnd(e: DragEndEvent) {
@@ -757,7 +901,18 @@ export function Board({
 
     const overId = resolvedOverId;
     const activeContainer = findContainer(issueId);
-    const overContainer = findContainer(overId) ?? activeContainer;
+    // The dashed slot is what the user was aiming at. Prefer it over the
+    // collision id, which can still point at the source column on release.
+    const preview = dropPreviewRef.current;
+    const previewTarget =
+      preview &&
+      activeContainer &&
+      preview.columnKey !== activeContainer &&
+      Object.prototype.hasOwnProperty.call(columns, preview.columnKey)
+        ? preview.columnKey
+        : null;
+    const overContainer =
+      previewTarget ?? findContainer(overId) ?? activeContainer;
     if (!activeContainer || !overContainer) {
       restoreDragSnapshot();
       clearDragState();
@@ -788,10 +943,17 @@ export function Board({
       }
       const overItems = cleaned[overContainer] ?? [];
       let newIndex = overItems.length;
-      if (!overId.startsWith("col-") && !blockSet.has(overId)) {
+      if (previewTarget && preview) {
+        newIndex = indexInFilteredColumn(
+          columns[previewTarget] ?? [],
+          preview.index,
+          blockSet
+        );
+      } else if (!overId.startsWith("col-") && !blockSet.has(overId)) {
         const overIndex = overItems.indexOf(overId);
         if (overIndex >= 0) newIndex = overIndex;
       }
+      newIndex = Math.min(Math.max(newIndex, 0), overItems.length);
       nextColumns = {
         ...cleaned,
         [overContainer]: [
@@ -1057,6 +1219,7 @@ export function Board({
           sensors={sensors}
           collisionDetection={collisionDetection}
           onDragStart={onDragStart}
+          onDragMove={onDragMove}
           onDragOver={onDragOver}
           onDragEnd={onDragEnd}
           onDragCancel={() => {
@@ -1073,6 +1236,10 @@ export function Board({
                   dragging={!!activeId}
                   selectedIds={selectedIds}
                   dragIds={dragIdSet}
+                  dropIndex={
+                    dropPreview?.columnKey === c.key ? dropPreview.index : null
+                  }
+                  registerColumnNode={registerColumnNode}
                   onSelectClick={onSelectClick}
                   onNewIssue={() =>
                     openCreateIssue({

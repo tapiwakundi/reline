@@ -141,6 +141,17 @@ export function BoardCardContent({
   );
 }
 
+/** Card-sized drop slot. `marker` tags the cross-column preview measured while dragging. */
+export function BoardDropSlot({ marker = false }: { marker?: boolean }) {
+  return (
+    <div
+      aria-hidden
+      {...(marker ? { "data-drop-placeholder": "" } : {})}
+      className="pointer-events-none min-h-[72px] w-full shrink-0 rounded-lg border border-dashed border-primary/45 bg-primary/10"
+    />
+  );
+}
+
 export function BoardCard({
   issue,
   properties,
@@ -199,6 +210,7 @@ export function BoardCard({
         }}
         {...attributes}
         {...listeners}
+        data-board-card-id={issue.id}
         onPointerEnter={() => prefetchIssue(issue.identifier, href)}
         onClick={(e) => {
           // Ignore the click that fires right after a drag release
@@ -219,11 +231,7 @@ export function BoardCard({
         )}
       >
         {showPlaceholder ? (
-          // Card-sized drop slot (not a full-column highlight)
-          <div
-            aria-hidden
-            className="min-h-[72px] rounded-lg border border-dashed border-primary/45 bg-primary/10"
-          />
+          <BoardDropSlot />
         ) : (
           <BoardCardContent
             issue={issue}
