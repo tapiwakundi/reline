@@ -1,15 +1,20 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  activities,
   attachments,
   invites,
+  issues,
   memberships,
+  notifications,
+  slackUserLinks,
   statuses,
   workspaces,
 } from "@/db/schema";
 import { DEFAULT_STATUSES, type WorkspaceListItem } from "@reline/shared";
 import { deleteObjects } from "@/lib/r2";
 import { allocateUniqueSlug } from "@/lib/workspace-slug";
+import { membershipRemoval } from "@/lib/membership-policy";
 import { getUserWorkspaces } from "@/lib/session";
 import { HttpError, type AuthUser, type WorkspaceContext } from "@/lib/context";
 
@@ -109,6 +114,93 @@ export async function getInvitePreview(token: string) {
     valid: Boolean(workspace),
     workspaceName: workspace?.name ?? null,
   };
+}
+
+/**
+ * Remove a member, or let a non-owner leave.
+ * Issues they were assigned stay in the workspace and become unassigned.
+ */
+export async function removeWorkspaceMember(
+  ctx: WorkspaceContext,
+  targetUserId: string
+): Promise<{ left: boolean; remaining: WorkspaceListItem[] }> {
+  const userId = targetUserId.trim();
+  if (!userId) throw new HttpError(400, "Member is required");
+
+  const { workspace, membership, user } = ctx;
+  const target = await db.query.memberships.findFirst({
+    where: and(
+      eq(memberships.workspaceId, workspace.id),
+      eq(memberships.userId, userId)
+    ),
+    with: { user: true },
+  });
+  if (!target) throw new HttpError(404, "Member not found");
+
+  const action = membershipRemoval({
+    actorId: user.id,
+    actorRole: membership.role,
+    targetId: target.userId,
+    targetRole: target.role,
+  });
+
+  await db.transaction(async (tx) => {
+    const deleted = await tx
+      .delete(memberships)
+      .where(eq(memberships.id, target.id))
+      .returning({ id: memberships.id });
+    if (!deleted.length) throw new HttpError(404, "Member not found");
+
+    const assigned = await tx
+      .select({ id: issues.id })
+      .from(issues)
+      .where(
+        and(eq(issues.workspaceId, workspace.id), eq(issues.assigneeId, userId))
+      );
+
+    if (assigned.length) {
+      await tx
+        .update(issues)
+        .set({ assigneeId: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(issues.workspaceId, workspace.id),
+            eq(issues.assigneeId, userId)
+          )
+        );
+      await tx.insert(activities).values(
+        assigned.map((issue) => ({
+          issueId: issue.id,
+          actorId: user.id,
+          type: "unassigned",
+          data: { assigneeId: userId, name: target.user.name },
+        }))
+      );
+    }
+
+    await tx
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.workspaceId, workspace.id),
+          eq(notifications.userId, userId)
+        )
+      );
+
+    await tx
+      .delete(slackUserLinks)
+      .where(
+        and(
+          eq(slackUserLinks.workspaceId, workspace.id),
+          eq(slackUserLinks.userId, userId)
+        )
+      );
+  });
+
+  if (action === "leave") {
+    return { left: true, remaining: await getUserWorkspaces(user.id) };
+  }
+  return { left: false, remaining: [] };
 }
 
 /**

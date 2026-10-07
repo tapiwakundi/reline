@@ -27,6 +27,7 @@ import {
   createInvite,
   createWorkspace,
   deleteWorkspace,
+  removeWorkspaceMember,
 } from "@/services/workspace";
 
 export const workspaceRoutes = new Hono<WorkspaceEnv & AuthEnv>();
@@ -61,6 +62,25 @@ workspaceRoutes.post("/workspace/board-display", requireWorkspace, async (c) => 
   await updateBoardDisplayPrefs(ctx, prefs);
   return c.json({ ok: true });
 });
+
+workspaceRoutes.delete(
+  "/workspace/members/:userId",
+  requireWorkspace,
+  async (c) => {
+    const ctx = c.get("ctx");
+    const { left, remaining } = await removeWorkspaceMember(
+      ctx,
+      c.req.param("userId")
+    );
+    if (!left) return c.json({ slug: ctx.workspace.slug });
+    if (!remaining.length) {
+      c.header("Set-Cookie", clearWorkspaceSlugCookie());
+      return c.json({ slug: null });
+    }
+    c.header("Set-Cookie", workspaceSlugCookie(remaining[0].slug));
+    return c.json({ slug: remaining[0].slug });
+  }
+);
 
 workspaceRoutes.delete("/workspace", requireWorkspace, async (c) => {
   const ctx = c.get("ctx");

@@ -18,6 +18,7 @@ export type {
   MeResponse,
   Member,
   MembershipSummary,
+  WorkspaceMember,
   SavedAttachment,
   StatusRow,
   WorkspaceBootstrap,
