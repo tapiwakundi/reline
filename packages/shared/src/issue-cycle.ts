@@ -50,6 +50,46 @@ export function cycleIdForBacklogEntry(
   return null;
 }
 
+/**
+ * Cycle change implied by a status move.
+ * - Entering Backlog clears the cycle (`null`).
+ * - Leaving Backlog for Todo assigns `targetCycleId`.
+ * - When `assignAnyStatus` is set, leaving Backlog for any other status also
+ *   assigns `targetCycleId` (a cycle board: the card joined this sprint).
+ * - `undefined` means the existing cycle stays as it is.
+ */
+export function cycleIdAfterStatusChange(
+  statuses: { id: string; type: string }[],
+  currentStatusId: string,
+  nextStatusId: string,
+  existingCycleId: string | null | undefined,
+  targetCycleId: string | null,
+  assignAnyStatus = false
+): string | null | undefined {
+  const cleared = cycleIdForBacklogEntry(
+    statuses,
+    nextStatusId,
+    existingCycleId
+  );
+  if (cleared === null) return null;
+
+  const todo = cycleIdForTodoEntry(
+    statuses,
+    currentStatusId,
+    nextStatusId,
+    existingCycleId,
+    targetCycleId
+  );
+  if (todo) return todo;
+
+  if (!assignAnyStatus || !targetCycleId || existingCycleId) return undefined;
+  const from = statuses.find((s) => s.id === currentStatusId);
+  const to = statuses.find((s) => s.id === nextStatusId);
+  if (from?.type !== "backlog") return undefined;
+  if (!to || to.type === "backlog") return undefined;
+  return targetCycleId;
+}
+
 /** Resolve the workspace's current (active) cycle id from cycle rows. */
 export function activeCycleIdFromRows(
   cycles: {

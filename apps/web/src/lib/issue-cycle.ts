@@ -1,5 +1,6 @@
 export {
   activeCycleIdFromRows,
+  cycleIdAfterStatusChange,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
   todoStatusIdForCycleEntry,

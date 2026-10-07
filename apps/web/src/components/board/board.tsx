@@ -94,8 +94,7 @@ import type {
 } from "@/lib/board-display";
 import {
   activeCycleIdFromRows,
-  cycleIdForBacklogEntry,
-  cycleIdForTodoEntry,
+  cycleIdAfterStatusChange,
   todoStatusIdForCycleEntry,
 } from "@/lib/issue-cycle";
 import {
@@ -133,22 +132,24 @@ function applyGroupToIssue(
   group: BoardColumnsGroup,
   key: string,
   statuses: StatusRow[] = [],
-  activeCycleId: string | null = null
+  targetCycleId: string | null = null,
+  joinOnAnyStatus = false
 ): IssueListItem {
   switch (group) {
     case "status": {
-      const cleared = cycleIdForBacklogEntry(statuses, key, issue.cycleId);
-      const cycleId =
-        cleared === null
-          ? null
-          : cycleIdForTodoEntry(
-              statuses,
-              issue.statusId,
-              key,
-              issue.cycleId,
-              activeCycleId
-            ) ?? issue.cycleId;
-      return { ...issue, statusId: key, cycleId };
+      const cycleId = cycleIdAfterStatusChange(
+        statuses,
+        issue.statusId,
+        key,
+        issue.cycleId,
+        targetCycleId,
+        joinOnAnyStatus
+      );
+      return {
+        ...issue,
+        statusId: key,
+        cycleId: cycleId === undefined ? issue.cycleId : cycleId,
+      };
     }
     case "assignee":
       return { ...issue, assigneeId: key === "none" ? null : key };
@@ -371,6 +372,7 @@ function Column({
   onNewIssue,
   properties,
   cycleIds,
+  cycleEntry,
   onIssuePatch,
   onIssueDelete,
   scrollKey,
@@ -387,6 +389,8 @@ function Column({
   onNewIssue: () => void;
   properties: BoardCardProperty[];
   cycleIds: CycleFilter[];
+  /** When the board is scoped to one sprint, status changes join that sprint. */
+  cycleEntry?: { cycleId: string; joinOnAnyStatus: boolean };
   onIssuePatch: (issueId: string, patch: IssuePatch) => void;
   onIssueDelete: (issueId: string) => void;
   scrollKey: string;
@@ -442,6 +446,7 @@ function Column({
                 issue={issue}
                 properties={properties}
                 cycleIds={cycleIds}
+                cycleEntry={cycleEntry}
                 selected={selectedIds.has(issue.id)}
                 isDragPlaceholder={dragIds.has(issue.id)}
                 onSelectClick={onSelectClick}
@@ -567,10 +572,15 @@ export function Board({
     })
   );
 
-  const visible = useMemo(
-    () => applyFilters(issues, filters, cycles),
-    [issues, filters, cycles]
-  );
+  const visible = useMemo(() => {
+    // Backlog issues have no cycle, so a cycle filter would hide them and the
+    // Backlog column would stay at 0. Keep that shared backlog on the board.
+    const uncycledBacklogStatusIds =
+      prefs.columns === "status" && prefs.showBacklog
+        ? statuses.filter((s) => s.type === "backlog").map((s) => s.id)
+        : undefined;
+    return applyFilters(issues, filters, cycles, { uncycledBacklogStatusIds });
+  }, [issues, filters, cycles, prefs.columns, prefs.showBacklog, statuses]);
 
   // Prefill create-issue with the board's cycle when the view is scoped to one.
   const defaultCycleId = useMemo(
@@ -581,6 +591,15 @@ export function Board({
     () => activeCycleIdFromRows(cycles),
     [cycles]
   );
+  // A board scoped to one sprint should pull backlog cards into that sprint,
+  // not whichever cycle happens to be active.
+  const sprintCycleId =
+    typeof defaultCycleId === "string" ? defaultCycleId : activeCycleId;
+  const joinSprintOnAnyStatus = typeof defaultCycleId === "string";
+  const cycleEntry =
+    typeof defaultCycleId === "string"
+      ? { cycleId: defaultCycleId, joinOnAnyStatus: true }
+      : undefined;
   const scopedActiveCycle = useMemo(() => {
     if (!defaultCycleId || !cycleList) return null;
     return (
@@ -1022,7 +1041,8 @@ export function Board({
               prefs.columns,
               overContainer,
               statuses,
-              activeCycleId
+              sprintCycleId,
+              joinSprintOnAnyStatus
             ),
             boardOrder: rank ?? i.boardOrder,
           };
@@ -1050,7 +1070,24 @@ export function Board({
       if (boardOrder == null) return;
       const siblings = i === 0 ? siblingOrders : [];
       if (prefs.columns === "status") {
-        void moveIssueOnBoard(id, overContainer, boardOrder, siblings);
+        const current = issueMap.get(id);
+        const cycleId = current
+          ? cycleIdAfterStatusChange(
+              statuses,
+              current.statusId,
+              overContainer,
+              current.cycleId,
+              sprintCycleId,
+              joinSprintOnAnyStatus
+            )
+          : undefined;
+        void moveIssueOnBoard(
+          id,
+          overContainer,
+          boardOrder,
+          siblings,
+          cycleId
+        );
       } else {
         void moveIssueOnBoardGrouped(
           id,
@@ -1075,7 +1112,8 @@ export function Board({
               prefs.columns,
               columnKey,
               statuses,
-              activeCycleId
+              sprintCycleId,
+              joinSprintOnAnyStatus
             );
       })
       .filter((i): i is IssueListItem => !!i);
@@ -1256,6 +1294,7 @@ export function Board({
                   }
                   properties={prefs.properties}
                   cycleIds={filters.cycleIds}
+                  cycleEntry={cycleEntry}
                   scrollKey={`board-col:${boardViewKey}:${c.key}`}
                   onIssuePatch={(issueId, patch) => {
                     const current = issueMap.get(issueId);
@@ -1266,7 +1305,8 @@ export function Board({
                       patch,
                       current,
                       statuses,
-                      cycles
+                      cycles,
+                      cycleEntry
                     );
                     suppressServerSyncUntil.current = Date.now() + 4000;
                     setIssues((prev) =>

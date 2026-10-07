@@ -15,6 +15,7 @@ import {
   MAX_ATTACHMENTS,
   activeCycleIdFromRows,
   classifyContentType,
+  cycleIdAfterStatusChange,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
   mentionsAdded,
@@ -137,6 +138,40 @@ async function cycleIdWhenLeavingBacklogToTodo(
     nextStatusId,
     existingCycleId,
     activeCycleIdFromRows(cycleRows)
+  );
+}
+
+/**
+ * Join the sprint the board is showing when a backlog issue leaves Backlog.
+ * Moving into Backlog still clears the cycle.
+ */
+async function cycleIdForRequestedSprint(
+  workspaceId: string,
+  currentStatusId: string,
+  nextStatusId: string,
+  existingCycleId: string | null,
+  requestedCycleId: string
+): Promise<string | null | undefined> {
+  const [workspaceStatuses, cycleRows] = await Promise.all([
+    db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspaceId),
+      columns: { id: true, type: true },
+    }),
+    db.query.cycles.findMany({
+      where: eq(cycles.workspaceId, workspaceId),
+      columns: { id: true },
+    }),
+  ]);
+  if (!cycleRows.some((c) => c.id === requestedCycleId)) {
+    throw new HttpError(400, "Cycle not found");
+  }
+  return cycleIdAfterStatusChange(
+    workspaceStatuses,
+    currentStatusId,
+    nextStatusId,
+    existingCycleId,
+    requestedCycleId,
+    true
   );
 }
 
@@ -466,7 +501,8 @@ export async function moveIssueOnBoard(
   issueId: string,
   statusId: string,
   boardOrder: number,
-  siblingOrders: { issueId: string; boardOrder: number }[] = []
+  siblingOrders: { issueId: string; boardOrder: number }[] = [],
+  requestedCycleId?: string | null
 ) {
   const { workspace, user } = ctx;
   const before = await ownedIssue(issueId, workspace.id);
@@ -479,21 +515,32 @@ export async function moveIssueOnBoard(
     statusId,
     boardOrder,
   };
-  const cleared = await cycleIdWhenEnteringBacklog(
-    workspace.id,
-    statusId,
-    before.cycleId
-  );
-  if (cleared === null) {
-    fields.cycleId = null;
-  } else {
-    const assigned = await cycleIdWhenLeavingBacklogToTodo(
+  if (typeof requestedCycleId === "string") {
+    const nextCycle = await cycleIdForRequestedSprint(
       workspace.id,
       before.statusId,
       statusId,
+      before.cycleId,
+      requestedCycleId
+    );
+    if (nextCycle !== undefined) fields.cycleId = nextCycle;
+  } else {
+    const cleared = await cycleIdWhenEnteringBacklog(
+      workspace.id,
+      statusId,
       before.cycleId
     );
-    if (assigned) fields.cycleId = assigned;
+    if (cleared === null) {
+      fields.cycleId = null;
+    } else {
+      const assigned = await cycleIdWhenLeavingBacklogToTodo(
+        workspace.id,
+        before.statusId,
+        statusId,
+        before.cycleId
+      );
+      if (assigned) fields.cycleId = assigned;
+    }
   }
 
   const statusChanged = statusId !== before.statusId;

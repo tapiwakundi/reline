@@ -62,6 +62,7 @@ export {
   EMPTY_FILTERS,
   applyFilters,
   cycleFilterLabel,
+  type ApplyFiltersOptions,
   defaultCycleIdFromFilters,
   hasActiveFilters,
   isCycleFilterPreset,
@@ -76,6 +77,7 @@ export {
 
 export {
   activeCycleIdFromRows,
+  cycleIdAfterStatusChange,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
   todoStatusIdForCycleEntry,

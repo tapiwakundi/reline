@@ -111,13 +111,15 @@ issuesRoutes.post("/issues/:id/move", requireWorkspace, async (c) => {
     statusId: string;
     boardOrder: number;
     siblingOrders?: { issueId: string; boardOrder: number }[];
+    cycleId?: string | null;
   }>();
   await moveIssueOnBoard(
     ctx,
     c.req.param("id"),
     body.statusId,
     body.boardOrder,
-    body.siblingOrders ?? []
+    body.siblingOrders ?? [],
+    body.cycleId
   );
   return c.json({ ok: true });
 });
