@@ -156,6 +156,7 @@ export function BoardCard({
   issue,
   properties,
   cycleIds,
+  cycleEntry,
   selected = false,
   isDragPlaceholder = false,
   onSelectClick,
@@ -166,6 +167,8 @@ export function BoardCard({
   properties: BoardCardProperty[];
   /** Board cycle filter — preserved in the issue URL for trail crumbs. */
   cycleIds: CycleFilter[];
+  /** When the board is scoped to one sprint, status changes join that sprint. */
+  cycleEntry?: { cycleId: string; joinOnAnyStatus: boolean };
   selected?: boolean;
   /** True while this card is part of an active multi-drag block. */
   isDragPlaceholder?: boolean;
@@ -198,6 +201,7 @@ export function BoardCard({
     <IssueContextMenu
       issue={issue}
       href={href}
+      cycleEntry={cycleEntry}
       onOptimisticUpdate={onOptimisticUpdate}
       onOptimisticDelete={onOptimisticDelete}
     >

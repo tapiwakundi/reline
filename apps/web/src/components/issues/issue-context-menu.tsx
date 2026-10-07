@@ -51,6 +51,7 @@ export function IssueContextMenu({
   issue,
   children,
   href,
+  cycleEntry,
   onOptimisticUpdate,
   onOptimisticDelete,
 }: {
@@ -58,6 +59,8 @@ export function IssueContextMenu({
   children: ReactElement;
   /** Optional full path (e.g. board → issue with cycle query). */
   href?: string;
+  /** When set, leaving Backlog joins this sprint instead of the active cycle. */
+  cycleEntry?: { cycleId: string | null; joinOnAnyStatus?: boolean };
   /** Apply local state immediately (e.g. board columns) before the server refresh. */
   onOptimisticUpdate?: (patch: IssuePatch) => void;
   onOptimisticDelete?: () => void;
@@ -73,7 +76,7 @@ export function IssueContextMenu({
   const currentStatus = statuses.find((s) => s.id === issue.statusId);
 
   function patch(p: IssuePatch) {
-    const resolved = resolveIssuePatch(p, issue, statuses, cycles);
+    const resolved = resolveIssuePatch(p, issue, statuses, cycles, cycleEntry);
     onOptimisticUpdate?.(resolved);
     startTransition(async () => {
       await optimisticUpdateIssue(

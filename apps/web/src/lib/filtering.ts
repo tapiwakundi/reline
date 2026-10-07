@@ -4,6 +4,7 @@ export {
   EMPTY_FILTERS,
   applyFilters,
   cycleFilterLabel,
+  type ApplyFiltersOptions,
   defaultCycleIdFromFilters,
   hasActiveFilters,
   isCycleFilterPreset,

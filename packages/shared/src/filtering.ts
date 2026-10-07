@@ -179,13 +179,23 @@ export function defaultCycleIdFromFilters(
   return undefined;
 }
 
+export type ApplyFiltersOptions = {
+  /**
+   * Backlog status ids. When a cycle filter is active, issues in these
+   * statuses with no cycle still match — backlog items are not on a cycle.
+   */
+  uncycledBacklogStatusIds?: readonly string[];
+};
+
 export function applyFilters(
   issues: IssueListItem[],
   f: IssueFilters,
-  cycles: CycleRow[] = []
+  cycles: CycleRow[] = [],
+  options?: ApplyFiltersOptions
 ): IssueListItem[] {
   const cycleMatch =
     f.cycleIds.length > 0 ? resolveCycleMatchSet(f.cycleIds, cycles) : null;
+  const uncycledBacklog = new Set(options?.uncycledBacklogStatusIds ?? []);
 
   return issues.filter((i) => {
     if (f.statusIds.length && !f.statusIds.includes(i.statusId)) return false;
@@ -198,8 +208,12 @@ export function applyFilters(
     if (f.labelIds.length && !f.labelIds.some((l) => i.labelIds.includes(l)))
       return false;
     if (cycleMatch) {
-      const key = i.cycleId ?? "none";
-      if (!cycleMatch.has(key)) return false;
+      const inSharedBacklog =
+        i.cycleId == null && uncycledBacklog.has(i.statusId);
+      if (!inSharedBacklog) {
+        const key = i.cycleId ?? "none";
+        if (!cycleMatch.has(key)) return false;
+      }
     }
     return true;
   });

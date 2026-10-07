@@ -13,8 +13,7 @@ import {
 } from "@/lib/api/issues";
 import {
   activeCycleIdFromRows,
-  cycleIdForBacklogEntry,
-  cycleIdForTodoEntry,
+  cycleIdAfterStatusChange,
   todoStatusIdForCycleEntry,
 } from "@/lib/issue-cycle";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
@@ -35,7 +34,13 @@ export function resolveIssuePatch(
   patch: IssuePatch,
   issue: { statusId: string; cycleId?: string | null },
   statuses: StatusRow[],
-  cycles: CycleRow[] = []
+  cycles: CycleRow[] = [],
+  options?: {
+    /** Sprint to join when leaving Backlog. Omit to use the active cycle. */
+    cycleId?: string | null;
+    /** Also join that sprint when leaving Backlog for a status other than Todo. */
+    joinOnAnyStatus?: boolean;
+  }
 ): IssuePatch {
   let next = patch;
 
@@ -49,23 +54,19 @@ export function resolveIssuePatch(
   }
 
   if (next.statusId && next.cycleId === undefined) {
-    const cleared = cycleIdForBacklogEntry(
+    const target =
+      options?.cycleId !== undefined
+        ? options.cycleId
+        : activeCycleIdFromRows(cycles);
+    const cycleId = cycleIdAfterStatusChange(
       statuses,
+      issue.statusId,
       next.statusId,
-      issue.cycleId
+      issue.cycleId,
+      target,
+      options?.joinOnAnyStatus ?? false
     );
-    if (cleared === null) {
-      next = { ...next, cycleId: null };
-    } else {
-      const cycleId = cycleIdForTodoEntry(
-        statuses,
-        issue.statusId,
-        next.statusId,
-        issue.cycleId,
-        activeCycleIdFromRows(cycles)
-      );
-      if (cycleId) next = { ...next, cycleId };
-    }
+    if (cycleId !== undefined) next = { ...next, cycleId };
   }
 
   return next;

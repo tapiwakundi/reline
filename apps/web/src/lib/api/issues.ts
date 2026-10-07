@@ -55,10 +55,16 @@ export async function moveIssueOnBoard(
   issueId: string,
   statusId: string,
   boardOrder: number,
-  siblingOrders: { issueId: string; boardOrder: number }[] = []
+  siblingOrders: { issueId: string; boardOrder: number }[] = [],
+  cycleId?: string | null
 ): Promise<void> {
   await fetchJson<{ ok: true }>(`/api/issues/${issueId}/move`, {
-    ...jsonBody({ statusId, boardOrder, siblingOrders }),
+    ...jsonBody({
+      statusId,
+      boardOrder,
+      siblingOrders,
+      ...(cycleId !== undefined ? { cycleId } : {}),
+    }),
     ...ws(),
   });
 }
