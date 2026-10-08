@@ -9,7 +9,7 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { invalidateWorkspace } from "@/lib/invalidate";
 import type { WorkspaceSettings } from "@/lib/types";
 import { DeleteWorkspace } from "@/components/settings/delete-workspace";
-import { LogoCropDialog } from "@/components/settings/logo-crop-dialog";
+import { ImageCropDialog } from "@/components/settings/image-crop-dialog";
 import { WorkspaceMark } from "@/components/workspace-mark";
 import { Button } from "@/components/ui/button";
 import { SettingsContentSkeleton } from "@/components/skeletons/page-skeletons";
@@ -163,7 +163,7 @@ export function SettingsGeneral({
         </div>
       )}
 
-      <LogoCropDialog
+      <ImageCropDialog
         file={cropFile}
         onClose={() => {
           setCropFile(null);

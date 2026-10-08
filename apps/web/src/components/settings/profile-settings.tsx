@@ -6,10 +6,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CameraIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ImageCropDialog } from "@/components/settings/image-crop-dialog";
 import { UserAvatar } from "@/components/user-avatar";
 import { useWorkspace } from "@/lib/workspace-context";
 import { invalidateAfterProfileChange } from "@/lib/invalidate";
-import { squareAvatar } from "@/lib/square-avatar";
 
 const ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/avif,image/*";
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -19,17 +19,15 @@ export function ProfileSettings() {
   const router = useRouter();
   const qc = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState<"upload" | "remove" | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const shown = preview ? { ...me, image: preview } : me;
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
 
   async function applyImage() {
     await invalidateAfterProfileChange(qc, workspace.id);
     router.refresh();
   }
 
-  async function onFile(file: File | undefined) {
+  function chooseFile(file: File | undefined) {
     if (!file || busy) return;
     if (file.type && !file.type.startsWith("image/")) {
       toast.error("Choose an image file");
@@ -39,50 +37,31 @@ export function ProfileSettings() {
       toast.error("Photo must be under 5 MB");
       return;
     }
+    setCropFile(file);
+  }
 
-    setBusy("upload");
-    const local = URL.createObjectURL(file);
-    setPreview(local);
-    try {
-      let upload = file;
-      if (file.type !== "image/gif") {
-        try {
-          upload = await squareAvatar(file);
-        } catch {
-          if (!file.type.startsWith("image/") || file.size > MAX_BYTES) {
-            throw new Error("Could not process that image");
-          }
-        }
-      }
-
-      const form = new FormData();
-      form.append("file", upload);
-      const res = await fetch("/api/profile/avatar", {
-        method: "POST",
-        body: form,
-      });
-      const data = (await res.json().catch(() => null)) as {
-        image?: string;
-        error?: string;
-      } | null;
-      if (!res.ok || !data?.image) {
-        throw new Error(data?.error ?? "Could not upload photo");
-      }
-      await applyImage();
-      toast.success("Profile photo updated");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not upload photo");
-    } finally {
-      setPreview(null);
-      URL.revokeObjectURL(local);
-      setBusy(null);
-      if (inputRef.current) inputRef.current.value = "";
+  async function savePhoto(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/profile/avatar", {
+      method: "POST",
+      body: form,
+    });
+    const data = (await res.json().catch(() => null)) as {
+      image?: string;
+      error?: string;
+    } | null;
+    if (!res.ok || !data?.image) {
+      throw new Error(data?.error ?? "Could not upload photo");
     }
+    setCropFile(null);
+    await applyImage();
+    toast.success("Profile photo updated");
   }
 
   async function remove() {
-    if (busy || !me.image) return;
-    setBusy("remove");
+    if (busy || cropFile || !me.image) return;
+    setBusy(true);
     try {
       const res = await fetch("/api/profile/avatar", { method: "DELETE" });
       const data = (await res.json().catch(() => null)) as {
@@ -94,7 +73,7 @@ export function ProfileSettings() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not remove photo");
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
@@ -112,11 +91,11 @@ export function ProfileSettings() {
           type="button"
           className="group relative size-16 shrink-0 rounded-full"
           onClick={() => inputRef.current?.click()}
-          disabled={busy !== null}
+          disabled={busy || cropFile !== null}
           title="Upload photo"
         >
           <UserAvatar
-            user={shown}
+            user={me}
             className="size-16"
             fallbackClassName="text-lg"
           />
@@ -132,20 +111,20 @@ export function ProfileSettings() {
               type="button"
               size="sm"
               variant="outline"
-              disabled={busy !== null}
+              disabled={busy || cropFile !== null}
               onClick={() => inputRef.current?.click()}
             >
-              {busy === "upload" ? "Uploading…" : "Upload photo"}
+              Upload photo
             </Button>
             {me.image ? (
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                disabled={busy !== null}
+                disabled={busy || cropFile !== null}
                 onClick={remove}
               >
-                {busy === "remove" ? "Removing…" : "Remove"}
+                {busy ? "Removing…" : "Remove"}
               </Button>
             ) : null}
           </div>
@@ -155,12 +134,29 @@ export function ProfileSettings() {
         </div>
       </div>
 
+      <ImageCropDialog
+        file={cropFile}
+        title="Crop photo"
+        description="Drag to reposition. Zoom so your face fills the circle."
+        saveLabel="Save photo"
+        failureMessage="Could not save photo"
+        shape="circle"
+        format="jpeg"
+        onClose={() => {
+          setCropFile(null);
+          if (inputRef.current) inputRef.current.value = "";
+        }}
+        onSave={savePhoto}
+      />
       <input
         ref={inputRef}
         type="file"
         accept={ACCEPT}
         className="hidden"
-        onChange={(e) => onFile(e.target.files?.[0])}
+        onChange={(e) => {
+          chooseFile(e.target.files?.[0]);
+          e.target.value = "";
+        }}
       />
     </div>
   );
