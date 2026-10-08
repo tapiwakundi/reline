@@ -9,41 +9,10 @@ import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { useWorkspace } from "@/lib/workspace-context";
 import { invalidateAfterProfileChange } from "@/lib/invalidate";
+import { squareAvatar } from "@/lib/square-avatar";
 
 const ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/avif,image/*";
 const MAX_BYTES = 5 * 1024 * 1024;
-
-async function squareAvatar(file: File): Promise<File> {
-  const bitmap = await createImageBitmap(file);
-  const size = 512;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    bitmap.close();
-    throw new Error("Could not process that image");
-  }
-  const scale = Math.max(size / bitmap.width, size / bitmap.height);
-  const w = bitmap.width * scale;
-  const h = bitmap.height * scale;
-  ctx.drawImage(bitmap, (size - w) / 2, (size - h) / 2, w, h);
-  bitmap.close();
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(
-      (webp) => {
-        if (webp) resolve(webp);
-        else canvas.toBlob(resolve, "image/jpeg", 0.9);
-      },
-      "image/webp",
-      0.9
-    );
-  });
-  if (!blob) throw new Error("Could not process that image");
-  const ext = blob.type === "image/jpeg" ? "jpg" : "webp";
-  return new File([blob], `avatar.${ext}`, { type: blob.type || "image/webp" });
-}
 
 export function ProfileSettings() {
   const { me, workspace } = useWorkspace();
