@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issues, statuses, workspaces } from "@/db/schema";
 import type { CycleIssueDisposition } from "@reline/shared";
+import { cycleNameLabel, defaultCycleName, normalizeCycleName } from "@reline/shared";
 import { HttpError, type WorkspaceContext } from "@/lib/context";
 import {
   snapCycleDurationDays,
@@ -17,7 +18,7 @@ const TARGET_PLANNED_CYCLES = 2;
  */
 async function ensureUpcomingCycles(opts: {
   workspaceId: string;
-  workspaceName: string;
+  workspace: { name: string; cycleName: string | null };
   /** Cycle being completed — excluded from the planned pool. */
   excludeCycleId: string;
   durationSource: { startDate: Date; endDate: Date };
@@ -59,7 +60,7 @@ async function ensureUpcomingCycles(opts: {
       .values({
         workspaceId: opts.workspaceId,
         number: ws.counter,
-        name: `${opts.workspaceName} Cycle ${ws.counter}`,
+        name: defaultCycleName(opts.workspace, ws.counter),
         startDate: window.startDate,
         endDate: window.endDate,
         status: "planned",
@@ -70,6 +71,52 @@ async function ensureUpcomingCycles(opts: {
   }
 
   return planned[0]?.id ?? firstCreatedId;
+}
+
+export async function updateWorkspaceCycleName(
+  ctx: WorkspaceContext,
+  name: string
+) {
+  if (ctx.membership.role !== "owner") {
+    throw new HttpError(403, "Only the workspace owner can change the cycle name");
+  }
+  const trimmed = name.trim();
+  if (trimmed.length > 80) {
+    throw new HttpError(400, "Cycle name must be 80 characters or less");
+  }
+
+  const stored = normalizeCycleName(trimmed, ctx.workspace.name);
+  const oldLabel = cycleNameLabel(ctx.workspace);
+  const newLabel = cycleNameLabel({
+    name: ctx.workspace.name,
+    cycleName: stored,
+  });
+
+  await db
+    .update(workspaces)
+    .set({ cycleName: stored })
+    .where(eq(workspaces.id, ctx.workspace.id));
+
+  if (oldLabel !== newLabel) {
+    const rows = await db.query.cycles.findMany({
+      where: and(
+        eq(cycles.workspaceId, ctx.workspace.id),
+        ne(cycles.status, "completed")
+      ),
+    });
+    await Promise.all(
+      rows
+        .filter((cycle) => cycle.name === `${oldLabel} Cycle ${cycle.number}`)
+        .map((cycle) =>
+          db
+            .update(cycles)
+            .set({ name: `${newLabel} Cycle ${cycle.number}` })
+            .where(eq(cycles.id, cycle.id))
+        )
+    );
+  }
+
+  return { cycleName: stored };
 }
 
 export async function createCycle(ctx: WorkspaceContext, input: {
@@ -88,7 +135,7 @@ export async function createCycle(ctx: WorkspaceContext, input: {
   await db.insert(cycles).values({
     workspaceId: workspace.id,
     number: ws.counter,
-    name: input.name?.trim() || `${workspace.name} Cycle ${ws.counter}`,
+    name: input.name?.trim() || defaultCycleName(workspace, ws.counter),
     startDate: new Date(input.startDate),
     endDate: new Date(input.endDate),
   });
@@ -154,7 +201,7 @@ export async function completeCycle(
 
   const soonestPlannedId = await ensureUpcomingCycles({
     workspaceId: workspace.id,
-    workspaceName: workspace.name,
+    workspace,
     excludeCycleId: cycleId,
     durationSource: {
       startDate: cycle.startDate,

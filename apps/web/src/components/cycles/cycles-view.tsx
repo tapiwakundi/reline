@@ -41,6 +41,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useCycles } from "@/lib/hooks/queries";
 import { useWorkspace } from "@/lib/workspace-context";
+import { defaultCycleName } from "@reline/shared";
 import { wsPath } from "@/lib/workspace-paths";
 import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
@@ -289,12 +290,15 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const defaults = defaultDates();
   const nextCycleNumber =
     list.reduce((max, c) => Math.max(max, c.number), 0) + 1;
-  const defaultCycleName = `${workspace.name} Cycle ${nextCycleNumber}`;
-  const [createName, setCreateName] = useState(defaultCycleName);
+  const suggestedCycleName = defaultCycleName(workspace, nextCycleNumber);
+  const [createName, setCreateName] = useState(suggestedCycleName);
 
   function openCreate() {
     setCreateName(
-      `${workspace.name} Cycle ${list.reduce((max, c) => Math.max(max, c.number), 0) + 1}`
+      defaultCycleName(
+        workspace,
+        list.reduce((max, c) => Math.max(max, c.number), 0) + 1
+      )
     );
     setOpen(true);
   }
@@ -639,7 +643,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                 name="name"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                placeholder={defaultCycleName}
+                placeholder={suggestedCycleName}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

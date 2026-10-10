@@ -1,18 +1,20 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useWorkspaceSettings } from "@/lib/hooks/queries";
 import { useWorkspace } from "@/lib/workspace-context";
-import { invalidateWorkspace } from "@/lib/invalidate";
+import { invalidateCycles, invalidateWorkspace } from "@/lib/invalidate";
 import type { WorkspaceSettings } from "@/lib/types";
 import { DeleteWorkspace } from "@/components/settings/delete-workspace";
 import { ImageCropDialog } from "@/components/settings/image-crop-dialog";
 import { WorkspaceMark } from "@/components/workspace-mark";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SettingsContentSkeleton } from "@/components/skeletons/page-skeletons";
+import { cycleNameLabel, normalizeCycleName } from "@reline/shared";
 
 const ACCEPT = "image/jpeg,image/png,image/gif,image/webp,image/avif,image/*";
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -29,6 +31,14 @@ export function SettingsGeneral({
   const inputRef = useRef<HTMLInputElement>(null);
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [cycleName, setCycleName] = useState(
+    initialData.workspace.cycleName ?? ""
+  );
+  const [savingCycleName, setSavingCycleName] = useState(false);
+  const savedCycleName = (data ?? initialData).workspace.cycleName ?? "";
+  useEffect(() => {
+    setCycleName(savedCycleName);
+  }, [savedCycleName]);
   if (isPending && !data) return <SettingsContentSkeleton />;
   const { workspace, role } = data ?? initialData;
   const owner = role === "owner";
@@ -86,6 +96,43 @@ export function SettingsGeneral({
     }
   }
 
+  const cycleLabel = cycleName.trim() || workspace.name;
+  const cycleNameUnchanged =
+    normalizeCycleName(cycleName, workspace.name) ===
+    (workspace.cycleName ?? null);
+
+  async function saveCycleName(e: FormEvent) {
+    e.preventDefault();
+    if (!owner || savingCycleName || cycleNameUnchanged) return;
+    setSavingCycleName(true);
+    try {
+      const res = await fetch("/api/workspace/cycle-name", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-workspace-slug": current.slug,
+        },
+        body: JSON.stringify({ name: cycleName }),
+      });
+      const body = (await res.json().catch(() => null)) as {
+        cycleName?: string | null;
+        error?: string;
+      } | null;
+      if (!res.ok) throw new Error(body?.error ?? "Could not save cycle name");
+      setCycleName(body?.cycleName ?? "");
+      await Promise.all([
+        invalidateWorkspace(qc, current.id),
+        invalidateCycles(qc, current.id),
+      ]);
+      router.refresh();
+      toast.success("Cycle name updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save cycle name");
+    } finally {
+      setSavingCycleName(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -132,6 +179,37 @@ export function SettingsGeneral({
         <div className="flex items-center justify-between">
           <dt className="text-sm text-muted-foreground">Name</dt>
           <dd className="text-sm font-medium">{workspace.name}</dd>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <dt className="text-sm text-muted-foreground">Cycle name</dt>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Current and upcoming cycles that still use the default name are
+              renamed. New cycles are named “{cycleLabel} Cycle 1”.
+            </p>
+          </div>
+          {owner ? (
+            <form onSubmit={saveCycleName} className="flex items-center gap-2">
+              <Input
+                value={cycleName}
+                onChange={(e) => setCycleName(e.target.value)}
+                placeholder={workspace.name}
+                aria-label="Cycle name"
+                maxLength={80}
+                className="w-44"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="outline"
+                disabled={savingCycleName || cycleNameUnchanged}
+              >
+                {savingCycleName ? "Saving…" : "Save"}
+              </Button>
+            </form>
+          ) : (
+            <dd className="text-sm font-medium">{cycleNameLabel(workspace)}</dd>
+          )}
         </div>
         <div className="flex items-center justify-between">
           <dt className="text-sm text-muted-foreground">Issue prefix</dt>

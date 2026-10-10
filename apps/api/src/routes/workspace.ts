@@ -29,6 +29,7 @@ import {
   deleteWorkspace,
   removeWorkspaceMember,
 } from "@/services/workspace";
+import { updateWorkspaceCycleName } from "@/services/cycles";
 
 export const workspaceRoutes = new Hono<WorkspaceEnv & AuthEnv>();
 
@@ -48,6 +49,13 @@ workspaceRoutes.post("/workspaces", requireUser, async (c) => {
   const { slug } = await createWorkspace(user, body);
   c.header("Set-Cookie", workspaceSlugCookie(slug));
   return c.json({ slug });
+});
+
+workspaceRoutes.post("/workspace/cycle-name", requireWorkspace, async (c) => {
+  const ctx = c.get("ctx");
+  const body = await c.req.json<{ name?: string }>();
+  const result = await updateWorkspaceCycleName(ctx, body.name ?? "");
+  return c.json(result);
 });
 
 workspaceRoutes.post("/workspace/invites", requireWorkspace, async (c) => {

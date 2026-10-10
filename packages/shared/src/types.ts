@@ -59,6 +59,7 @@ export type WorkspaceSummary = {
   slug: string;
   prefix: string;
   logo: string | null;
+  cycleName: string | null;
 };
 
 export type WorkspaceData = {
@@ -149,6 +150,7 @@ export type WorkspaceSettings = {
     name: string;
     prefix: string;
     logo: string | null;
+    cycleName: string | null;
     createdAt: string;
   };
   role: string;
@@ -162,6 +164,7 @@ export type WorkspaceListItem = {
   slug: string;
   prefix: string;
   logo: string | null;
+  cycleName: string | null;
 };
 
 export type AttachmentInput = {

@@ -102,6 +102,8 @@ export {
 
 export { RESERVED_SLUGS, WORKSPACE_SLUG_COOKIE, wsPath } from "./workspace-paths";
 
+export { cycleNameLabel, defaultCycleName, normalizeCycleName } from "./cycle-name";
+
 export {
   IMAGE_TYPES,
   MAX_ATTACHMENTS,

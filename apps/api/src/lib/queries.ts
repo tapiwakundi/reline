@@ -35,6 +35,7 @@ export async function getWorkspaceData(
     slug: string;
     prefix: string;
     logo: string | null;
+    cycleName: string | null;
   },
   meId: string
 ): Promise<
@@ -376,6 +377,7 @@ export async function getWorkspaceSettings(
     slug: string;
     prefix: string;
     logo: string | null;
+    cycleName: string | null;
     createdAt: Date;
   },
   membershipRole: string,
@@ -388,6 +390,7 @@ export async function getWorkspaceSettings(
       slug: workspace.slug,
       prefix: workspace.prefix,
       logo: workspace.logo ?? null,
+      cycleName: workspace.cycleName ?? null,
     },
     meId
   );
@@ -397,6 +400,7 @@ export async function getWorkspaceSettings(
       name: workspace.name,
       prefix: workspace.prefix,
       logo: workspace.logo ?? null,
+      cycleName: workspace.cycleName ?? null,
       createdAt: workspace.createdAt.toISOString(),
     },
     role: membershipRole,
