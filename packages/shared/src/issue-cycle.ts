@@ -1,18 +1,49 @@
 import { currentCycleId, type CycleStatusRow } from "./cycle-status";
 
+type OrderedStatus = { id: string; type: string; position?: number };
+
 /**
- * When an issue leaves Backlog into a cycle, promote it to Todo (unstarted).
- * Returns the Todo status id, or undefined if no change is needed.
+ * The column of `type` that sits furthest left on the board.
+ * Missing positions stay in input order behind any positioned column.
+ */
+export function earliestStatus<T extends OrderedStatus>(
+  statuses: readonly T[],
+  type: string
+): T | undefined {
+  let best: T | undefined;
+  for (const status of statuses) {
+    if (status.type !== type) continue;
+    if (!best) {
+      best = status;
+      continue;
+    }
+    const bestPos = best.position ?? Number.POSITIVE_INFINITY;
+    const pos = status.position ?? Number.POSITIVE_INFINITY;
+    if (pos < bestPos) best = status;
+  }
+  return best;
+}
+
+export function earliestStatusId(
+  statuses: readonly OrderedStatus[],
+  type: string
+): string | undefined {
+  return earliestStatus(statuses, type)?.id;
+}
+
+/**
+ * When an issue leaves Backlog into a cycle, promote it to the leftmost
+ * unstarted column. Returns that status id, or undefined if no change is needed.
  */
 export function todoStatusIdForCycleEntry(
-  statuses: { id: string; type: string }[],
+  statuses: OrderedStatus[],
   currentStatusId: string,
   cycleId: string | null | undefined
 ): string | undefined {
   if (!cycleId) return undefined;
   const current = statuses.find((s) => s.id === currentStatusId);
   if (current?.type !== "backlog") return undefined;
-  return statuses.find((s) => s.type === "unstarted")?.id;
+  return earliestStatusId(statuses, "unstarted");
 }
 
 /**

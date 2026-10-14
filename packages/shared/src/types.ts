@@ -11,12 +11,24 @@ export type WorkspaceMember = Member & {
   role: WorkspaceRole;
 };
 
+export type StatusType =
+  | "backlog"
+  | "unstarted"
+  | "started"
+  | "done"
+  | "canceled";
+
 export type StatusRow = {
   id: string;
   name: string;
-  type: "backlog" | "unstarted" | "started" | "done" | "canceled";
+  type: StatusType;
   color: string;
   position: number;
+};
+
+/** A board column plus how many issues currently sit in it. */
+export type WorkspaceStatus = StatusRow & {
+  issueCount: number;
 };
 
 export type IssueType = "story" | "task" | "bug";
@@ -156,6 +168,8 @@ export type WorkspaceSettings = {
   role: string;
   members: WorkspaceMember[];
   labels: LabelRow[];
+  /** Shared board columns, in the order everyone sees. */
+  statuses: WorkspaceStatus[];
 };
 
 export type WorkspaceListItem = {

@@ -260,7 +260,9 @@ export function IssuesView({
                     }}
                   />
                   <StatusIcon status={status} />
-                  <span className="text-[13px] font-medium">{status.name}</span>
+                  <span className="min-w-0 truncate text-[13px] font-medium" title={status.name}>
+                    {status.name}
+                  </span>
                   <span className="text-xs text-muted-foreground">
                     {items.length}
                   </span>

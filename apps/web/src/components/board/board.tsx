@@ -419,7 +419,9 @@ function Column({
     <div className="group/col flex h-full w-[300px] shrink-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 px-1.5">
         {column.icon}
-        <span className="text-[13px] font-medium">{column.title}</span>
+        <span className="min-w-0 truncate text-[13px] font-medium" title={column.title}>
+          {column.title}
+        </span>
         <span className="text-xs text-muted-foreground">{issues.length}</span>
         <Button
           variant="ghost"

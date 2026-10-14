@@ -45,6 +45,18 @@ export function invalidateAfterCycleChange(
   ]);
 }
 
+/** After shared board columns are added, edited, reordered, or removed. */
+export function invalidateAfterColumnChange(
+  qc: QueryClient,
+  workspaceId: string
+) {
+  return Promise.all([
+    invalidateWorkspace(qc, workspaceId),
+    invalidateIssues(qc, workspaceId),
+    invalidateCycles(qc, workspaceId),
+  ]);
+}
+
 /** After label CRUD. */
 export function invalidateAfterLabelChange(
   qc: QueryClient,

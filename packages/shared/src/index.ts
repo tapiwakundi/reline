@@ -22,6 +22,8 @@ export type {
   WorkspaceRole,
   SavedAttachment,
   StatusRow,
+  StatusType,
+  WorkspaceStatus,
   WorkspaceBootstrap,
   WorkspaceData,
   WorkspaceListItem,
@@ -82,8 +84,25 @@ export {
   cycleIdAfterStatusChange,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
+  earliestStatus,
+  earliestStatusId,
   todoStatusIdForCycleEntry,
 } from "./issue-cycle";
+
+export {
+  STATUS_NAME_MAX,
+  STATUS_TYPES,
+  defaultStatusColor,
+  isCompletedStatusType,
+  isStatusColor,
+  isStatusType,
+  nextStatusPosition,
+  normalizeStatusColor,
+  normalizeStatusName,
+  parseStatusName,
+  statusOrderUpdate,
+  statusTypeLabel,
+} from "./statuses";
 
 export { mentionSpans, mentionsAdded, resolveMentions, splitMentions } from "./mentions";
 
