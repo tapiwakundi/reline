@@ -391,6 +391,8 @@ export const slackInstallations = pgTable(
     teamName: text("team_name").notNull(),
     botUserId: text("bot_user_id").notNull(),
     botTokenEncrypted: text("bot_token_encrypted").notNull(),
+    /** Comma-separated bot scopes from OAuth. Null on installs from before link previews. */
+    botScopes: text("bot_scopes"),
     installedBy: text("installed_by").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -401,7 +403,10 @@ export const slackInstallations = pgTable(
       .$defaultFn(() => new Date())
       .notNull(),
   },
-  (t) => [uniqueIndex("slack_installations_ws_idx").on(t.workspaceId)]
+  (t) => [
+    uniqueIndex("slack_installations_ws_idx").on(t.workspaceId),
+    index("slack_installations_team_idx").on(t.teamId),
+  ]
 );
 
 export const slackUserLinks = pgTable(

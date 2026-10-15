@@ -35,6 +35,7 @@ import {
 import { readSlackOAuthState, signSlackOAuthState } from "@/lib/slack/oauth";
 import { deleteSlackMessageWithTokens } from "@/lib/slack/delete-message";
 import { shouldSyncSlackWrite, type SlackWriteKind } from "@/lib/slack/policy";
+import { installationCanUnfurl, SLACK_BOT_SCOPES } from "@/lib/slack/scopes";
 
 export type SlackSettingsStatus = {
   configured: boolean;
@@ -44,11 +45,13 @@ export type SlackSettingsStatus = {
   /** This member granted Reline permission to post Slack messages as them. */
   postsAsUser: boolean;
   canInstall: boolean;
+  /** This install can replace Slack's login-page preview with ticket details. */
+  linkPreviews: boolean;
 };
 
 export function getSlackSettingsStatus(
   ctx: WorkspaceContext,
-  installation: { teamName: string } | null,
+  installation: { teamName: string; botScopes: string | null } | null,
   linked: boolean,
   postsAsUser: boolean
 ): SlackSettingsStatus {
@@ -59,6 +62,7 @@ export function getSlackSettingsStatus(
     linked,
     postsAsUser,
     canInstall: ctx.membership.role === "owner",
+    linkPreviews: Boolean(installation && installationCanUnfurl(installation.botScopes)),
   };
 }
 
@@ -68,7 +72,7 @@ export async function loadSlackStatus(
   const [installation, link] = await Promise.all([
     db.query.slackInstallations.findFirst({
       where: eq(slackInstallations.workspaceId, ctx.workspace.id),
-      columns: { teamName: true },
+      columns: { teamName: true, botScopes: true },
     }),
     db.query.slackUserLinks.findFirst({
       where: and(
@@ -103,9 +107,7 @@ export function slackAuthorizeUrl(kind: "install" | "user", state: string): stri
   const st = encodeURIComponent(state);
   const client = encodeURIComponent(slackClientId());
   if (kind === "install") {
-    const scopes = encodeURIComponent(
-      "groups:write,groups:read,groups:history,chat:write,users:read,users:read.email"
-    );
+    const scopes = encodeURIComponent(SLACK_BOT_SCOPES.join(","));
     return `https://slack.com/oauth/v2/authorize?client_id=${client}&scope=${scopes}&redirect_uri=${redirect}&state=${st}`;
   }
   const userScope = encodeURIComponent("chat:write");
@@ -198,6 +200,7 @@ export async function completeSlackInstall(opts: {
     teamName: granted.teamName,
     botUserId: granted.botUserId,
     botTokenEncrypted: encryptSecret(granted.accessToken),
+    botScopes: granted.scope || SLACK_BOT_SCOPES.join(","),
     installedBy: parsed.userId,
     updatedAt: now,
   };
@@ -212,6 +215,7 @@ export async function completeSlackInstall(opts: {
         teamName: values.teamName,
         botUserId: values.botUserId,
         botTokenEncrypted: values.botTokenEncrypted,
+        botScopes: values.botScopes,
         installedBy: values.installedBy,
         updatedAt: now,
       },

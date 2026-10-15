@@ -14,6 +14,7 @@ function client(deleteMessage: SlackClient["deleteMessage"]): SlackClient {
     archiveChannel: async () => undefined,
     unarchiveChannel: async () => undefined,
     deleteMessage,
+    unfurl: async () => undefined,
   };
 }
 

@@ -35,6 +35,16 @@ export type SlackClient = {
   archiveChannel(token: string, channelId: string): Promise<void>;
   unarchiveChannel(token: string, channelId: string): Promise<void>;
   deleteMessage(token: string, channelId: string, ts: string): Promise<void>;
+  unfurl(
+    token: string,
+    opts: {
+      channel?: string;
+      ts?: string;
+      unfurlId?: string;
+      source?: string;
+      unfurls: Record<string, unknown>;
+    }
+  ): Promise<void>;
 };
 
 type SlackResponse = {
@@ -181,6 +191,19 @@ export const liveSlackClient: SlackClient = {
   async deleteMessage(token, channelId, ts) {
     await slackMethod(token, "chat.delete", { channel: channelId, ts });
   },
+
+  async unfurl(token, opts) {
+    const body: Record<string, unknown> = { unfurls: opts.unfurls };
+    if (opts.channel && opts.ts) {
+      body.channel = opts.channel;
+      body.ts = opts.ts;
+    }
+    if (opts.unfurlId && opts.source) {
+      body.unfurl_id = opts.unfurlId;
+      body.source = opts.source;
+    }
+    await slackMethod(token, "chat.unfurl", body);
+  },
 };
 
 export type SlackOAuthInstall = {
@@ -189,6 +212,8 @@ export type SlackOAuthInstall = {
   teamId: string;
   teamName: string;
   authedUserId: string | null;
+  /** Comma-separated bot scopes Slack granted, or empty when omitted. */
+  scope: string;
 };
 
 export async function exchangeSlackInstallCode(opts: {
@@ -213,6 +238,7 @@ export async function exchangeSlackInstallCode(opts: {
     teamId: team.id,
     teamName: team.name ?? team.id,
     authedUserId: authed?.id ?? null,
+    scope: typeof data.scope === "string" ? data.scope : "",
   };
 }
 
