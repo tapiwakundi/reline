@@ -3,18 +3,19 @@ import {
   handleMcpMessage,
   type RpcResponse,
 } from "@/lib/mcp/protocol";
-import type { McpToolResult } from "@/lib/mcp/types";
+import type { McpScope, McpToolResult } from "@/lib/mcp/types";
 
 const MAX_BODY_BYTES = 1_000_000;
 
 export type McpHttpDeps = {
   authenticate: (
     authorization: string | undefined
-  ) => Promise<{ id: string } | null>;
+  ) => Promise<{ id: string; scope: McpScope } | null>;
   callTool: (
     userId: string,
     name: string,
-    args: unknown
+    args: unknown,
+    scope: McpScope
   ) => Promise<McpToolResult>;
 };
 
@@ -119,7 +120,8 @@ export async function handleMcpHttpRequest(
   const responses: RpcResponse[] = [];
   for (const message of messages) {
     const response = await handleMcpMessage(message, {
-      callTool: (name, args) => deps.callTool(actor.id, name, args),
+      scope: actor.scope,
+      callTool: (name, args) => deps.callTool(actor.id, name, args, actor.scope),
     });
     if (response) responses.push(response);
   }

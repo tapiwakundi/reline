@@ -1,0 +1,89 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import {
+  matchAssignee,
+  matchByName,
+  matchCycle,
+  matchLabels,
+  parseIssueWriteArgs,
+  parsePriority,
+} from "./issue-fields";
+
+describe("issue write fields", () => {
+  it("requires a title to create and a change to update", () => {
+    const created = parseIssueWriteArgs({ description: "## Hi\n- one" }, "create");
+    assert.equal(created.ok, false);
+
+    const updated = parseIssueWriteArgs({ identifier: "REL-42" }, "update");
+    assert.equal(updated.ok, false);
+
+    const write = parseIssueWriteArgs(
+      {
+        workspace: "acme",
+        title: "  Ship login  ",
+        description: "* check redirect\n* check cookie",
+        priority: "High",
+        type: "Bug",
+        assignee: "me",
+        labels: ["Auth", ""],
+        cycle: "none",
+      },
+      "create"
+    );
+    assert.equal(write.ok, true);
+    if (!write.ok) return;
+    assert.equal(write.value.title, "Ship login");
+    assert.equal(write.value.description, "- check redirect\n- check cookie");
+    assert.equal(write.value.priority, 2);
+    assert.equal(write.value.type, "bug");
+    assert.deepEqual(write.value.assignee, { kind: "me" });
+    assert.deepEqual(write.value.labels, ["Auth"]);
+    assert.deepEqual(write.value.cycle, { kind: "clear" });
+    assert.equal(write.value.workspace, "acme");
+  });
+
+  it("parses priority labels and numbers", () => {
+    assert.deepEqual(parsePriority("urgent"), { ok: true, value: 1 });
+    assert.deepEqual(parsePriority(4), { ok: true, value: 4 });
+    assert.equal(parsePriority("critical").ok, false);
+  });
+
+  it("matches workspace names, members, labels, and cycles", () => {
+    const statuses = [
+      { id: "s1", name: "In Progress" },
+      { id: "s2", name: "Todo" },
+    ];
+    assert.equal(matchByName(statuses, "in progress", "status").ok, true);
+
+    const members = [
+      { id: "u1", name: "Ada Lovelace", email: "ada@example.com" },
+      { id: "u2", name: "Grace Hopper", email: "grace@example.com" },
+    ];
+    assert.deepEqual(matchAssignee(members, { kind: "me" }, "u2"), { ok: true, value: "u2" });
+    assert.deepEqual(matchAssignee(members, { kind: "query", query: "ADA@example.com" }, "u2"), {
+      ok: true,
+      value: "u1",
+    });
+    assert.deepEqual(matchAssignee(members, { kind: "clear" }, "u2"), { ok: true, value: null });
+
+    const labels = matchLabels(
+      [
+        { id: "l1", name: "Auth" },
+        { id: "l2", name: "Bug" },
+      ],
+      ["bug", "Auth", "bug"]
+    );
+    assert.deepEqual(labels, { ok: true, value: ["l2", "l1"] });
+
+    const cycles = [
+      { id: "c1", name: "Sprint 3", number: 3 },
+      { id: "c2", name: "Sprint 4", number: 4 },
+    ];
+    assert.deepEqual(matchCycle(cycles, { kind: "query", query: "4" }), { ok: true, value: "c2" });
+    assert.deepEqual(matchCycle(cycles, { kind: "query", query: "sprint 3" }), {
+      ok: true,
+      value: "c1",
+    });
+    assert.equal(matchCycle(cycles, { kind: "query", query: "Sprint 9" }).ok, false);
+  });
+});

@@ -325,9 +325,10 @@ export type NotificationType =
   | "mentioned";
 
 /**
- * Personal credentials for the read-only MCP server.
- * `scope` is always "read" — these tokens cannot create or change issues.
- * Only a hash of the secret is stored.
+ * Personal credentials for the MCP server.
+ * `read` can only look up issues. `write` can also create and edit them.
+ * Tokens minted before write access stay `read` until they are revoked
+ * and created again. Only a hash of the secret is stored.
  */
 export const mcpTokens = pgTable(
   "mcp_tokens",
@@ -339,7 +340,7 @@ export const mcpTokens = pgTable(
     name: text("name").notNull(),
     tokenHash: text("token_hash").notNull(),
     tokenPrefix: text("token_prefix").notNull(),
-    scope: text("scope").notNull().default("read"),
+    scope: text("scope").notNull().default("write"),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),

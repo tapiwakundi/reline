@@ -26,31 +26,45 @@ export type LoadSuccess<T> = { ok: true; value: T };
 export type LoadResult<T> = LoadSuccess<T> | LoadFailure;
 
 type WorkspaceRow = typeof workspaces.$inferSelect;
+type MembershipRow = typeof memberships.$inferSelect;
+type MembershipWithWorkspace = MembershipRow & { workspace: WorkspaceRow };
+
+export type LoadedIssueRecord = {
+  issueId: string;
+  view: McpIssue;
+  workspace: WorkspaceRow;
+  membership: MembershipRow;
+};
 
 export async function loadIssueForUser(
   userId: string,
   ref: IssueRef
 ): Promise<LoadResult<McpIssue>> {
+  const loaded = await loadIssueRecordForUser(userId, ref);
+  if (!loaded.ok) return loaded;
+  return { ok: true, value: loaded.value.view };
+}
+
+export async function loadIssueRecordForUser(
+  userId: string,
+  ref: IssueRef
+): Promise<LoadResult<LoadedIssueRecord>> {
   const key = splitIssueKey(ref.identifier);
   if (!key) {
     return { ok: false, error: "That is not a Reline issue key. Expected something like REL-42." };
   }
 
-  const membershipRows = await db.query.memberships.findMany({
-    where: eq(memberships.userId, userId),
-    with: { workspace: true },
-  });
-  const accessible = membershipRows.map((row) => row.workspace);
+  const membershipRows = await listMemberships(userId);
 
-  let workspace: WorkspaceRow | undefined;
+  let membership: MembershipWithWorkspace | undefined;
   if (ref.slug) {
-    workspace = accessible.find((item) => slugsMatch(item.slug, ref.slug!));
-    if (!workspace || !prefixesMatch(workspace.prefix, key.prefix)) {
+    membership = membershipRows.find((row) => slugsMatch(row.workspace.slug, ref.slug!));
+    if (!membership || !prefixesMatch(membership.workspace.prefix, key.prefix)) {
       return { ok: false, error: "No issue was found for that link." };
     }
   } else {
-    const matches = accessible.filter((item) =>
-      prefixesMatch(item.prefix, key.prefix)
+    const matches = membershipRows.filter((row) =>
+      prefixesMatch(row.workspace.prefix, key.prefix)
     );
     if (matches.length === 0) {
       return {
@@ -60,19 +74,21 @@ export async function loadIssueForUser(
     }
     if (matches.length > 1) {
       const list = matches
-        .map((item) => `${item.name} (${item.slug})`)
+        .map((row) => `${row.workspace.name} (${row.workspace.slug})`)
         .join(", ");
       return {
         ok: false,
         error: `${key.prefix}-${key.number} matches more than one workspace: ${list}. Paste the full issue URL or pass the workspace slug.`,
       };
     }
-    workspace = matches[0];
+    membership = matches[0];
   }
 
-  if (!workspace) {
+  if (!membership) {
     return { ok: false, error: "No issue was found for that link." };
   }
+
+  const workspace = membership.workspace;
 
   const issue = await db.query.issues.findFirst({
     where: and(
@@ -161,7 +177,75 @@ export async function loadIssueForUser(
       })
     ),
   };
-  return { ok: true, value: view };
+  return {
+    ok: true,
+    value: {
+      issueId: issue.id,
+      view,
+      workspace,
+      membership: membershipOnly(membership),
+    },
+  };
+}
+
+/** Workspace to create in. A slug is required when the user has more than one. */
+export async function membershipForUser(
+  userId: string,
+  slug?: string
+): Promise<LoadResult<{ workspace: WorkspaceRow; membership: MembershipRow }>> {
+  const rows = await listMemberships(userId);
+  if (!rows.length) {
+    return { ok: false, error: "You are not a member of a workspace." };
+  }
+  if (!slug) {
+    if (rows.length === 1) {
+      const only = rows[0]!;
+      return {
+        ok: true,
+        value: { workspace: only.workspace, membership: membershipOnly(only) },
+      };
+    }
+    return {
+      ok: false,
+      error: `You belong to more than one workspace: ${formatWorkspaces(rows)}. Pass the workspace slug.`,
+    };
+  }
+  const match = rows.find((row) => slugsMatch(row.workspace.slug, slug));
+  if (!match) {
+    return {
+      ok: false,
+      error: `No workspace "${slug}" was found. You can access: ${formatWorkspaces(rows)}.`,
+    };
+  }
+  return {
+    ok: true,
+    value: { workspace: match.workspace, membership: membershipOnly(match) },
+  };
+}
+
+async function listMemberships(userId: string): Promise<MembershipWithWorkspace[]> {
+  return db.query.memberships.findMany({
+    where: eq(memberships.userId, userId),
+    with: { workspace: true },
+  });
+}
+
+function membershipOnly(row: MembershipWithWorkspace): MembershipRow {
+  return {
+    id: row.id,
+    workspaceId: row.workspaceId,
+    userId: row.userId,
+    role: row.role,
+    boardDisplay: row.boardDisplay,
+    createdAt: row.createdAt,
+  };
+}
+
+function formatWorkspaces(rows: MembershipWithWorkspace[]): string {
+  return rows
+    .map((row) => `${row.workspace.name} (${row.workspace.slug})`)
+    .sort((a, b) => a.localeCompare(b))
+    .join(", ");
 }
 
 export async function loadAttachmentForUser(
