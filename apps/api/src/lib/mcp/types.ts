@@ -53,10 +53,20 @@ export type McpToolResult = {
 };
 
 export const MCP_SERVER_NAME = "reline";
-export const MCP_SERVER_VERSION = "0.1.0";
+export const MCP_SERVER_VERSION = "0.2.0";
 
-export const MCP_INSTRUCTIONS =
-  "Reline gives read-only access to issues. When the user shares a ticket link or an issue key (for example https://example.com/acme/issue/REL-42 or REL-42), call get_issue before answering. The result includes the title, description, status, comments, and attachments. Image attachments are embedded so you can see them. This server cannot create, edit, or delete issues.";
+export const MCP_READ_SCOPE = "read";
+export const MCP_WRITE_SCOPE = "write";
+export type McpScope = typeof MCP_READ_SCOPE | typeof MCP_WRITE_SCOPE;
+
+export const MCP_READ_ONLY_TOKEN_MESSAGE =
+  "This token is read-only. Revoke it and create a new token in Settings → Cursor to create and edit issues.";
+
+export const MCP_READ_INSTRUCTIONS =
+  "Reline gives this token read-only access to issues. When the user shares a ticket link or an issue key (for example https://example.com/acme/issue/REL-42 or REL-42), call get_issue before answering. The result includes the title, description, status, comments, and attachments. Image attachments are embedded so you can see them. This token cannot create or edit issues. A token created in Settings → Cursor can create and edit; existing read-only tokens stay read-only until they are revoked and created again.";
+
+export const MCP_WRITE_INSTRUCTIONS =
+  "Reline can read, create, and edit issues in workspaces this user belongs to. When the user shares a ticket link or an issue key (for example https://example.com/acme/issue/REL-42 or REL-42), call get_issue before answering. Call create_issue to create a ticket and update_issue to change one. Descriptions are markdown and render with the issue editor: # / ## / ### headings, - bullets, 1. numbered lists, - [ ] and - [x] checkboxes, > quotes, fenced code blocks, --- dividers, and inline **bold**, *italic*, ~~strikethrough~~, `code`, and links. Mention teammates as @Name. Put each block on its own line. This server cannot delete issues.";
 
 /** Images included inline with an issue. Larger files stay as URLs. */
 export const MAX_ISSUE_IMAGE_BYTES = 4 * 1024 * 1024;

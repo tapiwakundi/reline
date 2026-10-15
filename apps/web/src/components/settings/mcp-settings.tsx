@@ -11,7 +11,7 @@ type McpToken = {
   id: string;
   name: string;
   tokenPrefix: string;
-  scope: "read";
+  scope: "read" | "write";
   createdAt: string;
   lastUsedAt: string | null;
 };
@@ -87,7 +87,7 @@ export function McpSettings() {
       );
       setCreated(data.token);
       setTokens((current) => [data.token, ...(current ?? [])]);
-      toast.success("Read-only token created");
+      toast.success("Token created");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create token");
     } finally {
@@ -97,7 +97,7 @@ export function McpSettings() {
 
   async function revoke(token: McpToken) {
     if (revoking) return;
-    if (!window.confirm(`Revoke “${token.name}”? Cursor will stop being able to read issues with this token.`)) {
+    if (!window.confirm(`Revoke “${token.name}”? Cursor will no longer be able to use this token.`)) {
       return;
     }
     setRevoking(token.id);
@@ -127,10 +127,15 @@ export function McpSettings() {
       <div>
         <h2 className="text-base font-semibold">Cursor</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Connect Cursor with read-only access. Paste a ticket link in chat and
-          Cursor can read the issue, its description, and its attachments.
-          Tokens cannot create or change anything, and they only see workspaces
-          you belong to.
+          Connect Cursor to issues in workspaces you belong to. It can read a
+          ticket, create one, and edit the title, description, status, and
+          other fields. Descriptions use the same formatting as the issue
+          editor: headings, lists, checkboxes, quotes, and code.
+        </p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          New tokens can create and edit issues. Tokens already labeled
+          Read-only stay that way. Revoke one and create a new token to create
+          and edit tickets.
         </p>
       </div>
 
@@ -162,7 +167,7 @@ export function McpSettings() {
         className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
       >
         <div>
-          <div className="text-sm font-medium">Read-only token</div>
+          <div className="text-sm font-medium">New token</div>
           <p className="mt-1 text-sm text-muted-foreground">
             The secret is shown once. Put it in the Authorization header as{" "}
             <span className="font-mono text-xs">Bearer rel_…</span>.
@@ -191,8 +196,9 @@ export function McpSettings() {
           <div>
             <div className="text-sm font-medium">Token created</div>
             <p className="mt-1 text-sm text-muted-foreground">
-              Copy this into <span className="font-mono text-xs">~/.cursor/mcp.json</span>{" "}
-              or Cursor’s MCP settings. It will not be shown again.
+              This token can read, create, and edit issues. Copy it into{" "}
+              <span className="font-mono text-xs">~/.cursor/mcp.json</span> or
+              Cursor’s MCP settings. It will not be shown again.
             </p>
           </div>
           <code className="overflow-x-auto rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px]">
@@ -235,7 +241,7 @@ export function McpSettings() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{token.name}</span>
                     <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                      Read-only
+                      {token.scope === "write" ? "Create & edit" : "Read-only"}
                     </span>
                   </div>
                   <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
