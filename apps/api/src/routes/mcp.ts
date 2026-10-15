@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { handleMcpHttpRequest } from "@/lib/mcp/http";
 import { authenticateMcpToken, bearerToken } from "@/lib/mcp/tokens";
-import { callReadOnlyTool } from "@/lib/mcp/tools";
+import { callMcpTool } from "@/lib/mcp/tools";
 
 export const mcpRoutes = new Hono();
 
@@ -10,9 +10,9 @@ mcpRoutes.all("/mcp", (c) =>
     authenticate: async (authorization) => {
       const secret = bearerToken(authorization);
       if (!secret) return null;
-      const actor = await authenticateMcpToken(secret);
-      return actor ? { id: actor.id } : null;
+      return authenticateMcpToken(secret);
     },
-    callTool: (userId, name, args) => callReadOnlyTool(userId, name, args),
+    callTool: (userId, name, args, scope) =>
+      callMcpTool({ id: userId, scope }, name, args),
   })
 );

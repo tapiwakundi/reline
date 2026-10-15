@@ -105,6 +105,24 @@ export { RESERVED_SLUGS, WORKSPACE_SLUG_COOKIE, wsPath } from "./workspace-paths
 export { cycleNameLabel, defaultCycleName, normalizeCycleName } from "./cycle-name";
 
 export {
+  ISSUE_DESCRIPTION_GUIDE,
+  blocksContentEqual,
+  createBlock,
+  createBlockId,
+  enumerateBlocks,
+  isPlainDocument,
+  normalizeIssueMarkdown,
+  parseBlocks,
+  parseInline,
+  serializeBlocks,
+  toggleTodo,
+  valueMatchesEditor,
+  type Block,
+  type BlockType,
+  type InlineNode,
+} from "./issue-markdown";
+
+export {
   IMAGE_TYPES,
   MAX_ATTACHMENTS,
   MAX_AVATAR_BYTES,

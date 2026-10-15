@@ -85,6 +85,13 @@
       "when": 1791650000000,
       "tag": "0011_cycle_name",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792022400000,
+      "tag": "0012_mcp_token_write_scope",
+      "breakpoints": true
     }
   ]
 }

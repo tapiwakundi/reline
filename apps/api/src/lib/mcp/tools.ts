@@ -12,8 +12,12 @@ import {
   MAX_ATTACHMENT_IMAGE_BYTES,
   MAX_EMBEDDED_IMAGES,
   MAX_ISSUE_IMAGE_BYTES,
+  MCP_READ_ONLY_TOKEN_MESSAGE,
+  MCP_WRITE_SCOPE,
+  type McpScope,
   type McpToolResult,
 } from "@/lib/mcp/types";
+import { createIssueTool, updateIssueTool } from "@/lib/mcp/write-issue";
 
 export async function getIssueTool(
   userId: string,
@@ -83,14 +87,19 @@ export async function getAttachmentTool(
   }
 }
 
-export async function callReadOnlyTool(
-  userId: string,
+export async function callMcpTool(
+  actor: { id: string; scope: McpScope },
   name: string,
   args: unknown
 ): Promise<McpToolResult> {
-  if (name === "get_issue") return getIssueTool(userId, args);
-  if (name === "get_attachment") return getAttachmentTool(userId, args);
-  return toolError("Unknown tool. This server only provides read-only issue lookup.");
+  if (name === "get_issue") return getIssueTool(actor.id, args);
+  if (name === "get_attachment") return getAttachmentTool(actor.id, args);
+  if (name === "create_issue" || name === "update_issue") {
+    if (actor.scope !== MCP_WRITE_SCOPE) return toolError(MCP_READ_ONLY_TOKEN_MESSAGE);
+    if (name === "create_issue") return createIssueTool(actor.id, args);
+    return updateIssueTool(actor.id, args);
+  }
+  return toolError("Unknown tool.");
 }
 
 function readString(args: unknown, key: string): string | undefined {
