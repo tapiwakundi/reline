@@ -19,7 +19,22 @@ export type StatusRow = {
   position: number;
 };
 
-export type IssueType = "story" | "task" | "bug";
+export type IssueType = "epic" | "story" | "task" | "bug";
+
+export type EpicRef = {
+  id: string;
+  identifier: string;
+  title: string;
+};
+
+export type EpicChild = {
+  id: string;
+  identifier: string;
+  title: string;
+  type: IssueType;
+  statusId: string;
+  priority: number;
+};
 
 export type LabelRow = {
   id: string;
@@ -46,6 +61,8 @@ export type IssueListItem = {
   statusId: string;
   assigneeId: string | null;
   cycleId: string | null;
+  epicId: string | null;
+  epic: EpicRef | null;
   estimate: number | null;
   boardOrder: number;
   createdAt: string;
@@ -89,6 +106,8 @@ export type DetailIssue = {
   assigneeId: string | null;
   creator: Member | null;
   cycleId: string | null;
+  epicId: string | null;
+  epic: EpicRef | null;
   labelIds: string[];
   createdAt: string;
   attachments: SavedAttachment[];
@@ -115,6 +134,8 @@ export type IssueDetailData = {
   issue: DetailIssue;
   comments: CommentItem[];
   activities: ActivityItem[];
+  /** Issues that belong to this epic. Empty when the issue is not an epic. */
+  children: EpicChild[];
 };
 
 export type CycleListItem = {
@@ -179,6 +200,7 @@ export type IssueUpdatePatch = {
   type?: IssueType;
   assigneeId?: string | null;
   cycleId?: string | null;
+  epicId?: string | null;
   estimate?: number | null;
   labelIds?: string[];
 };

@@ -7,6 +7,8 @@ export type {
   CycleListItem,
   CycleRow,
   DetailIssue,
+  EpicChild,
+  EpicRef,
   ImportReport,
   InboxItem,
   InvitePreview,
@@ -35,6 +37,8 @@ export {
   LABEL_COLORS,
   PRIORITIES,
 } from "./defaults";
+
+export { epicLinksToApply, epicProgress, nextEpicId } from "./epics";
 
 export {
   BOARD_DISPLAY_COOKIE,

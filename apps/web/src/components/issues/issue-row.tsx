@@ -115,6 +115,11 @@ export function IssueRow({
         >
           {issue.title}
         </Link>
+        {issue.epic && (
+          <span className="hidden max-w-40 shrink-0 truncate text-[11px] text-muted-foreground lg:block">
+            {issue.epic.identifier}
+          </span>
+        )}
         <div className="hidden items-center gap-1 md:flex">
           {issueLabels.slice(0, 3).map((l) => (
             <span

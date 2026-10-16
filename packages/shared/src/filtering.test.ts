@@ -38,11 +38,26 @@ function issue(
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     labelIds: [],
+    epicId: null,
+    epic: null,
     ...partial,
   };
 }
 
 const sprintFilter: IssueFilters = { ...EMPTY_FILTERS, cycleIds: ["sprint-2"] };
+
+test("an epic filter keeps issues in that epic", () => {
+  const rows = [
+    issue({ id: "child", statusId: "todo", cycleId: null, epicId: "epic-1" }),
+    issue({ id: "other", statusId: "todo", cycleId: null, epicId: "epic-2" }),
+    issue({ id: "loose", statusId: "todo", cycleId: null, epicId: null }),
+  ];
+  const visible = applyFilters(rows, { ...EMPTY_FILTERS, epicIds: ["epic-1", "none"] });
+  assert.deepEqual(
+    visible.map((i) => i.id),
+    ["child", "loose"]
+  );
+});
 
 test("a cycle filter hides backlog issues that have no cycle", () => {
   const rows = [

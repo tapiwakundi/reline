@@ -18,6 +18,9 @@ import { attachToIssue, type AttachmentInput } from "@/lib/api/issues";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
 import { useIssueDetail } from "@/lib/hooks/queries";
+import { useShortcuts } from "@/components/global-shortcuts";
+import { epicProgress } from "@reline/shared";
+import { TypeIcon } from "@/components/issue-type-icon";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   optimisticAddComment,
@@ -36,6 +39,7 @@ import type {
 import {
   AssigneePicker,
   CyclePicker,
+  EpicPicker,
   LabelPicker,
   PriorityPicker,
   StatusPicker,
@@ -94,7 +98,10 @@ export function IssueDetail({
   const { data, isPending } = useIssueDetail(key, initialData);
   const detail = data ?? initialData;
   const { issue, comments, activities } = detail;
+  const children = detail.children ?? [];
   const { workspace, members, labels, statuses, cycles, me } = useWorkspace();
+  const { openCreateIssue } = useShortcuts();
+  const progress = epicProgress(children, statuses);
   const router = useRouter();
   const searchParams = useSearchParams();
   const boardTrailFilters = searchParams.has("cycle")
@@ -328,6 +335,16 @@ export function IssueDetail({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="flex w-full max-w-5xl items-start md:pl-24">
           <div className="w-full min-w-0 max-w-3xl flex-1 px-4 py-6 md:px-8">
+          {issue.epic && (
+            <Link
+              href={wsPath(workspace.slug, `/issue/${issue.epic.identifier}`)}
+              className="mb-2 inline-flex max-w-full items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <TypeIcon type="epic" />
+              <span className="shrink-0">{issue.epic.identifier}</span>
+              <span className="truncate">{issue.epic.title}</span>
+            </Link>
+          )}
           <textarea
             ref={titleRef}
             value={title}
@@ -404,13 +421,91 @@ export function IssueDetail({
 
           <div className="mt-4 flex flex-wrap gap-1.5 lg:hidden">
             <StatusPicker value={issue.statusId} onChange={(statusId) => patch({ statusId })} />
-            <TypePicker value={issue.type} onChange={(type) => patch({ type })} />
+            <TypePicker
+              value={issue.type}
+              onChange={(type) =>
+                patch(type === "epic" ? { type, epicId: null } : { type })
+              }
+            />
             <PriorityPicker value={issue.priority} onChange={(priority) => patch({ priority })} />
             <AssigneePicker value={issue.assigneeId} onChange={(assigneeId) => patch({ assigneeId })} />
             <ReporterRow creator={issue.creator} />
             <LabelPicker value={issue.labelIds} onChange={(labelIds) => patch({ labelIds })} />
+            {issue.type !== "epic" && (
+              <EpicPicker
+                value={issue.epicId}
+                excludeId={issue.id}
+                onChange={(epicId) => patch({ epicId })}
+              />
+            )}
             <CyclePicker value={issue.cycleId} onChange={(cycleId) => patch({ cycleId })} />
           </div>
+
+          {issue.type === "epic" && (
+            <section className="mt-8">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="text-sm font-medium">
+                  Issues
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {progress.done}/{progress.total} done
+                  </span>
+                </h2>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    openCreateIssue({ type: "story", epicId: issue.id })
+                  }
+                >
+                  Add issue
+                </Button>
+              </div>
+              <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-[#b59aeb]"
+                  style={{
+                    width:
+                      progress.total === 0
+                        ? "0%"
+                        : `${Math.round((progress.done / progress.total) * 100)}%`,
+                  }}
+                />
+              </div>
+              {children.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No issues in this epic yet.
+                </p>
+              ) : (
+                <ul className="flex flex-col">
+                  {children.map((child) => {
+                    const status = statuses.find((s) => s.id === child.statusId);
+                    return (
+                      <li key={child.id}>
+                        <Link
+                          href={wsPath(
+                            workspace.slug,
+                            `/issue/${child.identifier}`
+                          )}
+                          className="flex h-9 items-center gap-2 border-b border-border/60 text-sm hover:bg-foreground/5"
+                        >
+                          <TypeIcon type={child.type} />
+                          <span className="w-16 shrink-0 text-xs text-muted-foreground">
+                            {child.identifier}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">
+                            {child.title}
+                          </span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {status?.name ?? "Unknown"}
+                          </span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          )}
 
           <h2 className="mt-8 mb-4 text-sm font-medium">Activity</h2>
           <div className="flex flex-col gap-4">
@@ -497,7 +592,9 @@ export function IssueDetail({
             />
             <TypePicker
               value={issue.type}
-              onChange={(type) => patch({ type })}
+              onChange={(type) =>
+                patch(type === "epic" ? { type, epicId: null } : { type })
+              }
               className={railPickerClass}
             />
             <PriorityPicker
@@ -511,6 +608,15 @@ export function IssueDetail({
               className={railPickerClass}
             />
             <ReporterRow creator={issue.creator} className={railPickerClass} />
+            {issue.type !== "epic" && (
+              <EpicPicker
+                value={issue.epicId}
+                excludeId={issue.id}
+                onChange={(epicId) => patch({ epicId })}
+                placeholder="Add to epic"
+                className={railPickerClass}
+              />
+            )}
             <CyclePicker
               value={issue.cycleId}
               onChange={(cycleId) => patch({ cycleId })}

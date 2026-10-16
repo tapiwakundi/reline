@@ -11,6 +11,7 @@ import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   AssigneePicker,
   CyclePicker,
+  EpicPicker,
   LabelPicker,
   PriorityPicker,
   StatusPicker,
@@ -30,12 +31,16 @@ export function CreateIssueDialog({
   onOpenChange,
   defaultStatusId,
   defaultCycleId,
+  defaultType,
+  defaultEpicId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultStatusId?: string;
   /** When set (including `null` for "no cycle"), prefill the cycle picker. */
   defaultCycleId?: string | null;
+  defaultType?: IssueType;
+  defaultEpicId?: string | null;
 }) {
   const { workspace, statuses, members } = useWorkspace();
   const qc = useQueryClient();
@@ -53,6 +58,7 @@ export function CreateIssueDialog({
   const [priority, setPriority] = useState(0);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [cycleId, setCycleId] = useState<string | null>(null);
+  const [epicId, setEpicId] = useState<string | null>(null);
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const uploads = useAttachmentUploads();
   const { clear: clearUploads } = uploads;
@@ -67,16 +73,20 @@ export function CreateIssueDialog({
       todoStatusIdForCycleEntry(statuses, initialStatusId, initialCycleId) ??
         initialStatusId
     );
-    setType("story");
+    const initialType = defaultType ?? "story";
+    setType(initialType);
     setPriority(0);
     setAssigneeId(null);
     setCycleId(initialCycleId);
+    setEpicId(initialType === "epic" ? null : (defaultEpicId ?? null));
     setLabelIds([]);
     clearUploads();
   }, [
     open,
     defaultStatusId,
     defaultCycleId,
+    defaultType,
+    defaultEpicId,
     fallbackStatus,
     statuses,
     clearUploads,
@@ -102,6 +112,7 @@ export function CreateIssueDialog({
           priority,
           assigneeId,
           cycleId,
+          epicId: type === "epic" ? null : epicId,
           labelIds,
           attachments: payload,
         });
@@ -175,10 +186,19 @@ export function CreateIssueDialog({
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
           <StatusPicker value={statusId} onChange={setStatusId} />
-          <TypePicker value={type} onChange={setType} />
+          <TypePicker
+            value={type}
+            onChange={(next) => {
+              setType(next);
+              if (next === "epic") setEpicId(null);
+            }}
+          />
           <PriorityPicker value={priority} onChange={setPriority} />
           <AssigneePicker value={assigneeId} onChange={setAssigneeId} />
           <LabelPicker value={labelIds} onChange={setLabelIds} />
+          {type !== "epic" && (
+            <EpicPicker value={epicId} onChange={setEpicId} />
+          )}
           <CyclePicker
             value={cycleId}
             onChange={(next) => {

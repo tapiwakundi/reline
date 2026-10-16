@@ -11,6 +11,7 @@ import {
   CircleDashedIcon,
   InboxIcon,
   KanbanSquareIcon,
+  LayersIcon,
   ListIcon,
   LogOutIcon,
   MoreHorizontalIcon,
@@ -222,6 +223,12 @@ export function SidebarContent({
             href={wsPath(workspace.slug, "/issues")}
             icon={<ListIcon />}
             label="Issues"
+            onNavigate={onNavigate}
+          />
+          <NavItem
+            href={wsPath(workspace.slug, "/epics")}
+            icon={<LayersIcon />}
+            label="Epics"
             onNavigate={onNavigate}
           />
           <NavItem

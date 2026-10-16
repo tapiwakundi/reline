@@ -143,6 +143,7 @@ export async function loadIssueForUser(
     cycle: cycle
       ? { number: cycle.number, name: cycle.name, status: cycle.status }
       : null,
+    ...(await loadEpicContext(workspace.id, workspace.prefix, issue)),
     labels: labelRows.map((row) => row.name).sort((a, b) => a.localeCompare(b)),
     estimate: issue.estimate,
     createdAt: issue.createdAt.toISOString(),
@@ -214,6 +215,51 @@ export function publicIssueUrl(slug: string, identifier: string): string | null 
   const base = process.env.BETTER_AUTH_URL?.replace(/\/$/, "");
   if (!base) return null;
   return `${base}/${encodeURIComponent(slug)}/issue/${encodeURIComponent(identifier)}`;
+}
+
+async function loadEpicContext(
+  workspaceId: string,
+  prefix: string,
+  issue: { id: string; type: string; epicId: string | null }
+): Promise<Pick<McpIssue, "epic" | "children">> {
+  const epic = issue.epicId
+    ? await db.query.issues.findFirst({
+        where: and(
+          eq(issues.id, issue.epicId),
+          eq(issues.workspaceId, workspaceId)
+        ),
+        columns: { number: true, title: true, type: true },
+      })
+    : null;
+  const children =
+    issue.type === "epic"
+      ? await db.query.issues.findMany({
+          where: and(
+            eq(issues.epicId, issue.id),
+            eq(issues.workspaceId, workspaceId)
+          ),
+          columns: { number: true, title: true, statusId: true },
+          orderBy: asc(issues.number),
+        })
+      : [];
+  const statusRows = children.length
+    ? await db.query.statuses.findMany({
+        where: eq(statuses.workspaceId, workspaceId),
+        columns: { id: true, name: true },
+      })
+    : [];
+  const statusName = new Map(statusRows.map((row) => [row.id, row.name]));
+  return {
+    epic:
+      epic && epic.type === "epic"
+        ? { identifier: `${prefix}-${epic.number}`, title: epic.title }
+        : null,
+    children: children.map((child) => ({
+      identifier: `${prefix}-${child.number}`,
+      title: child.title,
+      statusName: statusName.get(child.statusId) ?? "Unknown",
+    })),
+  };
 }
 
 async function loadPeople(ids: string[]): Promise<Map<string, McpPerson>> {

@@ -92,6 +92,11 @@ export function BoardCardContent({
       <p className="line-clamp-3 text-[13px] font-medium leading-snug">
         {issue.title}
       </p>
+      {issue.epic && (
+        <p className="truncate text-[11px] text-muted-foreground">
+          {issue.epic.identifier} {issue.epic.title}
+        </p>
+      )}
       {showFooter && (
         <div className="flex flex-wrap items-center gap-1.5">
           {show("type") && <TypeIcon type={issue.type} />}

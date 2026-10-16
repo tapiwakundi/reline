@@ -37,6 +37,7 @@ export async function generateMetadata({
       priorities: [],
       assigneeIds: [],
       labelIds: [],
+      epicIds: [],
       cycleIds: [filter],
     },
     data.cycles

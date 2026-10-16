@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
+import { useIssuesList } from "@/lib/hooks/queries";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
@@ -477,6 +478,77 @@ export function CyclePicker({
                     <span className="text-[10px] text-primary">Active</span>
                   )}
                   {c.id === value && <CheckIcon className="ml-auto size-3.5" />}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function EpicPicker({
+  value,
+  onChange,
+  excludeId,
+  compact,
+  className,
+  placeholder = "No epic",
+}: {
+  value: string | null;
+  onChange: (id: string | null) => void;
+  excludeId?: string;
+  compact?: boolean;
+  className?: string;
+  placeholder?: string;
+}) {
+  const { data: issues = [] } = useIssuesList();
+  const [open, setOpen] = useState(false);
+  const epics = issues.filter(
+    (issue) => issue.type === "epic" && issue.id !== excludeId
+  );
+  const current = epics.find((issue) => issue.id === value) ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger className={cn(chipClass, className)} title={current?.title}>
+        <TypeIcon type="epic" />
+        {!compact && (
+          <span className="min-w-0 truncate">
+            {current ? `${current.identifier} ${current.title}` : placeholder}
+          </span>
+        )}
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Set epic…" />
+          <CommandList>
+            <CommandEmpty>No epics yet.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="no-epic"
+                onSelect={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+              >
+                No epic
+                {value === null && <CheckIcon className="ml-auto size-3.5" />}
+              </CommandItem>
+              {epics.map((epic) => (
+                <CommandItem
+                  key={epic.id}
+                  value={`${epic.identifier} ${epic.title}`}
+                  onSelect={() => {
+                    onChange(epic.id);
+                    setOpen(false);
+                  }}
+                >
+                  <TypeIcon type="epic" />
+                  <span className="text-muted-foreground">{epic.identifier}</span>
+                  <span className="min-w-0 truncate">{epic.title}</span>
+                  {epic.id === value && <CheckIcon className="ml-auto size-3.5" />}
                 </CommandItem>
               ))}
             </CommandGroup>

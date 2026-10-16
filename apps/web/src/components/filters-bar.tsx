@@ -23,6 +23,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
+import { useIssuesList } from "@/lib/hooks/queries";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
@@ -115,6 +116,8 @@ export function FiltersBar({
   toolbarEnd?: React.ReactNode;
 }) {
   const { statuses, labels, members, cycles } = useWorkspace();
+  const { data: issues = [] } = useIssuesList();
+  const epics = issues.filter((issue) => issue.type === "epic");
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [cycleQuery, setCycleQuery] = useState("");
@@ -123,6 +126,7 @@ export function FiltersBar({
   const [typeQuery, setTypeQuery] = useState("");
   const [assigneeQuery, setAssigneeQuery] = useState("");
   const [labelQuery, setLabelQuery] = useState("");
+  const [epicQuery, setEpicQuery] = useState("");
 
   const orderedCycles = useMemo(
     () =>
@@ -143,6 +147,7 @@ export function FiltersBar({
     labels.length > 0 && (!q || "label".includes(q) || "labels".includes(q));
   const showCycle =
     cycles.length > 0 && (!q || "cycle".includes(q) || "cycles".includes(q));
+  const showEpic = epics.length > 0 && (!q || "epic".includes(q) || "epics".includes(q));
 
   function setCycle(value: CycleFilter, checked: boolean) {
     onChange({
@@ -219,6 +224,19 @@ export function FiltersBar({
           onClear={() => onChange({ ...filters, labelIds: [] })}
         />
       )}
+      {filters.epicIds.length > 0 && (
+        <FilterChip
+          label="Epic"
+          value={joinLabels(
+            filters.epicIds.map((id) =>
+              id === "none"
+                ? "No epic"
+                : (epics.find((epic) => epic.id === id)?.title ?? "Unknown")
+            )
+          )}
+          onClear={() => onChange({ ...filters, epicIds: [] })}
+        />
+      )}
       {filters.cycleIds.length > 0 && !iconOnly && (
         <FilterChip
           label="Cycle"
@@ -263,6 +281,7 @@ export function FiltersBar({
           setPriorityQuery("");
           setAssigneeQuery("");
           setLabelQuery("");
+          setEpicQuery("");
         }
       }}
     >
@@ -530,6 +549,60 @@ export function FiltersBar({
             </DropdownMenuSub>
           )}
 
+          {showEpic && (
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <TypeIcon type="epic" />
+                Epic
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-64 p-0">
+                <SubmenuSearch value={epicQuery} onChange={setEpicQuery} />
+                <DropdownMenuSeparator />
+                <div className="max-h-72 overflow-y-auto p-1">
+                  <DropdownMenuCheckboxItem
+                    checked={filters.epicIds.includes("none")}
+                    onCheckedChange={() =>
+                      onChange({
+                        ...filters,
+                        epicIds: toggle(filters.epicIds, "none"),
+                      })
+                    }
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    No epic
+                  </DropdownMenuCheckboxItem>
+                  {epics
+                    .filter((epic) => {
+                      const needle = epicQuery.trim().toLowerCase();
+                      if (!needle) return true;
+                      return (
+                        epic.title.toLowerCase().includes(needle) ||
+                        epic.identifier.toLowerCase().includes(needle)
+                      );
+                    })
+                    .map((epic) => (
+                      <DropdownMenuCheckboxItem
+                        key={epic.id}
+                        checked={filters.epicIds.includes(epic.id)}
+                        onCheckedChange={() =>
+                          onChange({
+                            ...filters,
+                            epicIds: toggle(filters.epicIds, epic.id),
+                          })
+                        }
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        <span className="text-muted-foreground">
+                          {epic.identifier}
+                        </span>
+                        <span className="truncate">{epic.title}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                </div>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          )}
+
           {showCycle && (
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -584,6 +657,7 @@ export function FiltersBar({
             !showPriority &&
             !showAssignee &&
             !showLabel &&
+            !showEpic &&
             !showCycle && (
               <div className="px-2 py-3 text-center text-xs text-muted-foreground">
                 No filters match
