@@ -98,10 +98,20 @@ describe("MCP HTTP", () => {
     const text = await response.text();
     assert.match(text, /^event: message\ndata: /);
     const payload = JSON.parse(text.replace(/^event: message\ndata: /, "").trim()) as {
-      result: { instructions: string; protocolVersion: string };
+      result: {
+        instructions: string;
+        protocolVersion: string;
+        serverInfo: {
+          title: string;
+          icons: { src: string; mimeType: string }[];
+        };
+      };
     };
     assert.equal(payload.result.protocolVersion, "2025-03-26");
     assert.match(payload.result.instructions, /read-only/i);
+    assert.equal(payload.result.serverInfo.title, "Reline");
+    assert.equal(payload.result.serverInfo.icons[0]?.mimeType, "image/png");
+    assert.match(payload.result.serverInfo.icons[0]?.src ?? "", /\/icons\/icon-192\.png$/);
   });
 
   it("lists create and update tools for a write token", async () => {

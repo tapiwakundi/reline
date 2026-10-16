@@ -9,6 +9,7 @@ import {
   type McpScope,
   type McpToolResult,
 } from "@/lib/mcp/types";
+import { publicAppUrl } from "@/lib/public-url";
 
 export const SUPPORTED_PROTOCOL_VERSIONS = [
   "2024-11-05",
@@ -319,6 +320,28 @@ async function dispatch(
   }
 }
 
+export function mcpServerInfo() {
+  const origin = publicAppUrl();
+  return {
+    name: MCP_SERVER_NAME,
+    title: "Reline",
+    version: MCP_SERVER_VERSION,
+    websiteUrl: origin,
+    icons: [
+      {
+        src: `${origin}/icons/icon-192.png`,
+        mimeType: "image/png",
+        sizes: ["192x192"],
+      },
+      {
+        src: `${origin}/icons/icon-512.png`,
+        mimeType: "image/png",
+        sizes: ["512x512"],
+      },
+    ],
+  };
+}
+
 function initializeResult(params: unknown, scope: McpScope) {
   const requested = namedString(params, "protocolVersion");
   const protocolVersion =
@@ -333,10 +356,7 @@ function initializeResult(params: unknown, scope: McpScope) {
     capabilities: {
       tools: { listChanged: false },
     },
-    serverInfo: {
-      name: MCP_SERVER_NAME,
-      version: MCP_SERVER_VERSION,
-    },
+    serverInfo: mcpServerInfo(),
     instructions: instructionsFor(scope),
   };
 }
