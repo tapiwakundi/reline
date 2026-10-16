@@ -32,6 +32,8 @@ export type McpIssue = {
   statusType: string;
   priorityLabel: string;
   typeLabel: string;
+  epic: { identifier: string; title: string } | null;
+  children: { identifier: string; title: string; statusName: string }[];
   assignee: McpPerson | null;
   creator: McpPerson | null;
   cycle: { number: number; name: string; status: string } | null;

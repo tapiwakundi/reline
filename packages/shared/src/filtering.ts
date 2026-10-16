@@ -38,6 +38,7 @@ export type IssueFilters = {
   assigneeIds: (string | "none")[];
   labelIds: string[];
   cycleIds: CycleFilter[];
+  epicIds: (string | "none")[];
 };
 
 export const EMPTY_FILTERS: IssueFilters = {
@@ -47,6 +48,7 @@ export const EMPTY_FILTERS: IssueFilters = {
   assigneeIds: [],
   labelIds: [],
   cycleIds: [],
+  epicIds: [],
 };
 
 /** Sentinel in the URL meaning "no cycle filter" (show all). */
@@ -64,6 +66,7 @@ export function parseFilters(params: URLSearchParams): IssueFilters {
     cycleIds: params
       .getAll("cycle")
       .filter((v) => v !== CYCLE_FILTER_ALL) as CycleFilter[],
+    epicIds: params.getAll("epic"),
   };
 }
 
@@ -75,6 +78,7 @@ export function serializeFilters(f: IssueFilters): URLSearchParams {
   f.assigneeIds.forEach((v) => p.append("assignee", v));
   f.labelIds.forEach((v) => p.append("label", v));
   f.cycleIds.forEach((v) => p.append("cycle", v));
+  f.epicIds.forEach((v) => p.append("epic", v));
   return p;
 }
 
@@ -92,7 +96,8 @@ export function hasActiveFilters(f: IssueFilters) {
     f.priorities.length > 0 ||
     f.assigneeIds.length > 0 ||
     f.labelIds.length > 0 ||
-    f.cycleIds.length > 0
+    f.cycleIds.length > 0 ||
+    f.epicIds.length > 0
   );
 }
 
@@ -214,6 +219,10 @@ export function applyFilters(
         const key = i.cycleId ?? "none";
         if (!cycleMatch.has(key)) return false;
       }
+    }
+    if (f.epicIds.length) {
+      const key = i.epicId ?? "none";
+      if (!f.epicIds.includes(key)) return false;
     }
     return true;
   });

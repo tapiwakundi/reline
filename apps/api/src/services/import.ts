@@ -2,7 +2,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issueLabels, issues, labels, workspaces } from "@/db/schema";
 import { getWorkspaceData } from "@/lib/queries";
-import { LABEL_COLORS } from "@reline/shared";
+import { LABEL_COLORS, epicLinksToApply } from "@reline/shared";
 import {
   adfToText,
   mapJiraAssignee,
@@ -33,7 +33,31 @@ type ImportRow = {
   sprints: JiraSprint[];
   createdAt?: Date;
   updatedAt?: Date;
+  /** Jira issue key, used to attach children to an imported epic. */
+  jiraKey?: string;
+  /** Jira epic link or parent key. */
+  parentKey?: string;
 };
+
+function jiraIssueKey(value: string | undefined): string | undefined {
+  const raw = value?.trim();
+  if (!raw || !/^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(raw)) return undefined;
+  return raw;
+}
+
+function jiraParentKey(
+  issue: JiraApiIssue,
+  epicLinkFieldId: string | null
+): string | undefined {
+  if (epicLinkFieldId) {
+    const raw = issue.fields[epicLinkFieldId];
+    if (typeof raw === "string") {
+      const key = jiraIssueKey(raw);
+      if (key) return key;
+    }
+  }
+  return jiraIssueKey(issue.fields.parent?.key);
+}
 
 function emptyReport(errors: string[] = []): ImportReport {
   return {
@@ -244,6 +268,13 @@ async function runImport(
     report
   );
 
+  const linked: {
+    id: string;
+    type: (typeof issues.$inferSelect)["type"];
+    jiraKey?: string;
+    parentKey?: string;
+  }[] = [];
+
   for (const row of rows) {
     if (!row.title.trim()) {
       report.skipped++;
@@ -302,12 +333,26 @@ async function runImport(
           .onConflictDoNothing();
       }
 
+      linked.push({
+        id: issue.id,
+        type: issue.type,
+        jiraKey: row.jiraKey,
+        parentKey: row.parentKey,
+      });
+
       report.created++;
     } catch (e) {
       report.errors.push(
         `"${row.title.slice(0, 60)}": ${e instanceof Error ? e.message : "unknown error"}`
       );
     }
+  }
+
+  for (const link of epicLinksToApply(linked)) {
+    await db
+      .update(issues)
+      .set({ epicId: link.epicId })
+      .where(eq(issues.id, link.id));
   }
 
   return report;
@@ -348,6 +393,10 @@ export async function importJiraCsv(
   const sprintIdxs = header
     .map((h, i) => (h === "sprint" ? i : -1))
     .filter((i) => i !== -1);
+  const keyIdx = header.findIndex((h) => h === "issue key" || h === "key");
+  const parentIdx = header.findIndex(
+    (h) => h === "epic link" || h === "parent key" || h === "parent"
+  );
 
   const importRows: ImportRow[] = rows.slice(1).map((r) => {
     const sprints = sprintIdxs
@@ -371,6 +420,8 @@ export async function importJiraCsv(
       sprints: unique,
       createdAt: createdIdx !== -1 ? parseJiraDate(r[createdIdx]) : undefined,
       updatedAt: updatedIdx !== -1 ? parseJiraDate(r[updatedIdx]) : undefined,
+      jiraKey: keyIdx !== -1 ? jiraIssueKey(r[keyIdx]) : undefined,
+      parentKey: parentIdx !== -1 ? jiraIssueKey(r[parentIdx]) : undefined,
     };
   });
 
@@ -378,6 +429,7 @@ export async function importJiraCsv(
 }
 
 type JiraApiIssue = {
+  key?: string;
   fields: Record<string, unknown> & {
     summary?: string;
     description?: unknown;
@@ -388,6 +440,7 @@ type JiraApiIssue = {
     labels?: string[];
     created?: string;
     updated?: string;
+    parent?: { key?: string } | null;
   };
 };
 
@@ -412,6 +465,29 @@ async function findSprintFieldId(
       f.name === "Sprint"
   );
   return sprint?.id ?? null;
+}
+
+async function findEpicLinkFieldId(
+  base: string,
+  authHeader: string
+): Promise<string | null> {
+  const res = await fetch(`${base}/rest/api/3/field`, {
+    headers: { Authorization: authHeader, Accept: "application/json" },
+  });
+  if (!res.ok || !res.headers.get("content-type")?.includes("json")) {
+    return null;
+  }
+  const fields = (await res.json()) as {
+    id?: string;
+    name?: string;
+    schema?: { custom?: string };
+  }[];
+  const epic = fields.find(
+    (f) =>
+      f.schema?.custom === "com.pyxis.greenhopper.jira:gh-epic-link" ||
+      f.name === "Epic Link"
+  );
+  return epic?.id ?? null;
 }
 
 export async function importJiraApi(
@@ -452,6 +528,7 @@ export async function importJiraApi(
     );
   }
   const sprintFieldId = await findSprintFieldId(base, authHeader);
+  const epicLinkFieldId = await findEpicLinkFieldId(base, authHeader);
   const fieldList = [
     "summary",
     "description",
@@ -460,9 +537,11 @@ export async function importJiraApi(
     "issuetype",
     "assignee",
     "labels",
+    "parent",
     "created",
     "updated",
     ...(sprintFieldId ? [sprintFieldId] : []),
+    ...(epicLinkFieldId ? [epicLinkFieldId] : []),
   ].join(",");
 
   const all: JiraApiIssue[] = [];
@@ -517,6 +596,8 @@ export async function importJiraApi(
       sprints: parseJiraSprintField(sprintValue),
       createdAt: parseJiraDate(i.fields.created),
       updatedAt: parseJiraDate(i.fields.updated),
+      jiraKey: jiraIssueKey(i.key),
+      parentKey: jiraParentKey(i, epicLinkFieldId),
     };
   });
 

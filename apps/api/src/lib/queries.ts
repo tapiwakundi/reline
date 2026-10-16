@@ -134,7 +134,10 @@ export async function getIssues(
 
   const rows = await db.query.issues.findMany({
     where: and(...conditions),
-    with: { labels: true },
+    with: {
+      labels: true,
+      epic: { columns: { id: true, number: true, title: true, type: true } },
+    },
     orderBy: asc(issues.boardOrder),
   });
 
@@ -148,6 +151,15 @@ export async function getIssues(
     statusId: i.statusId,
     assigneeId: i.assigneeId,
     cycleId: i.cycleId,
+    epicId: i.epicId,
+    epic:
+      i.epic && i.epic.type === "epic"
+        ? {
+            id: i.epic.id,
+            identifier: `${prefix}-${i.epic.number}`,
+            title: i.epic.title,
+          }
+        : null,
     estimate: i.estimate,
     boardOrder: i.boardOrder,
     createdAt: i.createdAt.toISOString(),
@@ -246,7 +258,8 @@ export async function getIssueDetail(
   });
   if (!issue) return null;
 
-  const [commentRows, activityRows, attachmentRows] = await Promise.all([
+  const [commentRows, activityRows, attachmentRows, epicRow, childRows] =
+    await Promise.all([
     db.query.comments.findMany({
       where: eq(comments.issueId, issue.id),
       with: { author: true },
@@ -261,6 +274,32 @@ export async function getIssueDetail(
       where: eq(attachments.issueId, issue.id),
       orderBy: asc(attachments.createdAt),
     }),
+    issue.epicId
+      ? db.query.issues.findFirst({
+          where: and(
+            eq(issues.id, issue.epicId),
+            eq(issues.workspaceId, workspaceId)
+          ),
+          columns: { id: true, number: true, title: true, type: true },
+        })
+      : Promise.resolve(null),
+    issue.type === "epic"
+      ? db.query.issues.findMany({
+          where: and(
+            eq(issues.epicId, issue.id),
+            eq(issues.workspaceId, workspaceId)
+          ),
+          columns: {
+            id: true,
+            number: true,
+            title: true,
+            type: true,
+            statusId: true,
+            priority: true,
+          },
+          orderBy: asc(issues.number),
+        })
+      : Promise.resolve([]),
   ]);
 
   const toSaved = (a: (typeof attachmentRows)[number]) => ({
@@ -299,6 +338,15 @@ export async function getIssueDetail(
           }
         : null,
       cycleId: issue.cycleId,
+      epicId: issue.epicId,
+      epic:
+        epicRow && epicRow.type === "epic"
+          ? {
+              id: epicRow.id,
+              identifier: `${prefix}-${epicRow.number}`,
+              title: epicRow.title,
+            }
+          : null,
       labelIds: issue.labels.map((l) => l.labelId),
       createdAt: issue.createdAt.toISOString(),
       attachments: issueAttachments,
@@ -331,6 +379,14 @@ export async function getIssueDetail(
             image: a.actor.image ?? null,
           }
         : null,
+    })),
+    children: childRows.map((child) => ({
+      id: child.id,
+      identifier: `${prefix}-${child.number}`,
+      title: child.title,
+      type: child.type,
+      statusId: child.statusId,
+      priority: child.priority,
     })),
   };
 }

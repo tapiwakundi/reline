@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, PlusIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
+import { useIssuesList } from "@/lib/hooks/queries";
 import { StatusIcon } from "@/components/status-icon";
 import { PriorityIcon } from "@/components/priority-icon";
 import { UserAvatar } from "@/components/user-avatar";
@@ -33,16 +34,50 @@ const chipClass = cn(
   "inline-flex h-7 max-w-full min-w-0 items-center gap-1.5 overflow-hidden rounded-md border border-border bg-transparent px-2 text-xs font-medium text-foreground/90 transition-colors hover:bg-accent"
 );
 
+function PickerPopoverTrigger({
+  trigger,
+  triggerLabel,
+  className,
+  title,
+  children,
+}: {
+  /** Replaces the default chip contents so callers can keep their own visuals. */
+  trigger?: ReactNode;
+  triggerLabel?: string;
+  className?: string;
+  title?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <PopoverTrigger
+      aria-label={triggerLabel}
+      title={title}
+      className={cn(
+        trigger
+          ? "inline-flex max-w-full min-w-0 cursor-pointer items-center"
+          : chipClass,
+        className
+      )}
+    >
+      {trigger ?? children}
+    </PopoverTrigger>
+  );
+}
+
 export function StatusPicker({
   value,
   onChange,
   compact,
   className,
+  trigger,
+  triggerLabel,
 }: {
   value: string;
   onChange: (id: string) => void;
   compact?: boolean;
   className?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
 }) {
   const { statuses } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -50,10 +85,14 @@ export function StatusPicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={cn(chipClass, className)}>
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
+      >
           <StatusIcon status={current} />
           {!compact && current.name}
-      </PopoverTrigger>
+      </PickerPopoverTrigger>
       <PopoverContent className="w-52 p-0" align="start">
         <Command>
           <CommandInput placeholder="Change status…" />
@@ -87,21 +126,29 @@ export function PriorityPicker({
   onChange,
   compact,
   className,
+  trigger,
+  triggerLabel,
 }: {
   value: number;
   onChange: (p: number) => void;
   compact?: boolean;
   className?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const current = PRIORITIES.find((p) => p.value === value) ?? PRIORITIES[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={cn(chipClass, className)}>
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
+      >
           <PriorityIcon priority={value} />
           {!compact && current.label}
-      </PopoverTrigger>
+      </PickerPopoverTrigger>
       <PopoverContent className="w-52 p-0" align="start">
         <Command>
           <CommandInput placeholder="Set priority…" />
@@ -137,21 +184,29 @@ export function TypePicker({
   onChange,
   compact,
   className,
+  trigger,
+  triggerLabel,
 }: {
   value: IssueType;
   onChange: (t: IssueType) => void;
   compact?: boolean;
   className?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const current = ISSUE_TYPES.find((t) => t.value === value) ?? ISSUE_TYPES[0];
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={cn(chipClass, className)}>
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
+      >
         <TypeIcon type={value} />
         {!compact && current.label}
-      </PopoverTrigger>
+      </PickerPopoverTrigger>
       <PopoverContent className="w-52 p-0" align="start">
         <Command>
           <CommandInput placeholder="Set type…" />
@@ -187,11 +242,15 @@ export function AssigneePicker({
   onChange,
   compact,
   className,
+  trigger,
+  triggerLabel,
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
   compact?: boolean;
   className?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
 }) {
   const { members } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -199,14 +258,18 @@ export function AssigneePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger className={cn(chipClass, className)}>
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
+      >
           <UserAvatar user={current} className="size-4 shrink-0" />
           {!compact && (
             <span className="min-w-0 truncate">
               {current ? current.name : "Unassigned"}
             </span>
           )}
-      </PopoverTrigger>
+      </PickerPopoverTrigger>
       <PopoverContent className="w-56 p-0" align="start">
         <Command>
           <CommandInput placeholder="Assign to…" />
@@ -252,6 +315,8 @@ export function LabelPicker({
   compact,
   plusOnly,
   className,
+  trigger,
+  triggerLabel,
 }: {
   value: string[];
   onChange: (ids: string[]) => void;
@@ -259,6 +324,8 @@ export function LabelPicker({
   /** Render the trigger as a bare "+" button (chips shown by the parent). */
   plusOnly?: boolean;
   className?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
 }) {
   const { workspace, labels, addLabel } = useWorkspace();
   const qc = useQueryClient();
@@ -322,7 +389,11 @@ export function LabelPicker({
         if (!next) setQuery("");
       }}
     >
-      <PopoverTrigger className={cn(chipClass, className)}>
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
+      >
           {plusOnly ? (
             <PlusIcon className="size-3.5" />
           ) : selected.length === 0 ? (
@@ -350,7 +421,7 @@ export function LabelPicker({
               )}
             </span>
           )}
-      </PopoverTrigger>
+      </PickerPopoverTrigger>
       <PopoverContent className="w-56 p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
@@ -404,6 +475,8 @@ export function CyclePicker({
   compact,
   className,
   placeholder = "No cycle",
+  trigger,
+  triggerLabel,
 }: {
   value: string | null;
   onChange: (id: string | null) => void;
@@ -411,6 +484,8 @@ export function CyclePicker({
   className?: string;
   /** Trigger text when no cycle is selected. */
   placeholder?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
 }) {
   const { cycles } = useWorkspace();
   const [open, setOpen] = useState(false);
@@ -419,8 +494,10 @@ export function CyclePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        className={cn(chipClass, className)}
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
         title={current?.name}
       >
           <svg
@@ -446,7 +523,7 @@ export function CyclePicker({
               Active
             </Badge>
           )}
-      </PopoverTrigger>
+      </PickerPopoverTrigger>
       <PopoverContent className="w-56 p-0" align="start">
         <Command>
           <CommandInput placeholder="Move to cycle…" />
@@ -477,6 +554,86 @@ export function CyclePicker({
                     <span className="text-[10px] text-primary">Active</span>
                   )}
                   {c.id === value && <CheckIcon className="ml-auto size-3.5" />}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+export function EpicPicker({
+  value,
+  onChange,
+  excludeId,
+  compact,
+  className,
+  placeholder = "No epic",
+  trigger,
+  triggerLabel,
+}: {
+  value: string | null;
+  onChange: (id: string | null) => void;
+  excludeId?: string;
+  compact?: boolean;
+  className?: string;
+  placeholder?: string;
+  trigger?: ReactNode;
+  triggerLabel?: string;
+}) {
+  const { data: issues = [] } = useIssuesList();
+  const [open, setOpen] = useState(false);
+  const epics = issues.filter(
+    (issue) => issue.type === "epic" && issue.id !== excludeId
+  );
+  const current = epics.find((issue) => issue.id === value) ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PickerPopoverTrigger
+        trigger={trigger}
+        triggerLabel={triggerLabel}
+        className={className}
+        title={current?.title}
+      >
+        <TypeIcon type="epic" />
+        {!compact && (
+          <span className="min-w-0 truncate">
+            {current ? `${current.identifier} ${current.title}` : placeholder}
+          </span>
+        )}
+      </PickerPopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Set epic…" />
+          <CommandList>
+            <CommandEmpty>No epics yet.</CommandEmpty>
+            <CommandGroup>
+              <CommandItem
+                value="no-epic"
+                onSelect={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+              >
+                No epic
+                {value === null && <CheckIcon className="ml-auto size-3.5" />}
+              </CommandItem>
+              {epics.map((epic) => (
+                <CommandItem
+                  key={epic.id}
+                  value={`${epic.identifier} ${epic.title}`}
+                  onSelect={() => {
+                    onChange(epic.id);
+                    setOpen(false);
+                  }}
+                >
+                  <TypeIcon type="epic" />
+                  <span className="text-muted-foreground">{epic.identifier}</span>
+                  <span className="min-w-0 truncate">{epic.title}</span>
+                  {epic.id === value && <CheckIcon className="ml-auto size-3.5" />}
                 </CommandItem>
               ))}
             </CommandGroup>

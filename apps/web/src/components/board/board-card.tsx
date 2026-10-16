@@ -1,20 +1,34 @@
 "use client";
 
-import { useRef, type MouseEvent } from "react";
+import { useRef, useTransition, type MouseEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/lib/workspace-context";
 import { usePrefetchIssue } from "@/lib/hooks/prefetch-issue";
 import { issueHrefWithCycle } from "@/components/workspace-trail";
-import type { IssueListItem } from "@/lib/types";
+import type { IssueListItem, LabelRow } from "@/lib/types";
 import type { BoardCardProperty } from "@/lib/board-display";
 import type { CycleFilter } from "@/lib/filtering";
 import { PriorityIcon } from "@/components/priority-icon";
 import { TypeIcon } from "@/components/issue-type-icon";
 import { StatusIcon } from "@/components/status-icon";
 import { UserAvatar } from "@/components/user-avatar";
+import {
+  AssigneePicker,
+  CyclePicker,
+  EpicPicker,
+  LabelPicker,
+  PriorityPicker,
+  StatusPicker,
+  TypePicker,
+} from "@/components/pickers";
+import {
+  optimisticUpdateIssue,
+  resolveIssuePatch,
+} from "@/lib/optimistic-issues";
 import {
   IssueContextMenu,
   type IssuePatch,
@@ -27,16 +41,60 @@ function shortDate(iso: string) {
   });
 }
 
+const iconTriggerClass = "rounded-sm p-0.5 hover:bg-foreground/10";
+
+function stopCardActivate(event: { stopPropagation: () => void }) {
+  event.stopPropagation();
+}
+
+/** Keeps a click on a property from dragging the card or opening the issue. */
+function CardControl({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      data-card-control=""
+      className={cn("inline-flex max-w-full min-w-0", className)}
+      onMouseDown={stopCardActivate}
+      onPointerDown={stopCardActivate}
+      onTouchStart={stopCardActivate}
+      onClick={stopCardActivate}
+      onKeyDown={stopCardActivate}
+    >
+      {children}
+    </span>
+  );
+}
+
+function LabelChip({ label }: { label: LabelRow }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground">
+      <span
+        className="size-1.5 rounded-full"
+        style={{ background: label.color }}
+      />
+      {label.name}
+    </span>
+  );
+}
+
 export function BoardCardContent({
   issue,
   properties,
   className,
   selected = false,
+  onPatch,
 }: {
   issue: IssueListItem;
   properties: BoardCardProperty[];
   className?: string;
   selected?: boolean;
+  /** When set, property glyphs open their pickers instead of the issue. */
+  onPatch?: (patch: IssuePatch) => void;
 }) {
   const { labels, members, statuses, cycles } = useWorkspace();
   const show = (p: BoardCardProperty) => properties.includes(p);
@@ -44,7 +102,8 @@ export function BoardCardContent({
   const issueLabels = show("labels")
     ? labels.filter((l) => issue.labelIds.includes(l.id))
     : [];
-  const assignee = show("assignee")
+  const showAssignee = show("assignee");
+  const assignee = showAssignee
     ? (members.find((m) => m.id === issue.assigneeId) ?? null)
     : null;
   const status = show("status")
@@ -55,7 +114,7 @@ export function BoardCardContent({
       ? (cycles.find((c) => c.id === issue.cycleId) ?? null)
       : null;
 
-  const showHeader = show("id") || !!assignee;
+  const showHeader = show("id") || showAssignee;
   const showFooter =
     show("type") ||
     show("priority") ||
@@ -84,36 +143,127 @@ export function BoardCardContent({
           ) : (
             <span />
           )}
-          {assignee ? (
-            <UserAvatar user={assignee} className="size-4.5" />
+          {showAssignee ? (
+            onPatch ? (
+              <CardControl>
+                <AssigneePicker
+                  value={issue.assigneeId}
+                  onChange={(assigneeId) => onPatch({ assigneeId })}
+                  trigger={
+                    <UserAvatar user={assignee} className="size-4.5" />
+                  }
+                  triggerLabel="Change assignee"
+                  className="rounded-full hover:ring-2 hover:ring-foreground/20"
+                />
+              </CardControl>
+            ) : (
+              <UserAvatar user={assignee} className="size-4.5" />
+            )
           ) : null}
         </div>
       )}
       <p className="line-clamp-3 text-[13px] font-medium leading-snug">
         {issue.title}
       </p>
+      {issue.epic &&
+        (onPatch ? (
+          <CardControl className="flex w-full">
+            <EpicPicker
+              value={issue.epicId}
+              excludeId={issue.id}
+              onChange={(epicId) => onPatch({ epicId })}
+              trigger={
+                <span className="min-w-0 truncate">
+                  {issue.epic.identifier} {issue.epic.title}
+                </span>
+              }
+              triggerLabel="Change epic"
+              className="w-full min-w-0 justify-start border-0 bg-transparent p-0 text-left text-[11px] font-normal text-muted-foreground hover:text-foreground"
+            />
+          </CardControl>
+        ) : (
+          <p className="truncate text-[11px] text-muted-foreground">
+            {issue.epic.identifier} {issue.epic.title}
+          </p>
+        ))}
       {showFooter && (
         <div className="flex flex-wrap items-center gap-1.5">
-          {show("type") && <TypeIcon type={issue.type} />}
-          {show("priority") && <PriorityIcon priority={issue.priority} />}
-          {status && <StatusIcon status={status} />}
-          {issueLabels.map((l) => (
-            <span
-              key={l.id}
-              className="inline-flex items-center gap-1 rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground"
-            >
-              <span
-                className="size-1.5 rounded-full"
-                style={{ background: l.color }}
-              />
-              {l.name}
-            </span>
-          ))}
-          {cycle && (
-            <span className="inline-flex items-center rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground">
-              {cycle.name}
-            </span>
-          )}
+          {show("type") &&
+            (onPatch ? (
+              <CardControl>
+                <TypePicker
+                  value={issue.type}
+                  onChange={(type) => onPatch({ type })}
+                  trigger={<TypeIcon type={issue.type} />}
+                  triggerLabel="Change type"
+                  className={iconTriggerClass}
+                />
+              </CardControl>
+            ) : (
+              <TypeIcon type={issue.type} />
+            ))}
+          {show("priority") &&
+            (onPatch ? (
+              <CardControl>
+                <PriorityPicker
+                  value={issue.priority}
+                  onChange={(priority) => onPatch({ priority })}
+                  trigger={<PriorityIcon priority={issue.priority} />}
+                  triggerLabel="Change priority"
+                  className={iconTriggerClass}
+                />
+              </CardControl>
+            ) : (
+              <PriorityIcon priority={issue.priority} />
+            ))}
+          {status &&
+            (onPatch ? (
+              <CardControl>
+                <StatusPicker
+                  value={issue.statusId}
+                  onChange={(statusId) => onPatch({ statusId })}
+                  trigger={<StatusIcon status={status} />}
+                  triggerLabel="Change status"
+                  className={iconTriggerClass}
+                />
+              </CardControl>
+            ) : (
+              <StatusIcon status={status} />
+            ))}
+          {issueLabels.length > 0 &&
+            (onPatch ? (
+              <CardControl>
+                <LabelPicker
+                  value={issue.labelIds}
+                  onChange={(labelIds) => onPatch({ labelIds })}
+                  trigger={issueLabels.map((label) => (
+                    <LabelChip key={label.id} label={label} />
+                  ))}
+                  triggerLabel="Change labels"
+                  className="max-w-full flex-wrap gap-1"
+                />
+              </CardControl>
+            ) : (
+              issueLabels.map((label) => (
+                <LabelChip key={label.id} label={label} />
+              ))
+            ))}
+          {cycle &&
+            (onPatch ? (
+              <CardControl>
+                <CyclePicker
+                  value={issue.cycleId}
+                  onChange={(cycleId) => onPatch({ cycleId })}
+                  trigger={cycle.name}
+                  triggerLabel="Change cycle"
+                  className="h-auto rounded-full border border-border bg-transparent px-1.5 py-px text-[10px] font-normal text-muted-foreground shadow-none hover:bg-foreground/10"
+                />
+              </CardControl>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-border px-1.5 py-px text-[10px] text-muted-foreground">
+                {cycle.name}
+              </span>
+            ))}
           {show("estimate") && issue.estimate != null && (
             <span className="inline-flex items-center rounded border border-border px-1 text-[10px] text-muted-foreground">
               {issue.estimate}
@@ -177,8 +327,10 @@ export function BoardCard({
   onOptimisticDelete?: () => void;
 }) {
   const router = useRouter();
-  const { workspace } = useWorkspace();
+  const qc = useQueryClient();
+  const { workspace, statuses, cycles } = useWorkspace();
   const prefetchIssue = usePrefetchIssue();
+  const [, startTransition] = useTransition();
   const dragged = useRef(false);
   const href = issueHrefWithCycle(workspace.slug, issue.identifier, cycleIds);
   const {
@@ -197,6 +349,32 @@ export function BoardCard({
   if (isDragging) dragged.current = true;
   const showPlaceholder = isDragging || isDragPlaceholder;
 
+  function patch(next: IssuePatch) {
+    const resolved = resolveIssuePatch(
+      next,
+      issue,
+      statuses,
+      cycles,
+      cycleEntry
+    );
+    onOptimisticUpdate?.(resolved);
+    startTransition(async () => {
+      await optimisticUpdateIssue(
+        qc,
+        workspace.id,
+        {
+          id: issue.id,
+          identifier: issue.identifier,
+          statusId: issue.statusId,
+          cycleId: issue.cycleId,
+        },
+        resolved,
+        statuses,
+        cycles
+      );
+    });
+  }
+
   return (
     <IssueContextMenu
       issue={issue}
@@ -214,12 +392,19 @@ export function BoardCard({
         }}
         {...attributes}
         {...listeners}
+        role="group"
         data-board-card-id={issue.id}
         onPointerEnter={() => prefetchIssue(issue.identifier, href)}
         onClick={(e) => {
           // Ignore the click that fires right after a drag release
           if (dragged.current) {
             dragged.current = false;
+            return;
+          }
+          if (
+            e.target instanceof Element &&
+            e.target.closest("[data-card-control]")
+          ) {
             return;
           }
           if (e.metaKey || e.ctrlKey || e.shiftKey) {
@@ -241,6 +426,7 @@ export function BoardCard({
             issue={issue}
             properties={properties}
             selected={selected}
+            onPatch={patch}
           />
         )}
       </div>

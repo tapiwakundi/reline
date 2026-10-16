@@ -84,6 +84,9 @@ export function applyPatchToListItem(
     ...(patch.statusId !== undefined ? { statusId: patch.statusId } : {}),
     ...(patch.assigneeId !== undefined ? { assigneeId: patch.assigneeId } : {}),
     ...(patch.cycleId !== undefined ? { cycleId: patch.cycleId } : {}),
+    ...(patch.epicId !== undefined ? { epicId: patch.epicId } : {}),
+    ...(patch.type === "epic" ? { epicId: null, epic: null } : {}),
+    ...(patch.epicId === null ? { epic: null } : {}),
     ...(patch.estimate !== undefined ? { estimate: patch.estimate } : {}),
     ...(patch.labelIds !== undefined ? { labelIds: patch.labelIds } : {}),
     updatedAt: new Date().toISOString(),
@@ -102,6 +105,9 @@ function patchDetailIssue(issue: DetailIssue, patch: IssuePatch): DetailIssue {
     ...(patch.statusId !== undefined ? { statusId: patch.statusId } : {}),
     ...(patch.assigneeId !== undefined ? { assigneeId: patch.assigneeId } : {}),
     ...(patch.cycleId !== undefined ? { cycleId: patch.cycleId } : {}),
+    ...(patch.epicId !== undefined ? { epicId: patch.epicId } : {}),
+    ...(patch.type === "epic" ? { epicId: null, epic: null } : {}),
+    ...(patch.epicId === null ? { epic: null } : {}),
     ...(patch.labelIds !== undefined ? { labelIds: patch.labelIds } : {}),
   };
 }
@@ -136,9 +142,30 @@ export function applyIssuePatchToCaches(
     { queryKey: queryKeys.issues.all(workspaceId) },
     (old: unknown) => {
       if (!isIssueListCache(old)) return old;
-      return old.map((i) =>
-        i.id === issue.id ? applyPatchToListItem(i, patch) : i
-      );
+      const current = old.find((i) => i.id === issue.id);
+      const leavingEpic =
+        current?.type === "epic" && patch.type !== undefined && patch.type !== "epic";
+      const epic =
+        patch.epicId
+          ? old.find((i) => i.id === patch.epicId && i.type === "epic")
+          : undefined;
+      return old.map((i) => {
+        if (i.id === issue.id) {
+          const next = applyPatchToListItem(i, patch);
+          if (epic) {
+            next.epic = {
+              id: epic.id,
+              identifier: epic.identifier,
+              title: epic.title,
+            };
+          }
+          return next;
+        }
+        if (leavingEpic && i.epicId === issue.id) {
+          return { ...i, epicId: null, epic: null };
+        }
+        return i;
+      });
     }
   );
 
@@ -146,7 +173,16 @@ export function applyIssuePatchToCaches(
     queryKeys.issues.detail(workspaceId, issue.identifier),
     (old) => {
       if (!old) return old;
-      return { ...old, issue: patchDetailIssue(old.issue, patch) };
+      const issue = patchDetailIssue(old.issue, patch);
+      const leavingEpic =
+        old.issue.type === "epic" &&
+        patch.type !== undefined &&
+        patch.type !== "epic";
+      return {
+        ...old,
+        issue,
+        children: leavingEpic ? [] : (old.children ?? []),
+      };
     }
   );
 }

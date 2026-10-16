@@ -2,8 +2,8 @@ import { cn } from "@/lib/utils";
 import type { IssueType } from "@/lib/types";
 
 /**
- * Linear-style issue type glyphs: bookmark (story), checkbox (task),
- * octagon bug mark (bug).
+ * Linear-style issue type glyphs: diamond (epic), bookmark (story),
+ * checkbox (task), octagon bug mark (bug).
  */
 export function TypeIcon({
   type,
@@ -15,6 +15,12 @@ export function TypeIcon({
   const cls = cn("size-3.5 shrink-0", className);
 
   switch (type) {
+    case "epic":
+      return (
+        <svg viewBox="0 0 14 14" className={cls} aria-hidden>
+          <path d="M7 1.15 12.45 7 7 12.85 1.55 7 7 1.15Z" fill="#b59aeb" />
+        </svg>
+      );
     case "story":
       return (
         <svg viewBox="0 0 14 14" className={cls} aria-hidden>

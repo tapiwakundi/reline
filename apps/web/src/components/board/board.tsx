@@ -11,7 +11,7 @@ import {
   type MouseEvent,
 } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   DragOverlay,
@@ -113,6 +113,28 @@ type BoardColumnDef = {
   /** Done/canceled columns, for "order completed by recency". */
   isCompleted?: boolean;
 };
+
+function epicFromLists(
+  qc: QueryClient,
+  workspaceId: string,
+  epicId: string | null | undefined,
+  local: IssueListItem[]
+): { id: string; identifier: string; title: string } | null {
+  if (!epicId) return null;
+  const pools: IssueListItem[][] = [local];
+  for (const [, data] of qc.getQueriesData<unknown>({
+    queryKey: queryKeys.issues.all(workspaceId),
+  })) {
+    if (Array.isArray(data)) pools.push(data as IssueListItem[]);
+  }
+  for (const pool of pools) {
+    const hit = pool.find((row) => row.id === epicId && row.type === "epic");
+    if (hit) {
+      return { id: hit.id, identifier: hit.identifier, title: hit.title };
+    }
+  }
+  return null;
+}
 
 function groupKeyOf(issue: IssueListItem, group: BoardColumnsGroup): string {
   switch (group) {
@@ -1311,13 +1333,20 @@ export function Board({
                       cycleEntry
                     );
                     suppressServerSyncUntil.current = Date.now() + 4000;
-                    setIssues((prev) =>
-                      prev.map((i) =>
-                        i.id === issueId
-                          ? applyPatchToListItem(i, resolved)
-                          : i
-                      )
-                    );
+                    setIssues((prev) => {
+                      const epic = epicFromLists(
+                        qc,
+                        workspace.id,
+                        resolved.epicId,
+                        prev
+                      );
+                      return prev.map((i) => {
+                        if (i.id !== issueId) return i;
+                        const next = applyPatchToListItem(i, resolved);
+                        if (epic) next.epic = epic;
+                        return next;
+                      });
+                    });
                   }}
                   onIssueDelete={(issueId) => {
                     suppressServerSyncUntil.current = Date.now() + 4000;

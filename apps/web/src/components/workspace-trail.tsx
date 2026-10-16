@@ -62,6 +62,7 @@ export function issueHrefWithCycle(
     priorities: [],
     assigneeIds: [],
     labelIds: [],
+    epicIds: [],
     cycleIds,
   });
   const qs = params.toString();

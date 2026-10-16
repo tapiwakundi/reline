@@ -21,8 +21,10 @@ import {
   earliestStatusId,
   mentionsAdded,
   todoStatusIdForCycleEntry,
+  nextEpicId,
   type AttachmentInput,
   type BoardMoveTarget,
+  type IssueType,
   type IssueUpdatePatch,
   type Member,
 } from "@reline/shared";
@@ -234,20 +236,48 @@ async function notifyNewMentions(opts: {
   return new Set(mentioned.map((member) => member.id));
 }
 
+async function assertEpicId(
+  workspaceId: string,
+  epicId: string,
+  issueId: string | null
+) {
+  if (issueId && epicId === issueId) {
+    throw new HttpError(400, "An issue cannot belong to itself");
+  }
+  const epic = await db.query.issues.findFirst({
+    where: and(eq(issues.id, epicId), eq(issues.workspaceId, workspaceId)),
+    columns: { id: true, type: true },
+  });
+  if (!epic || epic.type !== "epic") {
+    throw new HttpError(400, "Epic not found");
+  }
+  return epic.id;
+}
+
 export async function createIssue(ctx: WorkspaceContext, input: {
   title: string;
   description?: string;
   statusId?: string;
   priority?: number;
-  type?: "story" | "task" | "bug";
+  type?: IssueType;
   assigneeId?: string | null;
   cycleId?: string | null;
+  epicId?: string | null;
   labelIds?: string[];
   attachments?: AttachmentInput[];
 }) {
   const { workspace, user } = ctx;
   const title = input.title.trim();
   if (!title) throw new HttpError(400, "Title is required");
+
+  const type = input.type ?? "story";
+  let epicId = nextEpicId({
+    nextType: type,
+    requested: input.epicId ?? null,
+  });
+  if (epicId) {
+    epicId = await assertEpicId(workspace.id, epicId, null);
+  }
 
   const [ws] = await db
     .update(workspaces)
@@ -284,10 +314,11 @@ export async function createIssue(ctx: WorkspaceContext, input: {
       title,
       description: input.description?.trim() ?? "",
       priority: input.priority ?? 0,
-      type: input.type ?? "story",
+      type,
       statusId,
       assigneeId: input.assigneeId ?? null,
       cycleId,
+      epicId: epicId ?? null,
       creatorId: user.id,
       boardOrder: Date.now(),
     })
@@ -384,11 +415,29 @@ async function applyIssueUpdate(
     }
   }
 
+  const nextType = fields.type ?? before.type;
+  const epicWrite = nextEpicId({
+    nextType,
+    requested: fields.epicId,
+  });
+  if (epicWrite !== undefined) {
+    fields.epicId = epicWrite
+      ? await assertEpicId(workspace.id, epicWrite, before.id)
+      : null;
+  }
+
   if (Object.keys(fields).length > 0) {
     await db
       .update(issues)
       .set({ ...fields, updatedAt: new Date() })
       .where(eq(issues.id, issueId));
+  }
+
+  if (before.type === "epic" && nextType !== "epic") {
+    await db
+      .update(issues)
+      .set({ epicId: null, updatedAt: new Date() })
+      .where(eq(issues.epicId, before.id));
   }
 
   if (labelIds) {
