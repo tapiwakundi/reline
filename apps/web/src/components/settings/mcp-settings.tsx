@@ -12,13 +12,42 @@ type McpToken = {
   name: string;
   tokenPrefix: string;
   scope: "read" | "write";
+  kind: "oauth" | "token";
   createdAt: string;
   lastUsedAt: string | null;
+  expiresAt: string | null;
 };
 
 type CreatedToken = McpToken & { secret: string };
 
-function cursorConfig(url: string, secret: string) {
+function cursorUrlConfig(url: string) {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        reline: { url },
+      },
+    },
+    null,
+    2
+  );
+}
+
+function cursorClientIdConfig(url: string) {
+  return JSON.stringify(
+    {
+      mcpServers: {
+        reline: {
+          url,
+          auth: { CLIENT_ID: "reline" },
+        },
+      },
+    },
+    null,
+    2
+  );
+}
+
+function cursorTokenConfig(url: string, secret: string) {
   return JSON.stringify(
     {
       mcpServers: {
@@ -97,15 +126,17 @@ export function McpSettings() {
 
   async function revoke(token: McpToken) {
     if (revoking) return;
-    if (!window.confirm(`Revoke “${token.name}”? Cursor will no longer be able to use this token.`)) {
-      return;
-    }
+    const message =
+      token.kind === "oauth"
+        ? `Disconnect “${token.name}”? Cursor will need to authorize again.`
+        : `Revoke “${token.name}”? Cursor will no longer be able to use this token.`;
+    if (!window.confirm(message)) return;
     setRevoking(token.id);
     try {
       await fetchJson(`/api/mcp/tokens/${token.id}`, { method: "DELETE" });
       setTokens((current) => (current ?? []).filter((item) => item.id !== token.id));
       if (created?.id === token.id) setCreated(null);
-      toast.success("Token revoked");
+      toast.success(token.kind === "oauth" ? "Disconnected" : "Token revoked");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not revoke token");
     } finally {
@@ -132,19 +163,14 @@ export function McpSettings() {
           other fields. Descriptions use the same formatting as the issue
           editor: headings, lists, checkboxes, quotes, and code.
         </p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          New tokens can create and edit issues. Tokens already labeled
-          Read-only stay that way. Revoke one and create a new token to create
-          and edit tickets.
-        </p>
       </div>
 
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
         <div>
-          <div className="text-sm font-medium">Server URL</div>
+          <div className="text-sm font-medium">Connect in the browser</div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add this in Cursor under MCP as a remote server. The web app
-            forwards it to the API.
+            Add this URL as a remote MCP server in Cursor. When Cursor opens
+            the browser, click Authorize. You don&apos;t need to paste a token.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -160,6 +186,30 @@ export function McpSettings() {
             Copy
           </Button>
         </div>
+        {mcpUrl ? (
+          <>
+            <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 text-[12px] leading-relaxed">
+              {cursorUrlConfig(mcpUrl)}
+            </pre>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => copy(cursorUrlConfig(mcpUrl), "Config")}
+              >
+                Copy config
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              If Cursor asks for a client ID, use{" "}
+              <span className="font-mono text-xs">reline</span>. That value is
+              not a secret.
+            </p>
+            <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 text-[12px] leading-relaxed">
+              {cursorClientIdConfig(mcpUrl)}
+            </pre>
+          </>
+        ) : null}
       </div>
 
       <form
@@ -167,10 +217,12 @@ export function McpSettings() {
         className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4"
       >
         <div>
-          <div className="text-sm font-medium">New token</div>
+          <div className="text-sm font-medium">Use a token instead</div>
           <p className="mt-1 text-sm text-muted-foreground">
             The secret is shown once. Put it in the Authorization header as{" "}
-            <span className="font-mono text-xs">Bearer rel_…</span>.
+            <span className="font-mono text-xs">Bearer rel_…</span>. New
+            tokens can create and edit issues. Tokens already labeled
+            Read-only stay that way.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
@@ -205,7 +257,7 @@ export function McpSettings() {
             {created.secret}
           </code>
           <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 text-[12px] leading-relaxed">
-            {cursorConfig(mcpUrl, created.secret)}
+            {cursorTokenConfig(mcpUrl, created.secret)}
           </pre>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" onClick={() => copy(created.secret, "Token")}>
@@ -214,7 +266,7 @@ export function McpSettings() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => copy(cursorConfig(mcpUrl, created.secret), "Config")}
+              onClick={() => copy(cursorTokenConfig(mcpUrl, created.secret), "Config")}
             >
               Copy config
             </Button>
@@ -223,12 +275,13 @@ export function McpSettings() {
       )}
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Active tokens</h3>
+        <h3 className="text-sm font-medium">Active connections</h3>
         {tokens === null ? (
-          <p className="text-sm text-muted-foreground">Loading tokens…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : tokens.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No tokens yet. Create one to connect Cursor.
+            No connections yet. Add the server URL in Cursor, or create a
+            token below.
           </p>
         ) : (
           <div className="divide-y divide-border rounded-lg border border-border bg-card">
@@ -241,12 +294,17 @@ export function McpSettings() {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{token.name}</span>
                     <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {token.kind === "oauth" ? "Browser" : "Token"}
+                    </span>
+                    <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                       {token.scope === "write" ? "Create & edit" : "Read-only"}
                     </span>
                   </div>
-                  <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
-                    {token.tokenPrefix}…
-                  </p>
+                  {token.kind === "token" ? (
+                    <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground">
+                      {token.tokenPrefix}…
+                    </p>
+                  ) : null}
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Created {formatWhen(token.createdAt)}
                     {" · "}
@@ -262,7 +320,13 @@ export function McpSettings() {
                   disabled={revoking === token.id}
                   onClick={() => revoke(token)}
                 >
-                  {revoking === token.id ? "Revoking…" : "Revoke"}
+                  {revoking === token.id
+                    ? token.kind === "oauth"
+                      ? "Disconnecting…"
+                      : "Revoking…"
+                    : token.kind === "oauth"
+                      ? "Disconnect"
+                      : "Revoke"}
                 </Button>
               </div>
             ))}

@@ -1,16 +1,13 @@
+import { publicAppUrl } from "@/lib/public-url";
+
+export { publicAppUrl };
+
 export function slackAppConfigured(): boolean {
   return Boolean(
     process.env.SLACK_CLIENT_ID &&
       process.env.SLACK_CLIENT_SECRET &&
       process.env.SLACK_SIGNING_SECRET &&
       process.env.SLACK_TOKEN_ENCRYPTION_KEY
-  );
-}
-
-export function publicAppUrl(): string {
-  return (process.env.BETTER_AUTH_URL ?? "http://localhost:4002").replace(
-    /\/$/,
-    ""
   );
 }
 

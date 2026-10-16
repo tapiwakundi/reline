@@ -356,10 +356,74 @@ export const mcpTokens = pgTable(
       .notNull(),
     lastUsedAt: timestamp("last_used_at"),
     revokedAt: timestamp("revoked_at"),
+    expiresAt: timestamp("expires_at"),
+    oauthClientId: text("oauth_client_id"),
   },
   (t) => [
     uniqueIndex("mcp_tokens_hash_idx").on(t.tokenHash),
     index("mcp_tokens_user_idx").on(t.userId),
+    index("mcp_tokens_oauth_idx").on(t.userId, t.oauthClientId),
+  ]
+);
+
+export const oauthClients = pgTable("oauth_clients", {
+  id: id(),
+  name: text("name").notNull(),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at")
+    .$defaultFn(() => new Date())
+    .notNull(),
+});
+
+export const oauthCodes = pgTable(
+  "oauth_codes",
+  {
+    id: id(),
+    codeHash: text("code_hash").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("oauth_codes_hash_idx").on(t.codeHash),
+    index("oauth_codes_user_idx").on(t.userId),
+  ]
+);
+
+export const oauthRefreshTokens = pgTable(
+  "oauth_refresh_tokens",
+  {
+    id: id(),
+    tokenHash: text("token_hash").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    clientId: text("client_id").notNull(),
+    mcpTokenId: text("mcp_token_id")
+      .notNull()
+      .references(() => mcpTokens.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at")
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [
+    uniqueIndex("oauth_refresh_hash_idx").on(t.tokenHash),
+    index("oauth_refresh_user_idx").on(t.userId),
+    index("oauth_refresh_token_idx").on(t.mcpTokenId),
   ]
 );
 
@@ -617,6 +681,25 @@ export const slackChannelsRelations = relations(slackChannels, ({ one }) => ({
   }),
 }));
 
-export const mcpTokensRelations = relations(mcpTokens, ({ one }) => ({
+export const mcpTokensRelations = relations(mcpTokens, ({ one, many }) => ({
   user: one(user, { fields: [mcpTokens.userId], references: [user.id] }),
+  refreshTokens: many(oauthRefreshTokens),
 }));
+
+export const oauthCodesRelations = relations(oauthCodes, ({ one }) => ({
+  user: one(user, { fields: [oauthCodes.userId], references: [user.id] }),
+}));
+
+export const oauthRefreshTokensRelations = relations(
+  oauthRefreshTokens,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [oauthRefreshTokens.userId],
+      references: [user.id],
+    }),
+    mcpToken: one(mcpTokens, {
+      fields: [oauthRefreshTokens.mcpTokenId],
+      references: [mcpTokens.id],
+    }),
+  })
+);

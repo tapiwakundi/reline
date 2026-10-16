@@ -32,9 +32,9 @@ so auth cookies stay first-party.
 - Command palette (⌘K) and shortcuts (`C` to create an issue)
 - Workspace invites via link
 - One-time Jira import: CSV export or Jira Cloud REST API
-- Cursor MCP: paste an issue link and Cursor can read it, or create and
-  edit tickets with the same headings, lists, and other formatting as the
-  issue editor
+- Cursor MCP: add the server URL, authorize in the browser, then paste an
+  issue link so Cursor can read it or create and edit tickets with the same
+  headings, lists, and other formatting as the issue editor
 
 ## Local development
 
@@ -189,39 +189,37 @@ first request after that takes a few seconds.
 
 ## Cursor MCP
 
-Settings → Cursor creates a personal token. A new token can read, create, and
-edit issues in workspaces you belong to, including descriptions with headings,
-lists, checkboxes, quotes, and code. It cannot delete issues. Tokens created
-before this stay read-only until you revoke them and create a new one.
-
-In Cursor, add a remote MCP server (or paste this into `~/.cursor/mcp.json`):
+Add the server URL in Cursor as a remote MCP server. Cursor opens the browser;
+sign in if needed, click Authorize, and you're connected. It can read, create,
+and edit issues in workspaces you belong to, including descriptions with
+headings, lists, checkboxes, quotes, and code. It cannot delete issues.
 
 ```json
 {
   "mcpServers": {
     "reline": {
-      "url": "https://<your-web-app>/api/mcp",
-      "headers": {
-        "Authorization": "Bearer rel_…"
-      }
+      "url": "https://<your-web-app>/api/mcp"
     }
   }
 }
 ```
 
-Locally, with `npm run dev`, use `http://localhost:4002/api/mcp` (or
-`http://localhost:4001/api/mcp` to hit the API directly). Use the web app
-origin in production. Next.js forwards `/api/mcp` to the API. Then paste an
+If Cursor asks for a client ID, set `"auth": { "CLIENT_ID": "reline" }`. That
+value is not a secret.
+
+Locally, with `npm run dev`, use `http://localhost:4002/api/mcp`. Use the web
+app origin in production. Next.js forwards `/api/mcp` to the API. Then paste an
 issue link such as `https://<your-web-app>/acme/issue/REL-42` in chat. Cursor
 calls `get_issue` for the title, description, comments, and attachments, and
 `get_attachment` to refetch one file. Images are returned inline. Videos stay
-as URLs. With a token that can edit, `create_issue` and `update_issue` write
-tickets. Descriptions are markdown (`#` headings, `-` bullets, `1.` lists,
-`- [ ]` checkboxes, quotes, and fenced code) and render in the issue editor.
+as URLs. With write access, `create_issue` and `update_issue` write tickets.
+Descriptions are markdown (`#` headings, `-` bullets, `1.` lists, `- [ ]`
+checkboxes, quotes, and fenced code) and render in the issue editor.
 
-The secret is shown once and only its hash is stored. Revoke it from the same
-settings page if it leaks. There is no OAuth on this endpoint, so Cursor uses
-the bearer token you configure.
+Settings → Cursor can still mint a personal token if you need a pasted bearer
+secret. The secret is shown once and only its hash is stored. Disconnect or
+revoke from the same settings page. Tokens created before write access stay
+read-only until you revoke them and connect again.
 
 ## Importing from Jira
 

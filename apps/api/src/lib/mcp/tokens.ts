@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import { mcpTokens, user } from "@/db/schema";
+import { mcpTokens, oauthRefreshTokens, user } from "@/db/schema";
 import { HttpError } from "@/lib/context";
 import {
   MCP_READ_SCOPE,
@@ -18,13 +18,17 @@ export type McpActor = {
   scope: McpScope;
 };
 
+export type McpTokenKind = "oauth" | "token";
+
 export type McpTokenSummary = {
   id: string;
   name: string;
   tokenPrefix: string;
   scope: McpScope;
+  kind: McpTokenKind;
   createdAt: string;
   lastUsedAt: string | null;
+  expiresAt: string | null;
 };
 
 export function hashMcpSecret(secret: string): string {
@@ -55,6 +59,7 @@ export async function authenticateMcpToken(
 ): Promise<McpActor | null> {
   if (!secret.startsWith("rel_") || secret.length < 20) return null;
   const hash = hashMcpSecret(secret);
+  const now = new Date();
   const rows = await db
     .select({
       tokenId: mcpTokens.id,
@@ -66,7 +71,13 @@ export async function authenticateMcpToken(
     })
     .from(mcpTokens)
     .innerJoin(user, eq(mcpTokens.userId, user.id))
-    .where(and(eq(mcpTokens.tokenHash, hash), isNull(mcpTokens.revokedAt)))
+    .where(
+      and(
+        eq(mcpTokens.tokenHash, hash),
+        isNull(mcpTokens.revokedAt),
+        or(isNull(mcpTokens.expiresAt), gt(mcpTokens.expiresAt, now))
+      )
+    )
     .limit(1);
   const row = rows[0];
   const scope = parseMcpScope(row?.scope);
@@ -105,7 +116,13 @@ export async function createMcpToken(
   const [{ value }] = await db
     .select({ value: count() })
     .from(mcpTokens)
-    .where(and(eq(mcpTokens.userId, userId), isNull(mcpTokens.revokedAt)));
+    .where(
+      and(
+        eq(mcpTokens.userId, userId),
+        isNull(mcpTokens.revokedAt),
+        isNull(mcpTokens.oauthClientId)
+      )
+    );
   if (Number(value) >= MAX_ACTIVE_TOKENS) {
     throw new HttpError(
       400,
@@ -141,6 +158,15 @@ export async function revokeMcpToken(userId: string, tokenId: string): Promise<v
     )
     .returning({ id: mcpTokens.id });
   if (!updated.length) throw new HttpError(404, "Token not found");
+  await db
+    .update(oauthRefreshTokens)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(oauthRefreshTokens.mcpTokenId, tokenId),
+        isNull(oauthRefreshTokens.revokedAt)
+      )
+    );
 }
 
 function toSummary(row: typeof mcpTokens.$inferSelect): McpTokenSummary {
@@ -149,8 +175,10 @@ function toSummary(row: typeof mcpTokens.$inferSelect): McpTokenSummary {
     name: row.name,
     tokenPrefix: row.tokenPrefix,
     scope: parseMcpScope(row.scope) ?? MCP_READ_SCOPE,
+    kind: row.oauthClientId ? "oauth" : "token",
     createdAt: row.createdAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
   };
 }
 

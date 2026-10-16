@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { signUp } from "@/lib/auth-client";
+import { safeInternalPath } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Logo } from "@/components/logo";
@@ -18,7 +19,13 @@ function SignupForm() {
   const searchParams = useSearchParams();
   const invite = searchParams.get("invite");
   const [loading, setLoading] = useState(false);
-  const googleCallback = invite ? `/invite/${invite}` : "/";
+  const next = searchParams.get("next");
+  const afterAuth = next
+    ? safeInternalPath(next)
+    : invite
+      ? `/invite/${invite}`
+      : null;
+  const googleCallback = afterAuth ?? "/";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,7 +41,7 @@ function SignupForm() {
       toast.error(error.message ?? "Could not create account");
       return;
     }
-    router.push(invite ? `/invite/${invite}` : "/onboarding");
+    router.push(afterAuth ?? "/onboarding");
     router.refresh();
   }
 
@@ -72,7 +79,14 @@ function SignupForm() {
       </div>
       <p className="text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="text-foreground hover:underline">
+        <Link
+          href={
+            next && afterAuth
+              ? `/login?next=${encodeURIComponent(afterAuth)}`
+              : "/login"
+          }
+          className="text-foreground hover:underline"
+        >
           Log in
         </Link>
       </p>
