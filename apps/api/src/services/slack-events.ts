@@ -10,6 +10,7 @@ import {
 } from "@/lib/slack/mentions";
 import { verifySlackSignature } from "@/lib/slack/signature";
 import { addComment } from "@/services/issues";
+import { handleSlackLinkShared } from "@/services/slack-unfurl";
 import {
   resolveRelineUserFromSlack,
   slackNamesByUserId,
@@ -28,6 +29,11 @@ type SlackEventPayload = {
     ts?: string;
     channel?: string;
     channel_type?: string;
+    channel_id?: string;
+    message_ts?: string;
+    unfurl_id?: string;
+    source?: string;
+    links?: { domain?: string; url?: string }[];
     metadata?: {
       event_type?: string;
       event_payload?: { comment_id?: unknown };
@@ -96,6 +102,10 @@ export async function handleSlackEvent(
 ): Promise<void> {
   const event = payload.event;
   if (!event || payload.type !== "event_callback") return;
+  if (event.type === "link_shared") {
+    await handleSlackLinkShared(payload, client);
+    return;
+  }
   if (event.type !== "message") return;
   if (event.subtype || event.bot_id) return;
   if (!event.channel || !event.ts || !event.user) return;

@@ -74,6 +74,14 @@ slackRoutes.post("/slack/events", async (c) => {
     return c.json({ challenge: payload.challenge ?? "" });
   }
 
+  if (payload.event?.type === "link_shared") {
+    // Ack before chat.unfurl. Slack retries when this request is slow.
+    void handleSlackEvent(payload).catch((error) => {
+      console.error("[slack] event", error);
+    });
+    return c.json({ ok: true });
+  }
+
   await handleSlackEvent(payload).catch((error) => {
     console.error("[slack] event", error);
   });

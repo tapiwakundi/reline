@@ -14,6 +14,7 @@ type SlackStatus = {
   linked: boolean;
   postsAsUser: boolean;
   canInstall: boolean;
+  linkPreviews: boolean;
 };
 
 function slackStartUrl(kind: "install" | "user") {
@@ -52,6 +53,7 @@ export function SlackSettings() {
             linked: false,
             postsAsUser: false,
             canInstall: false,
+            linkPreviews: false,
           });
           toast.error(error instanceof Error ? error.message : "Could not load Slack");
         }
@@ -78,6 +80,7 @@ export function SlackSettings() {
               teamName: null,
               linked: false,
               postsAsUser: false,
+              linkPreviews: false,
             }
           : current
       );
@@ -95,7 +98,9 @@ export function SlackSettings() {
         <h2 className="text-base font-semibold">Slack</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Open a private Slack channel the first time someone is @mentioned on a
-          ticket. Replies in that channel become comments here.
+          ticket. Replies in that channel become comments here. In a connected
+          Slack workspace, shared ticket links show the ticket instead of the
+          login page.
         </p>
       </div>
 
@@ -104,7 +109,8 @@ export function SlackSettings() {
           <div className="text-sm font-medium">Workspace</div>
           <p className="mt-1 text-sm text-muted-foreground">
             The workspace owner installs the Slack app once. Mentions and
-            comments then mirror into a channel named from the issue key.
+            comments then mirror into a channel named from the issue key. Shared
+            ticket links show the title, status, and assignee.
           </p>
         </div>
         {status === null ? (
@@ -114,22 +120,46 @@ export function SlackSettings() {
             Slack is not configured on this server.
           </p>
         ) : status.connected ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <p className="min-w-0 flex-1 text-sm">
-              Connected to <span className="font-medium">{status.teamName}</span>
-            </p>
-            {status.canInstall ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={disconnecting}
-                onClick={disconnect}
-              >
-                {disconnecting ? "Disconnecting…" : "Disconnect"}
-              </Button>
-            ) : null}
-          </div>
+          <>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <p className="min-w-0 flex-1 text-sm">
+                Connected to <span className="font-medium">{status.teamName}</span>
+              </p>
+              {status.canInstall ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={disconnecting}
+                  onClick={disconnect}
+                >
+                  {disconnecting ? "Disconnecting…" : "Disconnect"}
+                </Button>
+              ) : null}
+            </div>
+            {status.linkPreviews ? null : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+                  Ticket links still show the login page.{" "}
+                  {status.canInstall
+                    ? "Reconnect Slack to show the title, status, and assignee."
+                    : "Ask the workspace owner to reconnect Slack."}
+                </p>
+                {status.canInstall ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={disconnecting}
+                    onClick={() => {
+                      window.location.href = slackStartUrl("install");
+                    }}
+                  >
+                    Enable previews
+                  </Button>
+                ) : null}
+              </div>
+            )}
+          </>
         ) : status.canInstall ? (
           <Button type="button" onClick={() => {
             window.location.href = slackStartUrl("install");
