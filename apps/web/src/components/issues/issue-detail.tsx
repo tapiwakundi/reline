@@ -21,6 +21,7 @@ import { useIssueDetail } from "@/lib/hooks/queries";
 import { useShortcuts } from "@/components/global-shortcuts";
 import { epicProgress } from "@reline/shared";
 import { TypeIcon } from "@/components/issue-type-icon";
+import { AddEpicIssue } from "@/components/issues/add-epic-issue";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   optimisticAddComment,
@@ -450,15 +451,13 @@ export function IssueDetail({
                     {progress.done}/{progress.total} done
                   </span>
                 </h2>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() =>
+                <AddEpicIssue
+                  epic={{ id: issue.id, identifier: issue.identifier }}
+                  excludeIds={children.map((child) => child.id)}
+                  onCreate={() =>
                     openCreateIssue({ type: "story", epicId: issue.id })
                   }
-                >
-                  Add issue
-                </Button>
+                />
               </div>
               <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div

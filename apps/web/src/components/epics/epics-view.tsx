@@ -7,14 +7,17 @@ import { Button } from "@/components/ui/button";
 import { TypeIcon } from "@/components/issue-type-icon";
 import { MobileNavButton } from "@/components/mobile-nav";
 import { useShortcuts } from "@/components/global-shortcuts";
+import { useIssuesList } from "@/lib/hooks/queries";
 import { useWorkspace } from "@/lib/workspace-context";
 import { wsPath } from "@/lib/workspace-paths";
 import type { IssueListItem } from "@/lib/types";
 
-export function EpicsView({ issues }: { issues: IssueListItem[] }) {
+export function EpicsView({ issues: initialIssues }: { issues: IssueListItem[] }) {
   const { workspace, statuses } = useWorkspace();
   const { openCreateIssue } = useShortcuts();
-  const epics = issues
+  const { data: issues } = useIssuesList(initialIssues);
+  const list = issues ?? initialIssues;
+  const epics = list
     .filter((issue) => issue.type === "epic")
     .sort((a, b) => a.identifier.localeCompare(b.identifier));
 
@@ -50,7 +53,7 @@ export function EpicsView({ issues }: { issues: IssueListItem[] }) {
         ) : (
           <ul className="flex flex-col">
             {epics.map((epic) => {
-              const children = issues.filter((issue) => issue.epicId === epic.id);
+              const children = list.filter((issue) => issue.epicId === epic.id);
               const progress = epicProgress(children, statuses);
               const width =
                 progress.total === 0

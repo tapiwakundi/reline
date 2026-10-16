@@ -130,7 +130,7 @@ export function CreateIssueDialog({
           status: status ?? { type: "unstarted", color: "currentColor" },
           href: wsPath(workspace.slug, `/issue/${identifier}`),
         });
-        void invalidateAfterIssueChange(qc, workspace.id);
+        await invalidateAfterIssueChange(qc, workspace.id);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to create issue");
       }
