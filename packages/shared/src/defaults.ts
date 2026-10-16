@@ -31,6 +31,7 @@ export const PRIORITIES = [
 ] as const;
 
 export const ISSUE_TYPES = [
+  { value: "epic", label: "Epic" },
   { value: "story", label: "Story" },
   { value: "task", label: "Task" },
   { value: "bug", label: "Bug" },

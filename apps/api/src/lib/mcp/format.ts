@@ -40,6 +40,10 @@ export function formatIssue(issue: McpIssue, embedded: Set<string>): string {
     `Status: ${issue.statusName} (${issue.statusType})`,
     `Priority: ${issue.priorityLabel}`,
     `Type: ${issue.typeLabel}`,
+    `Epic: ${issue.epic ? `${issue.epic.identifier} · ${issue.epic.title}` : "none"}`,
+    issue.children.length
+      ? `Issues: ${issue.children.map((child) => `${child.identifier} · ${child.title} (${child.statusName})`).join("; ")}`
+      : "Issues: none",
     `Assignee: ${formatPerson(issue.assignee) ?? "Unassigned"}`,
     `Creator: ${formatPerson(issue.creator) ?? "Unknown"}`,
     `Cycle: ${

@@ -14,11 +14,14 @@ import { issuesRoutes } from "@/routes/issues";
 import { labelsRoutes } from "@/routes/labels";
 import { mcpRoutes } from "@/routes/mcp";
 import { mcpTokenRoutes } from "@/routes/mcp-tokens";
+import { oauthRoutes } from "@/routes/oauth";
+import { wellKnownRoutes } from "@/routes/well-known";
 import { meRoutes } from "@/routes/me";
 import { notificationsRoutes } from "@/routes/notifications";
 import { posthogProxyRoutes } from "@/routes/posthog-proxy";
 import { profileRoutes } from "@/routes/profile";
 import { slackRoutes } from "@/routes/slack";
+import { statusesRoutes } from "@/routes/statuses";
 import { workspaceRoutes } from "@/routes/workspace";
 
 const app = new Hono();
@@ -39,6 +42,7 @@ app.notFound((c) => c.json({ error: "Not found" }, 404));
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
+app.route("/", wellKnownRoutes);
 app.route("/api", posthogProxyRoutes);
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -53,6 +57,7 @@ app.use("/api/import/*", bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
 app.route("/api", meRoutes);
 app.route("/api", mcpTokenRoutes);
+app.route("/api", oauthRoutes);
 app.route("/api", mcpRoutes);
 app.route("/api", invitesRoutes);
 app.route("/api", workspaceRoutes);
@@ -60,6 +65,7 @@ app.route("/api", slackRoutes);
 app.route("/api", issuesRoutes);
 app.route("/api", cyclesRoutes);
 app.route("/api", labelsRoutes);
+app.route("/api", statusesRoutes);
 app.route("/api", notificationsRoutes);
 app.route("/api", profileRoutes);
 app.route("/api", attachmentsRoutes);

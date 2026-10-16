@@ -4,6 +4,7 @@ import {
   type RpcResponse,
 } from "@/lib/mcp/protocol";
 import type { McpScope, McpToolResult } from "@/lib/mcp/types";
+import { oauthWwwAuthenticate } from "@/lib/oauth/urls";
 
 const MAX_BODY_BYTES = 1_000_000;
 
@@ -95,10 +96,18 @@ export async function handleMcpHttpRequest(
     );
   }
 
-  const actor = await deps.authenticate(request.headers.get("authorization") ?? undefined);
+  const authorization = request.headers.get("authorization") ?? undefined;
+  const actor = await deps.authenticate(authorization);
   if (!actor) {
-    // Plain 401 with no WWW-Authenticate header. OAuth discovery would make
-    // Cursor ignore the bearer token configured in mcp.json.
+    // A missing Authorization header starts OAuth. A bad bearer token keeps a
+    // plain 401 so Cursor leaves a pasted mcp.json secret alone.
+    if (!authorization?.trim()) {
+      return json(
+        { error: "Unauthorized" },
+        401,
+        { "www-authenticate": oauthWwwAuthenticate() }
+      );
+    }
     return json({ error: "Unauthorized" }, 401);
   }
 

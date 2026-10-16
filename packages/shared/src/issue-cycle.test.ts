@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { cycleIdAfterStatusChange } from "./issue-cycle";
+import {
+  cycleIdAfterStatusChange,
+  earliestStatusId,
+  todoStatusIdForCycleEntry,
+} from "./issue-cycle";
 
 const statuses = [
   { id: "backlog", type: "backlog" },
@@ -50,6 +54,21 @@ test("a move that stays out of backlog keeps the existing cycle", () => {
     cycleIdAfterStatusChange(statuses, "todo", "doing", "sprint-2", "sprint-9", true),
     undefined
   );
+});
+
+test("cycle entry uses the leftmost unstarted column", () => {
+  const columns = [
+    { id: "backlog", type: "backlog", position: 0 },
+    { id: "review", type: "unstarted", position: 3 },
+    { id: "todo", type: "unstarted", position: 1 },
+  ];
+  assert.equal(earliestStatusId(columns, "unstarted"), "todo");
+  assert.equal(
+    todoStatusIdForCycleEntry(columns, "backlog", "sprint-2"),
+    "todo"
+  );
+  assert.equal(todoStatusIdForCycleEntry(columns, "backlog", null), undefined);
+  assert.equal(todoStatusIdForCycleEntry(columns, "todo", "sprint-2"), undefined);
 });
 
 test("an issue that already has a cycle is not reassigned from backlog", () => {

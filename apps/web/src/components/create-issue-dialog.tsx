@@ -11,6 +11,7 @@ import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   AssigneePicker,
   CyclePicker,
+  EpicPicker,
   LabelPicker,
   PriorityPicker,
   StatusPicker,
@@ -21,7 +22,10 @@ import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbn
 import { showIssueCreatedToast } from "@/components/issue-created-toast";
 import { BlockEditor } from "@/components/block-editor";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
-import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import {
+  earliestStatusId,
+  todoStatusIdForCycleEntry,
+} from "@/lib/issue-cycle";
 import { wsPath } from "@/lib/workspace-paths";
 import type { IssueType } from "@/lib/types";
 
@@ -30,21 +34,27 @@ export function CreateIssueDialog({
   onOpenChange,
   defaultStatusId,
   defaultCycleId,
+  defaultType,
+  defaultEpicId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultStatusId?: string;
   /** When set (including `null` for "no cycle"), prefill the cycle picker. */
   defaultCycleId?: string | null;
+  defaultType?: IssueType;
+  defaultEpicId?: string | null;
 }) {
   const { workspace, statuses, members } = useWorkspace();
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
-  const backlogStatusId = statuses.find((s) => s.type === "backlog")?.id;
+  const backlogStatusId = earliestStatusId(statuses, "backlog");
   const fallbackStatus =
     backlogStatusId ??
-    (statuses.find((s) => s.type === "unstarted") ?? statuses[0]).id;
+    earliestStatusId(statuses, "unstarted") ??
+    statuses[0]?.id ??
+    "";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -53,6 +63,7 @@ export function CreateIssueDialog({
   const [priority, setPriority] = useState(0);
   const [assigneeId, setAssigneeId] = useState<string | null>(null);
   const [cycleId, setCycleId] = useState<string | null>(null);
+  const [epicId, setEpicId] = useState<string | null>(null);
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const uploads = useAttachmentUploads();
   const { clear: clearUploads } = uploads;
@@ -67,16 +78,20 @@ export function CreateIssueDialog({
       todoStatusIdForCycleEntry(statuses, initialStatusId, initialCycleId) ??
         initialStatusId
     );
-    setType("story");
+    const initialType = defaultType ?? "story";
+    setType(initialType);
     setPriority(0);
     setAssigneeId(null);
     setCycleId(initialCycleId);
+    setEpicId(initialType === "epic" ? null : (defaultEpicId ?? null));
     setLabelIds([]);
     clearUploads();
   }, [
     open,
     defaultStatusId,
     defaultCycleId,
+    defaultType,
+    defaultEpicId,
     fallbackStatus,
     statuses,
     clearUploads,
@@ -102,6 +117,7 @@ export function CreateIssueDialog({
           priority,
           assigneeId,
           cycleId,
+          epicId: type === "epic" ? null : epicId,
           labelIds,
           attachments: payload,
         });
@@ -114,7 +130,7 @@ export function CreateIssueDialog({
           status: status ?? { type: "unstarted", color: "currentColor" },
           href: wsPath(workspace.slug, `/issue/${identifier}`),
         });
-        void invalidateAfterIssueChange(qc, workspace.id);
+        await invalidateAfterIssueChange(qc, workspace.id);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to create issue");
       }
@@ -175,10 +191,19 @@ export function CreateIssueDialog({
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3">
           <StatusPicker value={statusId} onChange={setStatusId} />
-          <TypePicker value={type} onChange={setType} />
+          <TypePicker
+            value={type}
+            onChange={(next) => {
+              setType(next);
+              if (next === "epic") setEpicId(null);
+            }}
+          />
           <PriorityPicker value={priority} onChange={setPriority} />
           <AssigneePicker value={assigneeId} onChange={setAssigneeId} />
           <LabelPicker value={labelIds} onChange={setLabelIds} />
+          {type !== "epic" && (
+            <EpicPicker value={epicId} onChange={setEpicId} />
+          )}
           <CyclePicker
             value={cycleId}
             onChange={(next) => {

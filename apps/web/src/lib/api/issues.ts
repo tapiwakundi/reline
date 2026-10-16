@@ -17,9 +17,10 @@ export async function createIssue(input: {
   description?: string;
   statusId?: string;
   priority?: number;
-  type?: "story" | "task" | "bug";
+  type?: "epic" | "story" | "task" | "bug";
   assigneeId?: string | null;
   cycleId?: string | null;
+  epicId?: string | null;
   labelIds?: string[];
   attachments?: AttachmentInput[];
 }) {

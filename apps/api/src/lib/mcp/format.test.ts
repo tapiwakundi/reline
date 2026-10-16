@@ -14,6 +14,8 @@ const issue: McpIssue = {
   statusType: "started",
   priorityLabel: "High",
   typeLabel: "Bug",
+  epic: null,
+  children: [],
   assignee: { name: "Ada Lovelace", email: "ada@example.com" },
   creator: { name: "Grace Hopper", email: "grace@example.com" },
   cycle: { number: 3, name: "Sprint 3", status: "active" },

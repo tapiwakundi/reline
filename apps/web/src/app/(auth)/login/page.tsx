@@ -60,6 +60,13 @@ function LoginForm() {
     toast.error(oauthErrorMessage(error));
   }, [error, isPending, step]);
 
+  useEffect(() => {
+    if (isPending || step || error || !hasSession) return;
+    if (destination === "/") return;
+    router.replace(destination);
+    router.refresh();
+  }, [destination, error, hasSession, isPending, router, step]);
+
   async function finishWithGoogle() {
     setLoading(true);
     const { error: linkError } = await linkGoogleAccount(destination);
@@ -262,7 +269,14 @@ function LoginForm() {
       ) : (
         <p className="text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-foreground hover:underline">
+          <Link
+            href={
+              destination === "/"
+                ? "/signup"
+                : `/signup?next=${encodeURIComponent(destination)}`
+            }
+            className="text-foreground hover:underline"
+          >
             Sign up
           </Link>
         </p>

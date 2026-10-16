@@ -31,9 +31,25 @@ function post(body: unknown, init?: { authorization?: string; accept?: string; c
 }
 
 describe("MCP HTTP", () => {
-  it("rejects missing credentials without starting OAuth", async () => {
+  it("challenges a missing Authorization header with OAuth metadata", async () => {
     const response = await handleMcpHttpRequest(
       post({ jsonrpc: "2.0", id: 1, method: "initialize" }),
+      deps()
+    );
+    assert.equal(response.status, 401);
+    const challenge = response.headers.get("www-authenticate");
+    assert.match(challenge ?? "", /Bearer /);
+    assert.match(challenge ?? "", /oauth-protected-resource/);
+    assert.match(challenge ?? "", /scope="write"/);
+    assert.deepEqual(await response.json(), { error: "Unauthorized" });
+  });
+
+  it("keeps a plain 401 when a bearer token is present but invalid", async () => {
+    const response = await handleMcpHttpRequest(
+      post(
+        { jsonrpc: "2.0", id: 1, method: "initialize" },
+        { authorization: "Bearer rel_wrong" }
+      ),
       deps()
     );
     assert.equal(response.status, 401);

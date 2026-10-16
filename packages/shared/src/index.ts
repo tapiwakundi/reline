@@ -7,6 +7,8 @@ export type {
   CycleListItem,
   CycleRow,
   DetailIssue,
+  EpicChild,
+  EpicRef,
   ImportReport,
   InboxItem,
   InvitePreview,
@@ -22,6 +24,8 @@ export type {
   WorkspaceRole,
   SavedAttachment,
   StatusRow,
+  StatusType,
+  WorkspaceStatus,
   WorkspaceBootstrap,
   WorkspaceData,
   WorkspaceListItem,
@@ -35,6 +39,8 @@ export {
   LABEL_COLORS,
   PRIORITIES,
 } from "./defaults";
+
+export { epicLinksToApply, epicProgress, nextEpicId } from "./epics";
 
 export {
   BOARD_DISPLAY_COOKIE,
@@ -82,8 +88,25 @@ export {
   cycleIdAfterStatusChange,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
+  earliestStatus,
+  earliestStatusId,
   todoStatusIdForCycleEntry,
 } from "./issue-cycle";
+
+export {
+  STATUS_NAME_MAX,
+  STATUS_TYPES,
+  defaultStatusColor,
+  isCompletedStatusType,
+  isStatusColor,
+  isStatusType,
+  nextStatusPosition,
+  normalizeStatusColor,
+  normalizeStatusName,
+  parseStatusName,
+  statusOrderUpdate,
+  statusTypeLabel,
+} from "./statuses";
 
 export { mentionSpans, mentionsAdded, resolveMentions, splitMentions } from "./mentions";
 

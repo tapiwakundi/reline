@@ -7,6 +7,8 @@ import { CreateIssueDialog } from "@/components/create-issue-dialog";
 export type CreateIssueDefaults = {
   statusId?: string;
   cycleId?: string | null;
+  type?: "epic" | "story" | "task" | "bug";
+  epicId?: string | null;
 };
 
 const ShortcutsContext = createContext<{
@@ -67,6 +69,8 @@ export function GlobalShortcuts({ children }: { children: React.ReactNode }) {
         }}
         defaultStatusId={defaults.statusId}
         defaultCycleId={defaults.cycleId}
+        defaultType={defaults.type}
+        defaultEpicId={defaults.epicId}
       />
       <CommandPalette
         open={paletteOpen}

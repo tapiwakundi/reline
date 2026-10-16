@@ -25,6 +25,7 @@ import {
   type WorkspaceData,
   type WorkspaceMember,
   type WorkspaceSettings,
+  type WorkspaceStatus,
 } from "@reline/shared";
 import { publicUrl } from "@/lib/r2";
 
@@ -133,7 +134,10 @@ export async function getIssues(
 
   const rows = await db.query.issues.findMany({
     where: and(...conditions),
-    with: { labels: true },
+    with: {
+      labels: true,
+      epic: { columns: { id: true, number: true, title: true, type: true } },
+    },
     orderBy: asc(issues.boardOrder),
   });
 
@@ -147,6 +151,15 @@ export async function getIssues(
     statusId: i.statusId,
     assigneeId: i.assigneeId,
     cycleId: i.cycleId,
+    epicId: i.epicId,
+    epic:
+      i.epic && i.epic.type === "epic"
+        ? {
+            id: i.epic.id,
+            identifier: `${prefix}-${i.epic.number}`,
+            title: i.epic.title,
+          }
+        : null,
     estimate: i.estimate,
     boardOrder: i.boardOrder,
     createdAt: i.createdAt.toISOString(),
@@ -245,7 +258,8 @@ export async function getIssueDetail(
   });
   if (!issue) return null;
 
-  const [commentRows, activityRows, attachmentRows] = await Promise.all([
+  const [commentRows, activityRows, attachmentRows, epicRow, childRows] =
+    await Promise.all([
     db.query.comments.findMany({
       where: eq(comments.issueId, issue.id),
       with: { author: true },
@@ -260,6 +274,32 @@ export async function getIssueDetail(
       where: eq(attachments.issueId, issue.id),
       orderBy: asc(attachments.createdAt),
     }),
+    issue.epicId
+      ? db.query.issues.findFirst({
+          where: and(
+            eq(issues.id, issue.epicId),
+            eq(issues.workspaceId, workspaceId)
+          ),
+          columns: { id: true, number: true, title: true, type: true },
+        })
+      : Promise.resolve(null),
+    issue.type === "epic"
+      ? db.query.issues.findMany({
+          where: and(
+            eq(issues.epicId, issue.id),
+            eq(issues.workspaceId, workspaceId)
+          ),
+          columns: {
+            id: true,
+            number: true,
+            title: true,
+            type: true,
+            statusId: true,
+            priority: true,
+          },
+          orderBy: asc(issues.number),
+        })
+      : Promise.resolve([]),
   ]);
 
   const toSaved = (a: (typeof attachmentRows)[number]) => ({
@@ -298,6 +338,15 @@ export async function getIssueDetail(
           }
         : null,
       cycleId: issue.cycleId,
+      epicId: issue.epicId,
+      epic:
+        epicRow && epicRow.type === "epic"
+          ? {
+              id: epicRow.id,
+              identifier: `${prefix}-${epicRow.number}`,
+              title: epicRow.title,
+            }
+          : null,
       labelIds: issue.labels.map((l) => l.labelId),
       createdAt: issue.createdAt.toISOString(),
       attachments: issueAttachments,
@@ -330,6 +379,14 @@ export async function getIssueDetail(
             image: a.actor.image ?? null,
           }
         : null,
+    })),
+    children: childRows.map((child) => ({
+      id: child.id,
+      identifier: `${prefix}-${child.number}`,
+      title: child.title,
+      type: child.type,
+      statusId: child.statusId,
+      priority: child.priority,
     })),
   };
 }
@@ -370,6 +427,33 @@ export async function getInbox(
   }));
 }
 
+export async function getWorkspaceStatuses(
+  workspaceId: string
+): Promise<WorkspaceStatus[]> {
+  const [rows, issueCounts] = await Promise.all([
+    db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspaceId),
+      orderBy: asc(statuses.position),
+    }),
+    db
+      .select({ statusId: issues.statusId, value: count() })
+      .from(issues)
+      .where(eq(issues.workspaceId, workspaceId))
+      .groupBy(issues.statusId),
+  ]);
+  const countByStatus = new Map(
+    issueCounts.map((row) => [row.statusId, Number(row.value)])
+  );
+  return rows.map((status) => ({
+    id: status.id,
+    name: status.name,
+    type: status.type,
+    color: status.color,
+    position: status.position,
+    issueCount: countByStatus.get(status.id) ?? 0,
+  }));
+}
+
 export async function getWorkspaceSettings(
   workspace: {
     id: string;
@@ -394,6 +478,7 @@ export async function getWorkspaceSettings(
     },
     meId
   );
+  const columnRows = await getWorkspaceStatuses(workspace.id);
   return {
     workspace: {
       id: workspace.id,
@@ -406,5 +491,6 @@ export async function getWorkspaceSettings(
     role: membershipRole,
     members: data.members,
     labels: data.labels,
+    statuses: columnRows,
   };
 }
