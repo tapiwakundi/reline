@@ -25,6 +25,7 @@ import {
   type WorkspaceData,
   type WorkspaceMember,
   type WorkspaceSettings,
+  type WorkspaceStatus,
 } from "@reline/shared";
 import { publicUrl } from "@/lib/r2";
 
@@ -370,6 +371,33 @@ export async function getInbox(
   }));
 }
 
+export async function getWorkspaceStatuses(
+  workspaceId: string
+): Promise<WorkspaceStatus[]> {
+  const [rows, issueCounts] = await Promise.all([
+    db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspaceId),
+      orderBy: asc(statuses.position),
+    }),
+    db
+      .select({ statusId: issues.statusId, value: count() })
+      .from(issues)
+      .where(eq(issues.workspaceId, workspaceId))
+      .groupBy(issues.statusId),
+  ]);
+  const countByStatus = new Map(
+    issueCounts.map((row) => [row.statusId, Number(row.value)])
+  );
+  return rows.map((status) => ({
+    id: status.id,
+    name: status.name,
+    type: status.type,
+    color: status.color,
+    position: status.position,
+    issueCount: countByStatus.get(status.id) ?? 0,
+  }));
+}
+
 export async function getWorkspaceSettings(
   workspace: {
     id: string;
@@ -394,6 +422,7 @@ export async function getWorkspaceSettings(
     },
     meId
   );
+  const columnRows = await getWorkspaceStatuses(workspace.id);
   return {
     workspace: {
       id: workspace.id,
@@ -406,5 +435,6 @@ export async function getWorkspaceSettings(
     role: membershipRole,
     members: data.members,
     labels: data.labels,
+    statuses: columnRows,
   };
 }

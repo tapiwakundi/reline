@@ -21,6 +21,8 @@ export type {
   WorkspaceMember,
   SavedAttachment,
   StatusRow,
+  StatusType,
+  WorkspaceStatus,
   WorkspaceBootstrap,
   WorkspaceData,
   WorkspaceListItem,

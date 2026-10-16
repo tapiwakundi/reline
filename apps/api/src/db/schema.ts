@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 const id = () =>
@@ -161,7 +161,13 @@ export const statuses = pgTable(
     color: text("color").notNull(),
     position: doublePrecision("position").notNull(),
   },
-  (t) => [index("statuses_ws_idx").on(t.workspaceId)]
+  (t) => [
+    index("statuses_ws_idx").on(t.workspaceId),
+    uniqueIndex("statuses_ws_name_idx").on(
+      t.workspaceId,
+      sql`lower(${t.name})`
+    ),
+  ]
 );
 
 export const cycles = pgTable(
