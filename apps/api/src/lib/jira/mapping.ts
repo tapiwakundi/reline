@@ -1,4 +1,9 @@
-import type { IssueType, StatusRow, Member } from "@reline/shared";
+import {
+  earliestStatus,
+  type IssueType,
+  type StatusRow,
+  type Member,
+} from "@reline/shared";
 
 /** Map a Jira status name to one of the workspace's statuses. */
 export function mapJiraStatus(
@@ -10,8 +15,7 @@ export function mapJiraStatus(
   const exact = statuses.find((s) => s.name.toLowerCase() === name);
   if (exact) return exact;
 
-  const byType = (type: StatusRow["type"]) =>
-    statuses.find((s) => s.type === type);
+  const byType = (type: StatusRow["type"]) => earliestStatus(statuses, type);
 
   if (["backlog"].includes(name)) return byType("backlog") ?? statuses[0];
   if (

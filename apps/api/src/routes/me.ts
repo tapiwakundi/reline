@@ -55,6 +55,7 @@ meRoutes.get("/workspaces/:slug/bootstrap", requireUser, async (c) => {
         slug: workspace.slug,
         prefix: workspace.prefix,
         logo: workspace.logo ?? null,
+        cycleName: workspace.cycleName ?? null,
       },
       user.id
     ),

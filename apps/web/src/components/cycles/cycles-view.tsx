@@ -41,6 +41,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useCycles } from "@/lib/hooks/queries";
 import { useWorkspace } from "@/lib/workspace-context";
+import { defaultCycleName } from "@reline/shared";
 import { wsPath } from "@/lib/workspace-paths";
 import { invalidateAfterCycleChange } from "@/lib/invalidate";
 import type { CycleListItem } from "@/lib/types";
@@ -50,9 +51,7 @@ import { CompleteCycleDialog } from "@/components/cycles/complete-cycle-dialog";
 
 type CycleItem = CycleListItem;
 
-type ListEntry =
-  | { kind: "cycle"; cycle: CycleItem }
-  | { kind: "paused" };
+type ListEntry = { kind: "cycle"; cycle: CycleItem } | { kind: "paused" };
 
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -66,7 +65,9 @@ function startOfDay(d: Date) {
 }
 
 function daysBetween(a: Date, b: Date) {
-  return Math.round((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86400000);
+  return Math.round(
+    (startOfDay(b).getTime() - startOfDay(a).getTime()) / 86400000,
+  );
 }
 
 function defaultDates() {
@@ -259,9 +260,7 @@ function CycleChart({ cycle }: { cycle: CycleItem }) {
               <span className="text-muted-foreground">
                 {" "}
                 ·{" "}
-                {cycle.total
-                  ? Math.round((cycle.done / cycle.total) * 100)
-                  : 0}
+                {cycle.total ? Math.round((cycle.done / cycle.total) * 100) : 0}
                 %
               </span>
             </span>
@@ -284,17 +283,20 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
   const [renameValue, setRenameValue] = useState("");
   const [completing, setCompleting] = useState<CycleItem | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(
-    () => initialCycles.find((c) => c.status === "active")?.id ?? null
+    () => initialCycles.find((c) => c.status === "active")?.id ?? null,
   );
   const defaults = defaultDates();
   const nextCycleNumber =
     list.reduce((max, c) => Math.max(max, c.number), 0) + 1;
-  const defaultCycleName = `${workspace.name} Cycle ${nextCycleNumber}`;
-  const [createName, setCreateName] = useState(defaultCycleName);
+  const suggestedCycleName = defaultCycleName(workspace, nextCycleNumber);
+  const [createName, setCreateName] = useState(suggestedCycleName);
 
   function openCreate() {
     setCreateName(
-      `${workspace.name} Cycle ${list.reduce((max, c) => Math.max(max, c.number), 0) + 1}`
+      defaultCycleName(
+        workspace,
+        list.reduce((max, c) => Math.max(max, c.number), 0) + 1,
+      ),
     );
     setOpen(true);
   }
@@ -305,15 +307,15 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
         .filter((c) => c.status === "planned")
         .sort(
           (a, b) =>
-            new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+            new Date(a.startDate).getTime() - new Date(b.startDate).getTime(),
         ),
-    [list]
+    [list],
   );
 
   const entries = useMemo((): ListEntry[] => {
     const sorted = [...list].sort(
       (a, b) =>
-        new Date(b.startDate).getTime() - new Date(a.startDate).getTime()
+        new Date(b.startDate).getTime() - new Date(a.startDate).getTime(),
     );
     const out: ListEntry[] = [];
     for (let i = 0; i < sorted.length; i++) {
@@ -323,7 +325,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
       if (!older) continue;
       const gap = daysBetween(
         new Date(older.endDate),
-        new Date(newer.startDate)
+        new Date(newer.startDate),
       );
       if (gap > 3) out.push({ kind: "paused" });
     }
@@ -445,7 +447,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                     <div
                       className={cn(
                         "group relative flex items-stretch transition-colors",
-                        expanded ? "bg-accent/25" : "hover:bg-accent/30"
+                        expanded ? "bg-accent/25" : "hover:bg-accent/30",
                       )}
                     >
                       {/* Timeline date + node */}
@@ -455,7 +457,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                             "mb-1.5 text-[11px] tabular-nums",
                             isCurrent
                               ? "font-medium text-primary"
-                              : "text-muted-foreground"
+                              : "text-muted-foreground",
                           )}
                         >
                           {fmt(c.startDate)}
@@ -463,9 +465,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                         <span
                           className={cn(
                             "relative z-10 size-2.5 rounded-full ring-4 ring-background",
-                            isCurrent
-                              ? "bg-primary"
-                              : "bg-muted-foreground/45"
+                            isCurrent ? "bg-primary" : "bg-muted-foreground/45",
                           )}
                         />
                         {isCurrent && (
@@ -477,9 +477,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                         <div
                           role="button"
                           tabIndex={0}
-                          onClick={() =>
-                            setExpandedId(expanded ? null : c.id)
-                          }
+                          onClick={() => setExpandedId(expanded ? null : c.id)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
@@ -493,7 +491,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                               "size-4 shrink-0",
                               isCurrent
                                 ? "text-primary"
-                                : "text-muted-foreground"
+                                : "text-muted-foreground",
                             )}
                           />
                           <Link
@@ -506,9 +504,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
 
                           <div className="ml-auto hidden items-center gap-3 text-[12px] text-muted-foreground lg:flex">
                             <span
-                              className={cn(
-                                isCurrent && "text-foreground/80"
-                              )}
+                              className={cn(isCurrent && "text-foreground/80")}
                             >
                               {statusLabel(c.status)}
                             </span>
@@ -543,12 +539,33 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                               {statusLabel(c.status)}
                             </span>
                             <ProgressRing
-                              value={c.status === "completed" ? pct : capacityPct}
+                              value={
+                                c.status === "completed" ? pct : capacityPct
+                              }
                             />
                             <span className="text-[12px] tabular-nums text-muted-foreground">
                               {c.status === "completed" ? pct : capacityPct}%
                             </span>
                           </div>
+
+                          {c.status === "planned" && (
+                            <Button
+                              type="button"
+                              size="xs"
+                              variant="outline"
+                              disabled={pending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                act(
+                                  () => startCycle(c.id),
+                                  `${c.name} started`,
+                                )();
+                              }}
+                            >
+                              <PlayIcon />
+                              Start cycle
+                            </Button>
+                          )}
 
                           <DropdownMenu>
                             <DropdownMenuTrigger
@@ -557,7 +574,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                                   variant: "ghost",
                                   size: "icon",
                                 }),
-                                "size-7 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 data-popup-open:opacity-100 max-md:opacity-100"
+                                "size-7 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 data-popup-open:opacity-100 max-md:opacity-100",
                               )}
                               disabled={pending}
                               onClick={(e) => e.stopPropagation()}
@@ -577,10 +594,10 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                                 <DropdownMenuItem
                                   onClick={act(
                                     () => startCycle(c.id),
-                                    `${c.name} started`
+                                    `${c.name} started`,
                                   )}
                                 >
-                                  <PlayIcon /> Start cycle
+                                  <PlayIcon /> Start sprint
                                 </DropdownMenuItem>
                               )}
                               {c.status === "active" && (
@@ -596,7 +613,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                               <DropdownMenuItem
                                 onClick={() =>
                                   router.push(
-                                    `${wsPath(workspace.slug, "/board")}?cycle=${c.id}`
+                                    `${wsPath(workspace.slug, "/board")}?cycle=${c.id}`,
                                   )
                                 }
                               >
@@ -606,7 +623,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                                 variant="destructive"
                                 onClick={act(
                                   () => deleteCycle(c.id),
-                                  `${c.name} deleted`
+                                  `${c.name} deleted`,
                                 )}
                               >
                                 <Trash2Icon /> Delete
@@ -639,7 +656,7 @@ export function CyclesView({ cycles: initialCycles }: { cycles: CycleItem[] }) {
                 name="name"
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                placeholder={defaultCycleName}
+                placeholder={suggestedCycleName}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">

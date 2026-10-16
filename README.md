@@ -32,8 +32,9 @@ so auth cookies stay first-party.
 - Command palette (⌘K) and shortcuts (`C` to create an issue)
 - Workspace invites via link
 - One-time Jira import: CSV export or Jira Cloud REST API
-- Read-only Cursor MCP: paste an issue link and Cursor can read the
-  description and attachments
+- Cursor MCP: paste an issue link and Cursor can read it, or create and
+  edit tickets with the same headings, lists, and other formatting as the
+  issue editor
 
 ## Local development
 
@@ -188,8 +189,10 @@ first request after that takes a few seconds.
 
 ## Cursor MCP
 
-Settings → Cursor creates a **read-only** personal token. The token can read
-issues in workspaces you belong to. It cannot create, edit, or delete anything.
+Settings → Cursor creates a personal token. A new token can read, create, and
+edit issues in workspaces you belong to, including descriptions with headings,
+lists, checkboxes, quotes, and code. It cannot delete issues. Tokens created
+before this stay read-only until you revoke them and create a new one.
 
 In Cursor, add a remote MCP server (or paste this into `~/.cursor/mcp.json`):
 
@@ -212,7 +215,9 @@ origin in production. Next.js forwards `/api/mcp` to the API. Then paste an
 issue link such as `https://<your-web-app>/acme/issue/REL-42` in chat. Cursor
 calls `get_issue` for the title, description, comments, and attachments, and
 `get_attachment` to refetch one file. Images are returned inline. Videos stay
-as URLs.
+as URLs. With a token that can edit, `create_issue` and `update_issue` write
+tickets. Descriptions are markdown (`#` headings, `-` bullets, `1.` lists,
+`- [ ]` checkboxes, quotes, and fenced code) and render in the issue editor.
 
 The secret is shown once and only its hash is stored. Revoke it from the same
 settings page if it leaks. There is no OAuth on this endpoint, so Cursor uses

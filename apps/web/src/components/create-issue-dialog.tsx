@@ -22,7 +22,10 @@ import { AttachmentThumbnails } from "@/components/attachments/attachment-thumbn
 import { showIssueCreatedToast } from "@/components/issue-created-toast";
 import { BlockEditor } from "@/components/block-editor";
 import { mediaFiles, useAttachmentUploads } from "@/lib/upload";
-import { todoStatusIdForCycleEntry } from "@/lib/issue-cycle";
+import {
+  earliestStatusId,
+  todoStatusIdForCycleEntry,
+} from "@/lib/issue-cycle";
 import { wsPath } from "@/lib/workspace-paths";
 import type { IssueType } from "@/lib/types";
 
@@ -46,10 +49,12 @@ export function CreateIssueDialog({
   const qc = useQueryClient();
   const [pending, startTransition] = useTransition();
 
-  const backlogStatusId = statuses.find((s) => s.type === "backlog")?.id;
+  const backlogStatusId = earliestStatusId(statuses, "backlog");
   const fallbackStatus =
     backlogStatusId ??
-    (statuses.find((s) => s.type === "unstarted") ?? statuses[0]).id;
+    earliestStatusId(statuses, "unstarted") ??
+    statuses[0]?.id ??
+    "";
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");

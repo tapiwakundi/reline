@@ -225,6 +225,7 @@ async function runImport(
       slug: workspace.slug,
       prefix: workspace.prefix,
       logo: workspace.logo ?? null,
+      cycleName: workspace.cycleName ?? null,
     },
     user.id
   );

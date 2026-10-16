@@ -3,21 +3,26 @@ import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { mcpTokens, user } from "@/db/schema";
 import { HttpError } from "@/lib/context";
+import {
+  MCP_READ_SCOPE,
+  MCP_WRITE_SCOPE,
+  type McpScope,
+} from "@/lib/mcp/types";
 
 const MAX_ACTIVE_TOKENS = 10;
-const READ_SCOPE = "read";
 
 export type McpActor = {
   id: string;
   name: string;
   email: string;
+  scope: McpScope;
 };
 
 export type McpTokenSummary = {
   id: string;
   name: string;
   tokenPrefix: string;
-  scope: typeof READ_SCOPE;
+  scope: McpScope;
   createdAt: string;
   lastUsedAt: string | null;
 };
@@ -64,7 +69,8 @@ export async function authenticateMcpToken(
     .where(and(eq(mcpTokens.tokenHash, hash), isNull(mcpTokens.revokedAt)))
     .limit(1);
   const row = rows[0];
-  if (!row || row.scope !== READ_SCOPE) return null;
+  const scope = parseMcpScope(row?.scope);
+  if (!row || !scope) return null;
 
   const stale =
     !row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 60_000;
@@ -75,7 +81,7 @@ export async function authenticateMcpToken(
       .where(eq(mcpTokens.id, row.tokenId));
   }
 
-  return { id: row.userId, name: row.name, email: row.email };
+  return { id: row.userId, name: row.name, email: row.email, scope };
 }
 
 export async function listMcpTokens(userId: string): Promise<McpTokenSummary[]> {
@@ -115,7 +121,7 @@ export async function createMcpToken(
       name: trimmed,
       tokenHash: generated.tokenHash,
       tokenPrefix: generated.tokenPrefix,
-      scope: READ_SCOPE,
+      scope: MCP_WRITE_SCOPE,
     })
     .returning();
   if (!row) throw new HttpError(500, "Could not create token");
@@ -142,8 +148,13 @@ function toSummary(row: typeof mcpTokens.$inferSelect): McpTokenSummary {
     id: row.id,
     name: row.name,
     tokenPrefix: row.tokenPrefix,
-    scope: READ_SCOPE,
+    scope: parseMcpScope(row.scope) ?? MCP_READ_SCOPE,
     createdAt: row.createdAt.toISOString(),
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
   };
+}
+
+function parseMcpScope(value: string | undefined): McpScope | null {
+  if (value === MCP_READ_SCOPE || value === MCP_WRITE_SCOPE) return value;
+  return null;
 }

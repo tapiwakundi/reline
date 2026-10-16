@@ -11,7 +11,7 @@ import {
   uniqueIndex,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 
 const id = () =>
@@ -87,6 +87,8 @@ export const workspaces = pgTable("workspaces", {
   // Issue identifier prefix, e.g. "REL" -> REL-123
   prefix: text("prefix").notNull().default("REL"),
   logo: text("logo"),
+  /** Optional label for new cycles. Null uses the workspace name. */
+  cycleName: text("cycle_name"),
   issueCounter: integer("issue_counter").notNull().default(0),
   cycleCounter: integer("cycle_counter").notNull().default(0),
   createdAt: timestamp("created_at")
@@ -159,7 +161,13 @@ export const statuses = pgTable(
     color: text("color").notNull(),
     position: doublePrecision("position").notNull(),
   },
-  (t) => [index("statuses_ws_idx").on(t.workspaceId)]
+  (t) => [
+    index("statuses_ws_idx").on(t.workspaceId),
+    uniqueIndex("statuses_ws_name_idx").on(
+      t.workspaceId,
+      sql`lower(${t.name})`
+    ),
+  ]
 );
 
 export const cycles = pgTable(
@@ -327,9 +335,10 @@ export type NotificationType =
   | "mentioned";
 
 /**
- * Personal credentials for the read-only MCP server.
- * `scope` is always "read" — these tokens cannot create or change issues.
- * Only a hash of the secret is stored.
+ * Personal credentials for the MCP server.
+ * `read` can only look up issues. `write` can also create and edit them.
+ * Tokens minted before write access stay `read` until they are revoked
+ * and created again. Only a hash of the secret is stored.
  */
 export const mcpTokens = pgTable(
   "mcp_tokens",
@@ -341,7 +350,7 @@ export const mcpTokens = pgTable(
     name: text("name").notNull(),
     tokenHash: text("token_hash").notNull(),
     tokenPrefix: text("token_prefix").notNull(),
-    scope: text("scope").notNull().default("read"),
+    scope: text("scope").notNull().default("write"),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),

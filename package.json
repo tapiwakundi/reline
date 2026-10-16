@@ -11,7 +11,7 @@
     "build": "npm run build -w @reline/api && npm run build -w @reline/web",
     "lint": "npm run lint -w @reline/api && npm run lint -w @reline/web",
     "db:generate": "npm run db:generate -w @reline/api",
-    "db:migrate": "npm run db:migrate -w @reline/api",
+    "migrate": "npm run db:migrate -w @reline/api",
     "db:studio": "npm run db:studio -w @reline/api"
   },
   "devDependencies": {

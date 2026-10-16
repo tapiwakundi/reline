@@ -11,6 +11,7 @@ import { MobileNavButton } from "@/components/mobile-nav";
 const tabDefs = [
   { path: "/settings/profile", label: "Profile" },
   { path: "/settings", label: "General" },
+  { path: "/settings/columns", label: "Columns" },
   { path: "/settings/members", label: "Members" },
   { path: "/settings/labels", label: "Labels" },
   { path: "/settings/import", label: "Import" },

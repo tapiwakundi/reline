@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { imageDataHasDetail } from "@/lib/square-avatar";
 import {
   Dialog,
   DialogContent,
@@ -53,10 +55,17 @@ function placement(
   };
 }
 
+function canvasBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
+  return new Promise<Blob | null>((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
 async function exportSquare(
   image: HTMLImageElement,
   zoom: number,
-  pan: { x: number; y: number }
+  pan: { x: number; y: number },
+  format: "webp" | "jpeg"
 ) {
   const { scale, left, top } = placement(
     image.naturalWidth,
@@ -67,7 +76,7 @@ async function exportSquare(
   const canvas = document.createElement("canvas");
   canvas.width = OUTPUT;
   canvas.height = OUTPUT;
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Could not crop that image");
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(
@@ -81,29 +90,44 @@ async function exportSquare(
     OUTPUT,
     OUTPUT
   );
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(
-      (webp) => {
-        if (webp) resolve(webp);
-        else canvas.toBlob(resolve, "image/jpeg", 0.92);
-      },
-      "image/webp",
-      0.92
-    );
-  });
+  if (
+    format === "jpeg" &&
+    !imageDataHasDetail(ctx.getImageData(0, 0, OUTPUT, OUTPUT).data)
+  ) {
+    throw new Error("Could not crop that image");
+  }
+
+  const blob =
+    format === "jpeg"
+      ? await canvasBlob(canvas, "image/jpeg", 0.9)
+      : (await canvasBlob(canvas, "image/webp", 0.92)) ??
+        (await canvasBlob(canvas, "image/jpeg", 0.92));
   if (!blob) throw new Error("Could not crop that image");
   const ext = blob.type === "image/jpeg" ? "jpg" : "webp";
-  return new File([blob], `logo.${ext}`, { type: blob.type || "image/webp" });
+  const name = format === "jpeg" ? "avatar" : "logo";
+  return new File([blob], `${name}.${ext}`, { type: blob.type || "image/webp" });
 }
 
-export function LogoCropDialog({
+export function ImageCropDialog({
   file,
   onClose,
   onSave,
+  title = "Crop logo",
+  description = "Drag to reposition. Zoom so the mark fills the square.",
+  saveLabel = "Save logo",
+  failureMessage = "Could not save logo",
+  shape = "rounded",
+  format = "webp",
 }: {
   file: File | null;
   onClose: () => void;
   onSave: (file: File) => Promise<void>;
+  title?: string;
+  description?: string;
+  saveLabel?: string;
+  failureMessage?: string;
+  shape?: "rounded" | "circle";
+  format?: "webp" | "jpeg";
 }) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -188,9 +212,9 @@ export function LogoCropDialog({
     if (!image || saving) return;
     setSaving(true);
     try {
-      await onSave(await exportSquare(image, zoom, pan));
+      await onSave(await exportSquare(image, zoom, pan, format));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save logo");
+      toast.error(e instanceof Error ? e.message : failureMessage);
     } finally {
       setSaving(false);
     }
@@ -209,10 +233,8 @@ export function LogoCropDialog({
     >
       <DialogContent className="sm:max-w-sm" showCloseButton={!saving}>
         <DialogHeader>
-          <DialogTitle>Crop logo</DialogTitle>
-          <DialogDescription>
-            Drag to reposition. Zoom so the mark fills the square.
-          </DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col items-center gap-4">
@@ -221,7 +243,10 @@ export function LogoCropDialog({
             role="application"
             aria-label="Crop area"
             tabIndex={0}
-            className="relative size-60 cursor-grab touch-none overflow-hidden rounded-lg bg-muted outline-none ring-1 ring-foreground/15 focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+            className={cn(
+              "relative size-60 cursor-grab touch-none overflow-hidden bg-muted outline-none ring-1 ring-foreground/15 focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing",
+              shape === "circle" ? "rounded-full" : "rounded-lg"
+            )}
             onPointerDown={(e) => {
               if (!image) return;
               drag.current = {
@@ -359,7 +384,7 @@ export function LogoCropDialog({
             Cancel
           </Button>
           <Button type="button" disabled={!image || saving} onClick={save}>
-            {saving ? "Saving…" : "Save logo"}
+            {saving ? "Saving…" : saveLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

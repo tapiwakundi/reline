@@ -1,4 +1,4 @@
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   attachments,
@@ -18,6 +18,7 @@ import {
   cycleIdAfterStatusChange,
   cycleIdForBacklogEntry,
   cycleIdForTodoEntry,
+  earliestStatusId,
   mentionsAdded,
   todoStatusIdForCycleEntry,
   nextEpicId,
@@ -107,7 +108,8 @@ async function statusIdWhenEnteringCycle(
   if (!cycleId) return undefined;
   const workspaceStatuses = await db.query.statuses.findMany({
     where: eq(statuses.workspaceId, workspaceId),
-    columns: { id: true, type: true },
+    columns: { id: true, type: true, position: true },
+    orderBy: asc(statuses.position),
   });
   return todoStatusIdForCycleEntry(
     workspaceStatuses,
@@ -285,13 +287,15 @@ export async function createIssue(ctx: WorkspaceContext, input: {
 
   let statusId = input.statusId;
   if (!statusId) {
-    const backlog = await db.query.statuses.findFirst({
-      where: and(
-        eq(statuses.workspaceId, workspace.id),
-        eq(statuses.type, "backlog")
-      ),
+    const workspaceStatuses = await db.query.statuses.findMany({
+      where: eq(statuses.workspaceId, workspace.id),
+      columns: { id: true, type: true, position: true },
+      orderBy: asc(statuses.position),
     });
-    statusId = backlog!.id;
+    statusId =
+      earliestStatusId(workspaceStatuses, "backlog") ??
+      workspaceStatuses[0]?.id;
+    if (!statusId) throw new HttpError(400, "This workspace has no columns");
   }
 
   const cycleId = input.cycleId ?? null;

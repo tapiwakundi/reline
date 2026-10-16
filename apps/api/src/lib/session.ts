@@ -24,6 +24,7 @@ export async function getUserWorkspaces(
       slug: m.workspace.slug,
       prefix: m.workspace.prefix,
       logo: m.workspace.logo ?? null,
+      cycleName: m.workspace.cycleName ?? null,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

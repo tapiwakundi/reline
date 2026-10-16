@@ -12,6 +12,7 @@ import {
 } from "@/lib/r2";
 import { requireUser, type AuthEnv } from "@/middleware/auth";
 import { getSessionFromHeaders } from "@/lib/session";
+import { isBlankCanvasWebp } from "@/lib/avatar-file";
 
 export const profileRoutes = new Hono<AuthEnv>();
 
@@ -44,6 +45,9 @@ profileRoutes.post("/profile/avatar", requireUser, async (c) => {
   if (file.size <= 0) throw new HttpError(400, "That image is empty");
   if (file.size > MAX_AVATAR_BYTES) {
     throw new HttpError(400, "Photo must be under 5 MB");
+  }
+  if (isBlankCanvasWebp(contentType, file.size)) {
+    throw new HttpError(400, "Could not read that photo. Try uploading it again.");
   }
 
   let key: string;
