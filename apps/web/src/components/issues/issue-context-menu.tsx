@@ -6,7 +6,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   CirclePlayIcon,
-  CopyIcon,
   LinkIcon,
   SquareArrowOutUpRightIcon,
   TagIcon,
@@ -310,37 +309,17 @@ export function IssueContextMenu({
 
         <ContextMenuSeparator />
 
-        <ContextMenuSub>
-          <ContextMenuSubTrigger>
-            <CopyIcon className="size-3.5 text-muted-foreground" />
-            <span className="flex-1">Copy</span>
-          </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-48">
-            <ContextMenuItem
-              onClick={() =>
-                copyText(
-                  `${window.location.origin}${wsPath(workspace.slug, `/issue/${issue.identifier}`)}`,
-                  "Link"
-                )
-              }
-            >
-              <LinkIcon className="size-3.5 text-muted-foreground" />
-              Copy link
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => copyText(issue.identifier, "Issue ID")}
-            >
-              <CopyIcon className="size-3.5 text-muted-foreground" />
-              Copy ID
-            </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => copyText(issue.title, "Title")}
-            >
-              <CopyIcon className="size-3.5 text-muted-foreground" />
-              Copy title
-            </ContextMenuItem>
-          </ContextMenuSubContent>
-        </ContextMenuSub>
+        <ContextMenuItem
+          onClick={() =>
+            copyText(
+              `${window.location.origin}${wsPath(workspace.slug, `/issue/${issue.identifier}`)}`,
+              "Link"
+            )
+          }
+        >
+          <LinkIcon className="size-3.5 text-muted-foreground" />
+          Copy link
+        </ContextMenuItem>
 
         <ContextMenuItem onClick={openIssue}>
           <SquareArrowOutUpRightIcon className="size-3.5 text-muted-foreground" />
