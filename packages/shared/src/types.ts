@@ -46,6 +46,9 @@ export type EpicChild = {
   type: IssueType;
   statusId: string;
   priority: number;
+  assigneeId: string | null;
+  cycleId: string | null;
+  labelIds: string[];
 };
 
 export type LabelRow = {

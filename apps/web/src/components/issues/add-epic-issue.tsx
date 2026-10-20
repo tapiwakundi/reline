@@ -84,6 +84,9 @@ export function AddEpicIssue({
                 type: issue.type,
                 statusId: issue.statusId,
                 priority: issue.priority,
+                assigneeId: issue.assigneeId,
+                cycleId: issue.cycleId,
+                labelIds: issue.labelIds,
               },
             ],
           };

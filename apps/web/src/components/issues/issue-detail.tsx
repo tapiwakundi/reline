@@ -22,6 +22,7 @@ import { useShortcuts } from "@/components/global-shortcuts";
 import { epicProgress } from "@reline/shared";
 import { TypeIcon } from "@/components/issue-type-icon";
 import { AddEpicIssue } from "@/components/issues/add-epic-issue";
+import { IssueContextMenu } from "@/components/issues/issue-context-menu";
 import { invalidateAfterIssueChange } from "@/lib/invalidate";
 import {
   optimisticAddComment,
@@ -34,6 +35,7 @@ import {
 import type {
   ActivityItem,
   CommentItem,
+  EpicChild,
   IssueDetailData,
   Member,
 } from "@/lib/types";
@@ -60,6 +62,28 @@ import { MobileNavButton } from "@/components/mobile-nav";
 import { WorkspaceTrail } from "@/components/workspace-trail";
 import { parseFilters } from "@/lib/filtering";
 import { cn } from "@/lib/utils";
+
+function EpicChildRow({ child }: { child: EpicChild }) {
+  const { workspace, statuses } = useWorkspace();
+  const status = statuses.find((s) => s.id === child.statusId);
+  return (
+    <IssueContextMenu issue={child}>
+      <Link
+        href={wsPath(workspace.slug, `/issue/${child.identifier}`)}
+        className="flex h-9 items-center gap-2 border-b border-border/60 text-sm hover:bg-foreground/5"
+      >
+        <TypeIcon type={child.type} />
+        <span className="w-16 shrink-0 text-xs text-muted-foreground">
+          {child.identifier}
+        </span>
+        <span className="min-w-0 flex-1 truncate">{child.title}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {status?.name ?? "Unknown"}
+        </span>
+      </Link>
+    </IssueContextMenu>
+  );
+}
 
 function timeAgo(iso: string) {
   const s = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -476,31 +500,11 @@ export function IssueDetail({
                 </p>
               ) : (
                 <ul className="flex flex-col">
-                  {children.map((child) => {
-                    const status = statuses.find((s) => s.id === child.statusId);
-                    return (
-                      <li key={child.id}>
-                        <Link
-                          href={wsPath(
-                            workspace.slug,
-                            `/issue/${child.identifier}`
-                          )}
-                          className="flex h-9 items-center gap-2 border-b border-border/60 text-sm hover:bg-foreground/5"
-                        >
-                          <TypeIcon type={child.type} />
-                          <span className="w-16 shrink-0 text-xs text-muted-foreground">
-                            {child.identifier}
-                          </span>
-                          <span className="min-w-0 flex-1 truncate">
-                            {child.title}
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground">
-                            {status?.name ?? "Unknown"}
-                          </span>
-                        </Link>
-                      </li>
-                    );
-                  })}
+                  {children.map((child) => (
+                    <li key={child.id}>
+                      <EpicChildRow child={child} />
+                    </li>
+                  ))}
                 </ul>
               )}
             </section>

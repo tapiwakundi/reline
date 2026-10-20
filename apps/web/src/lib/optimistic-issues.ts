@@ -23,6 +23,7 @@ import type {
   CommentItem,
   CycleRow,
   DetailIssue,
+  EpicChild,
   IssueDetailData,
   IssueListItem,
   Member,
@@ -119,6 +120,49 @@ function isIssueListCache(
   return Array.isArray(data);
 }
 
+function isIssueDetailCache(data: unknown): data is IssueDetailData {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+  const row = data as Partial<IssueDetailData>;
+  return (
+    !!row.issue &&
+    typeof row.issue.id === "string" &&
+    Array.isArray(row.children)
+  );
+}
+
+function patchEpicChild(child: EpicChild, patch: IssuePatch): EpicChild {
+  return {
+    ...child,
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+    ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+    ...(patch.type !== undefined ? { type: patch.type } : {}),
+    ...(patch.statusId !== undefined ? { statusId: patch.statusId } : {}),
+    ...(patch.assigneeId !== undefined ? { assigneeId: patch.assigneeId } : {}),
+    ...(patch.cycleId !== undefined ? { cycleId: patch.cycleId } : {}),
+    ...(patch.labelIds !== undefined ? { labelIds: patch.labelIds } : {}),
+  };
+}
+
+/** Keep an open epic's child rows in step with a property edit or removal. */
+function syncEpicChildren(
+  data: IssueDetailData,
+  issueId: string,
+  patch: IssuePatch
+): IssueDetailData {
+  if (!data.children.some((child) => child.id === issueId)) return data;
+  const leaves =
+    patch.type === "epic" ||
+    (patch.epicId !== undefined && patch.epicId !== data.issue.id);
+  return {
+    ...data,
+    children: leaves
+      ? data.children.filter((child) => child.id !== issueId)
+      : data.children.map((child) =>
+          child.id === issueId ? patchEpicChild(child, patch) : child
+        ),
+  };
+}
+
 /** Snapshot every issues.* query so we can roll back on failure. */
 function snapshotIssueQueries(qc: QueryClient, workspaceId: string) {
   return qc.getQueriesData({ queryKey: queryKeys.issues.all(workspaceId) });
@@ -142,6 +186,9 @@ export function applyIssuePatchToCaches(
   qc.setQueriesData(
     { queryKey: queryKeys.issues.all(workspaceId) },
     (old: unknown) => {
+      if (isIssueDetailCache(old)) {
+        return syncEpicChildren(old, issue.id, patch);
+      }
       if (!isIssueListCache(old)) return old;
       const current = old.find((i) => i.id === issue.id);
       const leavingEpic =
@@ -196,6 +243,13 @@ export function removeIssueFromCaches(
   qc.setQueriesData(
     { queryKey: queryKeys.issues.all(workspaceId) },
     (old: unknown) => {
+      if (isIssueDetailCache(old)) {
+        if (!old.children.some((child) => child.id === issue.id)) return old;
+        return {
+          ...old,
+          children: old.children.filter((child) => child.id !== issue.id),
+        };
+      }
       if (!isIssueListCache(old)) return old;
       return old.filter((i) => i.id !== issue.id);
     }

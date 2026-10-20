@@ -7,6 +7,7 @@ export type {
   CycleListItem,
   CycleRow,
   DetailIssue,
+  EpicChild,
   ImportReport,
   InboxItem,
   InvitePreview,

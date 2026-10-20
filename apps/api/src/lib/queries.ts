@@ -296,7 +296,10 @@ export async function getIssueDetail(
             type: true,
             statusId: true,
             priority: true,
+            assigneeId: true,
+            cycleId: true,
           },
+          with: { labels: true },
           orderBy: asc(issues.number),
         })
       : Promise.resolve([]),
@@ -387,6 +390,9 @@ export async function getIssueDetail(
       type: child.type,
       statusId: child.statusId,
       priority: child.priority,
+      assigneeId: child.assigneeId,
+      cycleId: child.cycleId,
+      labelIds: child.labels.map((label) => label.labelId),
     })),
   };
 }

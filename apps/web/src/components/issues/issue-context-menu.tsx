@@ -44,6 +44,19 @@ import { PriorityIcon } from "@/components/priority-icon";
 import { TypeIcon } from "@/components/issue-type-icon";
 import { UserAvatar } from "@/components/user-avatar";
 
+/** Fields the property menu reads and writes. List rows and epic children both qualify. */
+export type IssueMenuTarget = Pick<
+  IssueListItem,
+  | "id"
+  | "identifier"
+  | "statusId"
+  | "priority"
+  | "type"
+  | "assigneeId"
+  | "cycleId"
+  | "labelIds"
+>;
+
 export type { IssuePatch };
 
 export function IssueContextMenu({
@@ -55,7 +68,7 @@ export function IssueContextMenu({
   onOptimisticDelete,
   onSelectionPatch,
 }: {
-  issue: IssueListItem;
+  issue: IssueMenuTarget;
   children: ReactElement;
   /** Optional full path (e.g. board → issue with cycle query). */
   href?: string;
