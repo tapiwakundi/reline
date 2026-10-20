@@ -533,20 +533,48 @@ export async function bulkUpdateIssues(
   if (uniqueIds.length === 0) return;
 
   const { workspace, user } = ctx;
-  const rows = await db.query.issues.findMany({
-    where: and(
-      eq(issues.workspaceId, workspace.id),
-      inArray(issues.id, uniqueIds)
-    ),
-  });
-  if (rows.length !== uniqueIds.length) {
-    throw new HttpError(404, "Issue not found");
-  }
-
+  const rows = await loadWorkspaceIssues(workspace.id, uniqueIds);
   for (const before of rows) {
     await applyIssueUpdate(workspace, user, before, patch);
   }
+}
 
+/** Apply a patch per issue in one request. Patches may differ. */
+export async function bulkPatchIssues(
+  ctx: WorkspaceContext,
+  updates: { issueId: string; patch: IssueUpdatePatch }[]
+) {
+  const byId = new Map<string, IssueUpdatePatch>();
+  for (const update of updates) {
+    if (!update || typeof update.issueId !== "string" || !update.issueId) {
+      throw new HttpError(400, "Each update needs an issue id");
+    }
+    if (
+      !update.patch ||
+      typeof update.patch !== "object" ||
+      Array.isArray(update.patch)
+    ) {
+      throw new HttpError(400, "Each update needs a patch");
+    }
+    byId.set(update.issueId, update.patch);
+  }
+  if (byId.size === 0) return;
+
+  const { workspace, user } = ctx;
+  const rows = await loadWorkspaceIssues(workspace.id, [...byId.keys()]);
+  for (const before of rows) {
+    await applyIssueUpdate(workspace, user, before, byId.get(before.id)!);
+  }
+}
+
+async function loadWorkspaceIssues(workspaceId: string, issueIds: string[]) {
+  const rows = await db.query.issues.findMany({
+    where: and(eq(issues.workspaceId, workspaceId), inArray(issues.id, issueIds)),
+  });
+  if (rows.length !== issueIds.length) {
+    throw new HttpError(404, "Issue not found");
+  }
+  return rows;
 }
 
 export async function moveIssueOnBoard(

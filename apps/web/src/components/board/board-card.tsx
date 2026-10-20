@@ -312,6 +312,7 @@ export function BoardCard({
   onSelectClick,
   onOptimisticUpdate,
   onOptimisticDelete,
+  onSelectionPatch,
 }: {
   issue: IssueListItem;
   properties: BoardCardProperty[];
@@ -325,6 +326,8 @@ export function BoardCard({
   onSelectClick?: (issueId: string, event: MouseEvent) => void;
   onOptimisticUpdate?: (patch: IssuePatch) => void;
   onOptimisticDelete?: () => void;
+  /** Apply this edit to every selected card. Return true when it did. */
+  onSelectionPatch?: (patch: IssuePatch) => boolean;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -350,6 +353,7 @@ export function BoardCard({
   const showPlaceholder = isDragging || isDragPlaceholder;
 
   function patch(next: IssuePatch) {
+    if (onSelectionPatch?.(next)) return;
     const resolved = resolveIssuePatch(
       next,
       issue,
@@ -382,6 +386,7 @@ export function BoardCard({
       cycleEntry={cycleEntry}
       onOptimisticUpdate={onOptimisticUpdate}
       onOptimisticDelete={onOptimisticDelete}
+      onSelectionPatch={onSelectionPatch}
     >
       <div
         ref={setNodeRef}

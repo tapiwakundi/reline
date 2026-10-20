@@ -53,6 +53,7 @@ export function IssueContextMenu({
   cycleEntry,
   onOptimisticUpdate,
   onOptimisticDelete,
+  onSelectionPatch,
 }: {
   issue: IssueListItem;
   children: ReactElement;
@@ -63,6 +64,11 @@ export function IssueContextMenu({
   /** Apply local state immediately (e.g. board columns) before the server refresh. */
   onOptimisticUpdate?: (patch: IssuePatch) => void;
   onOptimisticDelete?: () => void;
+  /**
+   * When this issue is part of a multi-selection, apply the raw patch to
+   * every selected issue. Return true when that handled the edit.
+   */
+  onSelectionPatch?: (patch: IssuePatch) => boolean;
 }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -75,6 +81,7 @@ export function IssueContextMenu({
   const currentStatus = statuses.find((s) => s.id === issue.statusId);
 
   function patch(p: IssuePatch) {
+    if (onSelectionPatch?.(p)) return;
     const resolved = resolveIssuePatch(p, issue, statuses, cycles, cycleEntry);
     onOptimisticUpdate?.(resolved);
     startTransition(async () => {

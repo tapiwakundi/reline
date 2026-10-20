@@ -52,6 +52,15 @@ export async function bulkUpdateIssues(
   });
 }
 
+export async function bulkPatchIssues(
+  updates: { issueId: string; patch: IssueUpdatePatch }[]
+): Promise<void> {
+  await fetchJson<{ ok: true }>("/api/issues/bulk", {
+    ...jsonBody({ updates }),
+    ...ws(),
+  });
+}
+
 export async function moveIssueOnBoard(
   issueId: string,
   statusId: string,

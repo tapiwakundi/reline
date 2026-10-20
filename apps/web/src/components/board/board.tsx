@@ -8,6 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useTransition,
   type MouseEvent,
 } from "react";
 import { useSearchParams } from "next/navigation";
@@ -99,9 +100,11 @@ import {
 } from "@/lib/issue-cycle";
 import {
   applyPatchToListItem,
+  optimisticUpdateMany,
   resolveIssuePatch,
   type IssuePatch,
 } from "@/lib/optimistic-issues";
+import { patchForSelectedIssue } from "@/lib/selection-patch";
 import type { StatusRow } from "@/lib/types";
 
 type BoardColumnDef = {
@@ -134,6 +137,41 @@ function epicFromLists(
     }
   }
   return null;
+}
+
+function paintBoardIssues(
+  prev: IssueListItem[],
+  updates: { id: string; patch: IssuePatch }[],
+  epicFor: (
+    epicId: string,
+    local: IssueListItem[]
+  ) => { id: string; identifier: string; title: string } | null
+): IssueListItem[] {
+  const byId = new Map(updates.map((update) => [update.id, update.patch]));
+  const leavingEpics = new Set<string>();
+  for (const issue of prev) {
+    const patch = byId.get(issue.id);
+    if (
+      issue.type === "epic" &&
+      patch?.type !== undefined &&
+      patch.type !== "epic"
+    ) {
+      leavingEpics.add(issue.id);
+    }
+  }
+
+  return prev.map((issue) => {
+    const patch = byId.get(issue.id);
+    let next = patch ? applyPatchToListItem(issue, patch) : issue;
+    if (patch?.epicId) {
+      const epic = epicFor(patch.epicId, prev);
+      if (epic) next = { ...next, epic };
+    }
+    if (next.epicId && leavingEpics.has(next.epicId)) {
+      next = { ...next, epicId: null, epic: null };
+    }
+    return next;
+  });
 }
 
 function groupKeyOf(issue: IssueListItem, group: BoardColumnsGroup): string {
@@ -396,6 +434,7 @@ function Column({
   cycleIds,
   cycleEntry,
   onIssuePatch,
+  onSelectionPatch,
   onIssueDelete,
   scrollKey,
   registerColumnNode,
@@ -414,6 +453,8 @@ function Column({
   /** When the board is scoped to one sprint, status changes join that sprint. */
   cycleEntry?: { cycleId: string; joinOnAnyStatus: boolean };
   onIssuePatch: (issueId: string, patch: IssuePatch) => void;
+  /** Edit every selected card when this one is part of the selection. */
+  onSelectionPatch: (issueId: string, patch: IssuePatch) => boolean;
   onIssueDelete: (issueId: string) => void;
   scrollKey: string;
   registerColumnNode: (key: string, node: HTMLElement | null) => void;
@@ -476,6 +517,7 @@ function Column({
                 onSelectClick={onSelectClick}
                 onOptimisticUpdate={(patch) => onIssuePatch(issue.id, patch)}
                 onOptimisticDelete={() => onIssueDelete(issue.id)}
+                onSelectionPatch={(patch) => onSelectionPatch(issue.id, patch)}
               />
             </Fragment>
           ))}
@@ -516,6 +558,7 @@ export function Board({
   const { openCreateIssue } = useShortcuts();
   const searchParams = useSearchParams();
   const qc = useQueryClient();
+  const [, startTransition] = useTransition();
 
   const [prefs, setPrefs] = useState(serverPrefs);
   const boardOpts = {
@@ -1321,32 +1364,74 @@ export function Board({
                   cycleEntry={cycleEntry}
                   scrollKey={`board-col:${boardViewKey}:${c.key}`}
                   onIssuePatch={(issueId, patch) => {
-                    const current = issueMap.get(issueId);
-                    if (!current) return;
+                    if (!issueMap.has(issueId)) return;
                     // Local board state only — React Query is updated by
                     // optimisticUpdateIssue so rollback snapshots stay correct.
-                    const resolved = resolveIssuePatch(
-                      patch,
-                      current,
-                      statuses,
-                      cycles,
-                      cycleEntry
-                    );
                     suppressServerSyncUntil.current = Date.now() + 4000;
-                    setIssues((prev) => {
-                      const epic = epicFromLists(
-                        qc,
-                        workspace.id,
-                        resolved.epicId,
-                        prev
-                      );
-                      return prev.map((i) => {
-                        if (i.id !== issueId) return i;
-                        const next = applyPatchToListItem(i, resolved);
-                        if (epic) next.epic = epic;
-                        return next;
-                      });
+                    setIssues((prev) =>
+                      paintBoardIssues(
+                        prev,
+                        [{ id: issueId, patch }],
+                        (epicId, local) =>
+                          epicFromLists(qc, workspace.id, epicId, local)
+                      )
+                    );
+                  }}
+                  onSelectionPatch={(issueId, patch) => {
+                    if (!selectedIds.has(issueId) || selectedIds.size < 2) {
+                      return false;
+                    }
+                    const source = issueMap.get(issueId);
+                    if (!source) return false;
+                    const targets = [...selectedIds].flatMap((id) => {
+                      const issue = issueMap.get(id);
+                      return issue ? [issue] : [];
                     });
+                    if (targets.length < 2) return false;
+
+                    const updates = targets.flatMap((target) => {
+                      const raw = patchForSelectedIssue(source, target, patch);
+                      if (!raw) return [];
+                      return [
+                        {
+                          id: target.id,
+                          issue: {
+                            id: target.id,
+                            identifier: target.identifier,
+                            statusId: target.statusId,
+                            cycleId: target.cycleId,
+                          },
+                          patch: resolveIssuePatch(
+                            raw,
+                            target,
+                            statuses,
+                            cycles,
+                            cycleEntry
+                          ),
+                        },
+                      ];
+                    });
+                    if (updates.length === 0) return true;
+
+                    const snapshot = issues;
+                    suppressServerSyncUntil.current = Date.now() + 4000;
+                    setIssues((prev) =>
+                      paintBoardIssues(prev, updates, (epicId, local) =>
+                        epicFromLists(qc, workspace.id, epicId, local)
+                      )
+                    );
+                    startTransition(async () => {
+                      try {
+                        await optimisticUpdateMany(
+                          qc,
+                          workspace.id,
+                          updates
+                        );
+                      } catch {
+                        setIssues(snapshot);
+                      }
+                    });
+                    return true;
                   }}
                   onIssueDelete={(issueId) => {
                     suppressServerSyncUntil.current = Date.now() + 4000;

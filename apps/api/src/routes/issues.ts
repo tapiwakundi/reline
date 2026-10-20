@@ -5,6 +5,7 @@ import { requireWorkspace, type WorkspaceEnv } from "@/middleware/auth";
 import {
   addComment,
   attachToIssue,
+  bulkPatchIssues,
   bulkUpdateIssues,
   createIssue,
   deleteAttachment,
@@ -77,10 +78,18 @@ issuesRoutes.post("/issues", requireWorkspace, async (c) => {
 issuesRoutes.post("/issues/bulk", requireWorkspace, async (c) => {
   const ctx = c.get("ctx");
   const body = await c.req.json<{
-    issueIds: string[];
-    patch: IssueUpdatePatch;
+    issueIds?: string[];
+    patch?: IssueUpdatePatch;
+    updates?: { issueId: string; patch: IssueUpdatePatch }[];
   }>();
-  await bulkUpdateIssues(ctx, body.issueIds, body.patch);
+  if (body.updates !== undefined) {
+    if (!Array.isArray(body.updates)) {
+      throw new HttpError(400, "Updates must be a list");
+    }
+    await bulkPatchIssues(ctx, body.updates);
+    return c.json({ ok: true });
+  }
+  await bulkUpdateIssues(ctx, body.issueIds ?? [], body.patch ?? {});
   return c.json({ ok: true });
 });
 

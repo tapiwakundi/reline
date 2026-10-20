@@ -4,6 +4,7 @@ import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   addComment,
+  bulkPatchIssues,
   bulkUpdateIssues,
   deleteAttachment,
   deleteComment,
@@ -268,6 +269,43 @@ export async function optimisticBulkUpdateIssues(
     toast.error(
       e instanceof Error ? e.message : "Couldn't update issues"
     );
+    throw e;
+  }
+
+  void invalidateAfterIssueChange(qc, workspaceId);
+}
+
+export async function optimisticUpdateMany(
+  qc: QueryClient,
+  workspaceId: string,
+  updates: {
+    issue: {
+      id: string;
+      identifier: string;
+      statusId: string;
+      cycleId?: string | null;
+    };
+    patch: IssuePatch;
+  }[]
+) {
+  if (updates.length === 0) return;
+
+  await qc.cancelQueries({ queryKey: queryKeys.issues.all(workspaceId) });
+  const snapshot = snapshotIssueQueries(qc, workspaceId);
+  for (const update of updates) {
+    applyIssuePatchToCaches(qc, workspaceId, update.issue, update.patch);
+  }
+
+  try {
+    await bulkPatchIssues(
+      updates.map((update) => ({
+        issueId: update.issue.id,
+        patch: update.patch,
+      }))
+    );
+  } catch (e) {
+    restoreIssueQueries(qc, snapshot);
+    toast.error(e instanceof Error ? e.message : "Couldn't update issues");
     throw e;
   }
 
