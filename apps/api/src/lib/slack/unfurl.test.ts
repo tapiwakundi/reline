@@ -8,7 +8,7 @@ import { installationCanUnfurl, SLACK_BOT_SCOPES } from "./scopes";
 import {
   descriptionExcerpt,
   issueLinksOnOrigin,
-  ticketUnfurlContent,
+  ticketWorkObject,
   unfurlSharedIssueLinks,
   type LinkSharedEvent,
   type UnfurlInstallation,
@@ -80,26 +80,30 @@ test("issue links on the app host are kept and other urls are ignored", () => {
   assert.equal(links[1]?.identifier, "SMPL-30");
 });
 
-test("ticket preview names the issue instead of the login page", () => {
-  const content = ticketUnfurlContent({
+test("ticket preview is a native Slack task card", () => {
+  const card = ticketWorkObject({
     identifier: "SMPL-29",
     title: "a < b & c",
     url: `${ORIGIN}/siimplytrade/issue/SMPL-29`,
     statusName: "In Progress",
-    statusColor: "red",
+    statusColor: "#e11d48",
     priorityLabel: "High",
     typeLabel: "Bug",
     assigneeName: null,
     description: "The preview says **login**. See [docs](https://example.com/x).",
   });
-  assert.equal(content.color, "#5e6ad2");
-  assert.equal(content.fallback, "SMPL-29 a < b & c");
-  const text = content.blocks[0].text.text;
-  assert.match(text, /SMPL-29 a &lt; b &amp; c/);
-  assert.match(text, /Bug · In Progress · High · Unassigned/);
-  assert.match(text, /The preview says login\. See docs\./);
-  assert.doesNotMatch(text, /Log in/);
-  assert.equal(content.preview.title.text, "SMPL-29 a < b & c");
+  assert.equal(card.entity_type, "slack#/entities/task");
+  assert.equal(card.external_ref.id, "SMPL-29");
+  assert.equal(card.entity_payload.attributes.display_id, "SMPL-29");
+  assert.equal(card.entity_payload.attributes.display_type, "Bug");
+  assert.equal(card.entity_payload.attributes.title.text, "a < b & c");
+  assert.equal(card.entity_payload.fields.status.value, "In Progress");
+  assert.equal(card.entity_payload.fields.status.tag_color, "red");
+  assert.equal(card.entity_payload.fields.priority.value, "High");
+  assert.equal(card.entity_payload.fields.assignee, undefined);
+  assert.equal(card.entity_payload.custom_fields[0]?.value, "Bug");
+  assert.match(card.entity_payload.fields.description?.value ?? "", /The preview says login/);
+  assert.doesNotMatch(JSON.stringify(card), /Log in/);
 });
 
 test("description excerpts collapse markdown and stay short", () => {
@@ -110,7 +114,7 @@ test("description excerpts collapse markdown and stay short", () => {
 });
 
 test("connected slack workspace unfurls ticket details for its own issues", async () => {
-  const calls: { token: string; unfurls: Record<string, { blocks: { text: { text: string } }[] }> }[] = [];
+  const calls: { token: string; entities: { app_unfurl_url: string; entity_payload: { attributes: { title: { text: string } }; fields: { status: { value: string }; assignee?: { user: { text: string } } } } }[] }[] = [];
   const loaded: { workspaceId: string; numbers: number[] }[] = [];
   const url = `${ORIGIN}/SiimplyTrade/issue/smpl-29`;
   await unfurlSharedIssueLinks({
@@ -125,8 +129,9 @@ test("connected slack workspace unfurls ticket details for its own issues", asyn
       unfurl: async (token, opts) => {
         calls.push({
           token,
-          unfurls: opts.unfurls as (typeof calls)[number]["unfurls"],
+          entities: (opts.metadata?.entities ?? []) as (typeof calls)[number]["entities"],
         });
+        assert.equal(opts.unfurls, undefined);
         assert.equal(opts.channel, "C123");
         assert.equal(opts.ts, "111.222");
         assert.equal(opts.unfurlId, "Uf1");
@@ -137,12 +142,11 @@ test("connected slack workspace unfurls ticket details for its own issues", asyn
   assert.deepEqual(loaded, [{ workspaceId: "ws_1", numbers: [29] }]);
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.token, "xoxb-test");
-  const text = calls[0]?.unfurls[url]?.blocks[0]?.text.text ?? "";
-  assert.match(text, /SMPL-29/);
-  assert.match(text, /Fix login redirect/);
-  assert.match(text, /In Progress/);
-  assert.match(text, /Ada Lovelace/);
-  assert.match(text, new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  const card = calls[0]?.entities[0];
+  assert.equal(card?.app_unfurl_url, url);
+  assert.match(card?.entity_payload.attributes.title.text ?? "", /Fix login redirect/);
+  assert.equal(card?.entity_payload.fields.status.value, "In Progress");
+  assert.equal(card?.entity_payload.fields.assignee?.user.text, "Ada Lovelace");
 });
 
 test("a link to another reline workspace is not unfurled", async () => {
@@ -228,7 +232,12 @@ test("one message unfurls each connected workspace with its own token", async ()
     },
     client: {
       unfurl: async (token, opts) => {
-        calls.push({ token, urls: Object.keys(opts.unfurls) });
+        calls.push({
+          token,
+          urls: (opts.metadata?.entities ?? []).map(
+            (entity) => (entity as { app_unfurl_url: string }).app_unfurl_url
+          ),
+        });
       },
     },
   });

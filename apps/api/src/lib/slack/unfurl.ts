@@ -32,12 +32,30 @@ export type LinkSharedEvent = {
   links?: { domain?: string; url?: string }[];
 };
 
-export type SlackUnfurlContent = {
-  color: string;
-  fallback: string;
-  blocks: [{ type: "section"; text: { type: "mrkdwn"; text: string } }];
-  preview: { title: { type: "plain_text"; text: string; emoji: false } };
+export type WorkObjectEntity = {
+  app_unfurl_url: string;
+  url: string;
+  external_ref: { id: string; type: "issue" };
+  entity_type: "slack#/entities/task";
+  entity_payload: {
+    attributes: {
+      title: { text: string };
+      display_id: string;
+      display_type: string;
+      product_name: "Reline";
+    };
+    fields: {
+      description?: { value: string };
+      assignee?: { type: "slack#/types/user"; user: { text: string } };
+      status: { value: string; tag_color: TagColor };
+      priority: { value: string };
+    };
+    custom_fields: [{ key: "type"; label: "Type"; value: string; type: "string" }];
+    display_order: string[];
+  };
 };
+
+type TagColor = "red" | "yellow" | "green" | "gray" | "blue";
 
 export type UnfurlCall = {
   channel?: string;
@@ -45,8 +63,6 @@ export type UnfurlCall = {
   unfurlId?: string;
   source?: string;
 };
-
-const DEFAULT_COLOR = "#5e6ad2";
 
 export function issueLinksOnOrigin(
   links: { url?: string }[],
@@ -131,7 +147,8 @@ export function descriptionExcerpt(text: string, max = 240): string {
   return `${plain.slice(0, max - 1).trimEnd()}…`;
 }
 
-export function ticketUnfurlContent(ticket: {
+/** Native Slack Work Object, the same card style Jira uses for an issue. */
+export function ticketWorkObject(ticket: {
   identifier: string;
   title: string;
   url: string;
@@ -141,27 +158,41 @@ export function ticketUnfurlContent(ticket: {
   typeLabel: string;
   assigneeName: string | null;
   description: string;
-}): SlackUnfurlContent {
-  const title = clamp(oneLine(ticket.title) || "Untitled", 180);
-  const identifier = oneLine(ticket.identifier);
-  const label = `${identifier} ${title}`.trim();
-  const meta = [
-    oneLine(ticket.typeLabel),
-    oneLine(ticket.statusName) || "Unknown",
-    oneLine(ticket.priorityLabel),
-    oneLine(ticket.assigneeName) || "Unassigned",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const excerpt = descriptionExcerpt(ticket.description);
-  const lines = [`*${slackLink(ticket.url, label)}*`, slackPlain(meta)];
-  if (excerpt) lines.push(slackPlain(excerpt));
+}): WorkObjectEntity {
+  const identifier = oneLine(ticket.identifier) || "Issue";
+  const title = clamp(oneLine(ticket.title) || "Untitled", 150);
+  const typeLabel = oneLine(ticket.typeLabel) || "Issue";
+  const assignee = oneLine(ticket.assigneeName);
+  const excerpt = descriptionExcerpt(ticket.description, 500);
+  const fields: WorkObjectEntity["entity_payload"]["fields"] = {
+    status: {
+      value: clamp(oneLine(ticket.statusName) || "Unknown", 80),
+      tag_color: statusTagColor(ticket.statusColor),
+    },
+    priority: { value: clamp(oneLine(ticket.priorityLabel) || "No priority", 40) },
+  };
+  if (assignee) {
+    fields.assignee = { type: "slack#/types/user", user: { text: clamp(assignee, 80) } };
+  }
+  if (excerpt) fields.description = { value: excerpt };
+  const displayOrder = ["status", "priority", "type"];
+  if (assignee) displayOrder.push("assignee");
+  if (excerpt) displayOrder.push("description");
   return {
-    color: attachmentColor(ticket.statusColor),
-    fallback: clamp(label, 300),
-    blocks: [{ type: "section", text: { type: "mrkdwn", text: lines.join("\n") } }],
-    preview: {
-      title: { type: "plain_text", text: clamp(label, 150), emoji: false },
+    app_unfurl_url: ticket.url,
+    url: ticket.url,
+    external_ref: { id: identifier, type: "issue" },
+    entity_type: "slack#/entities/task",
+    entity_payload: {
+      attributes: {
+        title: { text: title },
+        display_id: clamp(identifier, 40),
+        display_type: clamp(typeLabel, 40),
+        product_name: "Reline",
+      },
+      fields,
+      custom_fields: [{ key: "type", label: "Type", value: clamp(typeLabel, 40), type: "string" }],
+      display_order: displayOrder,
     },
   };
 }
@@ -206,7 +237,7 @@ export async function unfurlSharedIssueLinks(opts: {
     byWorkspace.set(item.workspaceId, list);
   }
 
-  const resolved: { url: string; token: string; content: SlackUnfurlContent }[] = [];
+  const resolved: { token: string; entity: WorkObjectEntity }[] = [];
   for (const [workspaceId, items] of byWorkspace) {
     const issues = await opts.loadIssues(workspaceId, [
       ...new Set(items.map((item) => item.number)),
@@ -216,9 +247,8 @@ export async function unfurlSharedIssueLinks(opts: {
       const issue = byNumber.get(item.number);
       if (!issue) continue;
       resolved.push({
-        url: item.url,
         token: item.token,
-        content: ticketUnfurlContent({
+        entity: ticketWorkObject({
           identifier: item.identifier,
           title: issue.title,
           url: item.url,
@@ -234,16 +264,16 @@ export async function unfurlSharedIssueLinks(opts: {
   }
   if (resolved.length === 0) return;
 
-  const byToken = new Map<string, Record<string, SlackUnfurlContent>>();
+  const byToken = new Map<string, WorkObjectEntity[]>();
   for (const item of resolved) {
-    const unfurls = byToken.get(item.token) ?? {};
-    unfurls[item.url] = item.content;
-    byToken.set(item.token, unfurls);
+    const entities = byToken.get(item.token) ?? [];
+    entities.push(item.entity);
+    byToken.set(item.token, entities);
   }
 
-  for (const [token, unfurls] of byToken) {
+  for (const [token, entities] of byToken) {
     try {
-      await opts.client.unfurl(token, { ...target, unfurls });
+      await opts.client.unfurl(token, { ...target, metadata: { entities } });
     } catch (error) {
       if (
         error instanceof SlackApiError &&
@@ -265,8 +295,16 @@ function typeLabel(value: string): string {
   return ISSUE_TYPES.find((item) => item.value === value)?.label ?? value;
 }
 
-function attachmentColor(color: string | null): string {
-  return color && /^#[0-9a-fA-F]{6}$/.test(color) ? color : DEFAULT_COLOR;
+function statusTagColor(color: string | null): TagColor {
+  if (!color || !/^#[0-9a-fA-F]{6}$/.test(color)) return "gray";
+  const red = Number.parseInt(color.slice(1, 3), 16);
+  const green = Number.parseInt(color.slice(3, 5), 16);
+  const blue = Number.parseInt(color.slice(5, 7), 16);
+  if (green >= red + 25 && green >= blue) return "green";
+  if (red >= green + 25 && red >= blue + 25) return "red";
+  if (red > 160 && green > 120 && blue < 100) return "yellow";
+  if (blue >= red && blue >= green) return "blue";
+  return "gray";
 }
 
 function oneLine(text: string | null | undefined): string {
@@ -278,19 +316,3 @@ function clamp(text: string, max: number): string {
   return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
-/** User-controlled text safe to place in Slack mrkdwn. */
-function slackPlain(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/[*_~`]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function slackLink(url: string, label: string): string {
-  const safeLabel = slackPlain(label).replace(/\|/g, "·") || "Open ticket";
-  if (/[|\s<>]/.test(url)) return safeLabel;
-  return `<${url}|${safeLabel}>`;
-}

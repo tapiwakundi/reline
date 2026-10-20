@@ -42,7 +42,8 @@ export type SlackClient = {
       ts?: string;
       unfurlId?: string;
       source?: string;
-      unfurls: Record<string, unknown>;
+      unfurls?: Record<string, unknown>;
+      metadata?: { entities: unknown[] };
     }
   ): Promise<void>;
 };
@@ -193,7 +194,9 @@ export const liveSlackClient: SlackClient = {
   },
 
   async unfurl(token, opts) {
-    const body: Record<string, unknown> = { unfurls: opts.unfurls };
+    const body: Record<string, unknown> = {};
+    if (opts.unfurls) body.unfurls = opts.unfurls;
+    if (opts.metadata) body.metadata = opts.metadata;
     if (opts.channel && opts.ts) {
       body.channel = opts.channel;
       body.ts = opts.ts;
