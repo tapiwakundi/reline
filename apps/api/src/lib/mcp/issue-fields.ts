@@ -5,6 +5,7 @@ import {
   normalizeIssueMarkdown,
   type IssueType,
 } from "@reline/shared";
+import { parseIssueRef, splitIssueKey } from "@/lib/mcp/parse-link";
 
 export { ISSUE_DESCRIPTION_GUIDE };
 
@@ -20,6 +21,20 @@ export type AssigneeInput =
 
 export type CycleInput = { kind: "clear" } | { kind: "query"; query: string };
 
+export type EpicInput = { kind: "clear" } | { kind: "query"; query: string };
+
+export type IssueKeyInput = {
+  identifier: string;
+  slug?: string;
+};
+
+export type EpicCandidate = {
+  id: string;
+  identifier: string;
+  title: string;
+  type: IssueType;
+};
+
 export type IssueWriteInput = {
   url?: string;
   identifier?: string;
@@ -32,10 +47,17 @@ export type IssueWriteInput = {
   assignee?: AssigneeInput;
   labels?: string[];
   cycle?: CycleInput;
+  epic?: EpicInput;
+  issues?: IssueKeyInput[];
 };
 
 const CLEAR_ASSIGNEE = new Set(["none", "unassigned", "nobody", "no one"]);
 const CLEAR_CYCLE = new Set(["none", "no cycle", "unassigned"]);
+const CLEAR_EPIC = new Set(["none", "no epic"]);
+const TYPE_ERROR = "Type must be epic, story, task, or bug.";
+export const ATTACH_REQUIRES_EPIC =
+  "Only an epic can have tickets attached. Set type to epic, or set the epic field on each ticket.";
+const MAX_ATTACHED_ISSUES = 50;
 
 export function parseIssueWriteArgs(
   args: unknown,
@@ -115,6 +137,25 @@ export function parseIssueWriteArgs(
     input.cycle = cycle.value;
   }
 
+  if (hasOwn(record, "epic")) {
+    const epic = parseEpic(record.epic);
+    if (!epic.ok) return epic;
+    input.epic = epic.value;
+  }
+
+  if (hasOwn(record, "issues")) {
+    const issues = parseIssueKeys(record.issues);
+    if (!issues.ok) return issues;
+    input.issues = issues.value;
+  }
+
+  if (input.type === "epic" && input.epic?.kind === "query") {
+    return { ok: false, error: "An epic cannot belong to another epic." };
+  }
+  if (input.issues && input.type && input.type !== "epic") {
+    return { ok: false, error: ATTACH_REQUIRES_EPIC };
+  }
+
   if (mode === "create" && !input.title) {
     return { ok: false, error: "Title is required." };
   }
@@ -131,7 +172,9 @@ export function parseIssueWriteArgs(
       input.type !== undefined ||
       input.assignee !== undefined ||
       input.labels !== undefined ||
-      input.cycle !== undefined;
+      input.cycle !== undefined ||
+      input.epic !== undefined ||
+      input.issues !== undefined;
     if (!changing) {
       return {
         ok: false,
@@ -197,13 +240,13 @@ export function parsePriority(value: unknown): FieldResult<number> {
 
 export function parseIssueType(value: unknown): FieldResult<IssueType> {
   if (typeof value !== "string") {
-    return { ok: false, error: "Type must be story, task, or bug." };
+    return { ok: false, error: TYPE_ERROR };
   }
   const trimmed = value.trim().toLowerCase();
   const match = ISSUE_TYPES.find(
     (item) => item.value === trimmed || item.label.toLowerCase() === trimmed
   );
-  if (!match) return { ok: false, error: "Type must be story, task, or bug." };
+  if (!match) return { ok: false, error: TYPE_ERROR };
   return { ok: true, value: match.value };
 }
 
@@ -227,6 +270,85 @@ export function parseLabels(value: unknown): FieldResult<string[]> {
   }
   const names = value.map((item) => item.trim()).filter(Boolean);
   return { ok: true, value: names };
+}
+
+export function parseEpic(value: unknown): FieldResult<EpicInput> {
+  if (value === null) return { ok: true, value: { kind: "clear" } };
+  if (typeof value !== "string") {
+    return { ok: false, error: "Epic must be an issue key, a title, or none." };
+  }
+  const trimmed = value.trim();
+  if (!trimmed || CLEAR_EPIC.has(trimmed.toLowerCase())) {
+    return { ok: true, value: { kind: "clear" } };
+  }
+  return { ok: true, value: { kind: "query", query: trimmed } };
+}
+
+export function parseIssueKeys(value: unknown): FieldResult<IssueKeyInput[]> {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    return { ok: false, error: "Issues must be an array of issue keys or URLs." };
+  }
+  if (value.length > MAX_ATTACHED_ISSUES) {
+    return { ok: false, error: `Attach at most ${MAX_ATTACHED_ISSUES} issues at a time.` };
+  }
+  const keys: IssueKeyInput[] = [];
+  for (const item of value) {
+    const ref = parseIssueRef(item);
+    if (!ref) {
+      const shown = item.trim() || item;
+      return {
+        ok: false,
+        error: `"${shown}" is not an issue key. Expected something like REL-42.`,
+      };
+    }
+    keys.push(ref.slug ? { identifier: ref.identifier, slug: ref.slug } : { identifier: ref.identifier });
+  }
+  if (!keys.length) {
+    return { ok: false, error: "Pass at least one issue key to attach, such as REL-42." };
+  }
+  return { ok: true, value: keys };
+}
+
+/**
+ * Resolve an epic link against issues in one workspace. A key or URL must
+ * point at an epic. Anything else matches an epic title.
+ */
+export function resolveEpicSelection(
+  rows: EpicCandidate[],
+  epic: EpicInput,
+  workspace: { slug: string; prefix: string }
+): FieldResult<string | null> {
+  if (epic.kind === "clear") return { ok: true, value: null };
+
+  const ref = parseIssueRef(epic.query);
+  if (ref) {
+    if (ref.slug && !sameSlug(workspace.slug, ref.slug)) {
+      return { ok: false, error: "That epic link is for a different workspace." };
+    }
+    const key = splitIssueKey(ref.identifier);
+    if (!key || !samePrefix(workspace.prefix, key.prefix)) {
+      return { ok: false, error: missingEpic(epic.query.trim(), rows) };
+    }
+    const row = rows.find((item) => splitIssueKey(item.identifier)?.number === key.number);
+    if (!row) {
+      return { ok: false, error: missingEpic(`${workspace.prefix}-${key.number}`, rows) };
+    }
+    if (row.type !== "epic") {
+      const label = ISSUE_TYPES.find((item) => item.value === row.type)?.label ?? row.type;
+      return { ok: false, error: `${row.identifier} is a ${label}, not an epic.` };
+    }
+    return { ok: true, value: row.id };
+  }
+
+  const needle = epic.query.trim().toLowerCase();
+  const matches = rows.filter(
+    (row) => row.type === "epic" && row.title.trim().toLowerCase() === needle
+  );
+  if (matches.length === 1) return { ok: true, value: matches[0]!.id };
+  if (matches.length > 1) {
+    return { ok: false, error: `"${epic.query.trim()}" matches more than one epic.` };
+  }
+  return { ok: false, error: missingEpic(epic.query.trim(), rows) };
 }
 
 export function parseCycle(value: unknown): FieldResult<CycleInput> {
@@ -317,6 +439,24 @@ export function matchCycle(
   }
   const names = uniqueNames(cycles.map((item) => `${item.number} · ${item.name}`));
   return { ok: false, error: missingNamed("cycle", query, names) };
+}
+
+function sameSlug(stored: string, given: string): boolean {
+  return stored === given || stored.toLowerCase() === given.toLowerCase();
+}
+
+function samePrefix(stored: string, given: string): boolean {
+  return stored.toLowerCase() === given.toLowerCase();
+}
+
+function missingEpic(query: string, rows: EpicCandidate[]): string {
+  const names = uniqueNames(
+    rows
+      .filter((row) => row.type === "epic")
+      .map((row) => `${row.identifier} · ${row.title}`)
+  );
+  if (!names.length) return "This workspace has no epics.";
+  return `No epic matching "${query}". Available: ${names.join(", ")}.`;
 }
 
 function cycleNumber(query: string): number | null {

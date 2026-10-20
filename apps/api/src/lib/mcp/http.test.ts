@@ -153,6 +153,7 @@ describe("MCP HTTP", () => {
       result: { instructions: string };
     };
     assert.match(initBody.result.instructions, /create_issue/);
+    assert.match(initBody.result.instructions, /epic/i);
     assert.match(initBody.result.instructions, /headings/i);
   });
 

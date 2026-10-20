@@ -160,8 +160,9 @@ export function McpSettings() {
         <p className="mt-1 text-sm text-muted-foreground">
           Connect Cursor to issues in workspaces you belong to. It can read a
           ticket, create one, and edit the title, description, status, and
-          other fields. Descriptions use the same formatting as the issue
-          editor: headings, lists, checkboxes, quotes, and code.
+          other fields. It can also create epics and attach tickets to them.
+          Descriptions use the same formatting as the issue editor: headings,
+          lists, checkboxes, quotes, and code.
         </p>
       </div>
 

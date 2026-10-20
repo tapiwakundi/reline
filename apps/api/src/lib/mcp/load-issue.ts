@@ -1,4 +1,4 @@
-import { ISSUE_TYPES, PRIORITIES } from "@reline/shared";
+import { ISSUE_TYPES, PRIORITIES, type IssueType } from "@reline/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -31,6 +31,7 @@ type MembershipWithWorkspace = MembershipRow & { workspace: WorkspaceRow };
 
 export type LoadedIssueRecord = {
   issueId: string;
+  issueType: IssueType;
   view: McpIssue;
   workspace: WorkspaceRow;
   membership: MembershipRow;
@@ -182,6 +183,7 @@ export async function loadIssueRecordForUser(
     ok: true,
     value: {
       issueId: issue.id,
+      issueType: issue.type,
       view,
       workspace,
       membership: membershipOnly(membership),

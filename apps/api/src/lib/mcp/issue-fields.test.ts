@@ -7,6 +7,7 @@ import {
   matchLabels,
   parseIssueWriteArgs,
   parsePriority,
+  resolveEpicSelection,
 } from "./issue-fields";
 
 describe("issue write fields", () => {
@@ -40,6 +41,65 @@ describe("issue write fields", () => {
     assert.deepEqual(write.value.labels, ["Auth"]);
     assert.deepEqual(write.value.cycle, { kind: "clear" });
     assert.equal(write.value.workspace, "acme");
+  });
+
+  it("accepts epics and tickets attached to them", () => {
+    const created = parseIssueWriteArgs(
+      {
+        title: "Billing",
+        type: "Epic",
+        issues: ["REL-3", "https://app.example.com/acme/issue/REL-4"],
+      },
+      "create"
+    );
+    assert.equal(created.ok, true);
+    if (!created.ok) return;
+    assert.equal(created.value.type, "epic");
+    assert.deepEqual(created.value.issues, [
+      { identifier: "REL-3" },
+      { identifier: "REL-4", slug: "acme" },
+    ]);
+
+    const linked = parseIssueWriteArgs(
+      { identifier: "REL-9", epic: "none" },
+      "update"
+    );
+    assert.equal(linked.ok, true);
+    if (!linked.ok) return;
+    assert.deepEqual(linked.value.epic, { kind: "clear" });
+
+    assert.equal(
+      parseIssueWriteArgs({ title: "Nested", type: "epic", epic: "REL-1" }, "create").ok,
+      false
+    );
+    assert.equal(
+      parseIssueWriteArgs({ title: "Story", type: "story", issues: ["REL-3"] }, "create").ok,
+      false
+    );
+    assert.equal(parseIssueWriteArgs({ identifier: "REL-1", issues: [] }, "update").ok, false);
+    assert.equal(parseIssueWriteArgs({ identifier: "REL-1", issues: ["nope"] }, "update").ok, false);
+
+    const epics = [
+      { id: "e1", identifier: "REL-1", title: "Billing", type: "epic" as const },
+      { id: "s1", identifier: "REL-3", title: "Fix tax", type: "story" as const },
+    ];
+    const workspace = { slug: "acme", prefix: "REL" };
+    assert.deepEqual(resolveEpicSelection(epics, { kind: "query", query: "billing" }, workspace), {
+      ok: true,
+      value: "e1",
+    });
+    assert.deepEqual(resolveEpicSelection(epics, { kind: "query", query: "REL-3" }, workspace), {
+      ok: false,
+      error: "REL-3 is a Story, not an epic.",
+    });
+    assert.deepEqual(resolveEpicSelection(epics, { kind: "clear" }, workspace), {
+      ok: true,
+      value: null,
+    });
+    assert.equal(
+      resolveEpicSelection(epics, { kind: "query", query: "Missing" }, workspace).ok,
+      false
+    );
   });
 
   it("parses priority labels and numbers", () => {

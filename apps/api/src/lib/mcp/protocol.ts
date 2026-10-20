@@ -47,7 +47,7 @@ const TOOLS = [
     name: "get_issue",
     title: "Get issue",
     description:
-      "Read a Reline issue from a ticket link or key. Use this whenever the user pastes or mentions a Reline URL (a path like /acme/issue/REL-42) or an issue key such as REL-42. Returns the title, description, status, priority, assignee, labels, cycle, comments, and attachments. Image attachments are included so you can see them. Read-only: this cannot change the issue.",
+      "Read a Reline issue from a ticket link or key. Use this whenever the user pastes or mentions a Reline URL (a path like /acme/issue/REL-42) or an issue key such as REL-42. Returns the title, description, status, priority, assignee, labels, cycle, epic, child issues, comments, and attachments. Image attachments are included so you can see them. Read-only: this cannot change the issue.",
     inputSchema: {
       type: "object",
       properties: {
@@ -106,7 +106,7 @@ const TOOLS = [
     name: "create_issue",
     title: "Create issue",
     description:
-      "Create an issue in a workspace the user belongs to. Write the description in markdown so it renders with headings, lists, quotes, and the other formatting the issue editor supports. Returns the created issue.",
+      "Create an issue or epic in a workspace the user belongs to. Write the description in markdown so it renders with headings, lists, quotes, and the other formatting the issue editor supports. Use type epic for an epic. Use the epic field to put a new ticket under an epic. When type is epic, pass issues to attach existing tickets. Returns the created issue.",
     inputSchema: {
       type: "object",
       properties: {
@@ -137,7 +137,18 @@ const TOOLS = [
         },
         type: {
           type: "string",
-          description: "story, task, or bug. Defaults to story.",
+          description: "epic, story, task, or bug. Defaults to story.",
+        },
+        epic: {
+          type: "string",
+          description:
+            "Epic this ticket belongs to. An issue key such as REL-12, a Reline URL, or the epic title. Pass none to leave it out of an epic. An epic cannot belong to another epic.",
+        },
+        issues: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Issue keys or URLs to attach to this epic, such as REL-42. Only when type is epic. Moves those tickets onto this epic.",
         },
         assignee: {
           type: "string",
@@ -171,7 +182,7 @@ const TOOLS = [
     name: "update_issue",
     title: "Update issue",
     description:
-      "Edit an existing issue. Pass only the fields that should change. Description replaces the whole description, so call get_issue first and keep the parts the user did not ask to change. Use the issue editor's markdown for headings, bullets, numbered lists, checkboxes, quotes, code, and inline marks. Cannot delete the issue.",
+      "Edit an existing issue or epic. Pass only the fields that should change. Description replaces the whole description, so call get_issue first and keep the parts the user did not ask to change. Use the issue editor's markdown for headings, bullets, numbered lists, checkboxes, quotes, code, and inline marks. Set epic to attach or remove a parent epic. On an epic, pass issues to attach tickets. Cannot delete the issue.",
     inputSchema: {
       type: "object",
       properties: {
@@ -205,7 +216,18 @@ const TOOLS = [
         },
         type: {
           type: "string",
-          description: "story, task, or bug.",
+          description: "epic, story, task, or bug.",
+        },
+        epic: {
+          type: "string",
+          description:
+            "Epic this ticket belongs to. An issue key such as REL-12, a Reline URL, or the epic title. Pass none to remove it. An epic cannot belong to another epic.",
+        },
+        issues: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Issue keys or URLs to attach to this epic, such as REL-42. Only when this issue is an epic. Adds those tickets and leaves tickets already in the epic. To remove a ticket, update that ticket and set epic to none.",
         },
         assignee: {
           type: "string",
