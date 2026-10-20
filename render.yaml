@@ -51,6 +51,8 @@ services:
         sync: false
       - key: SLACK_TOKEN_ENCRYPTION_KEY
         sync: false
+      - key: RELINE_INTERNAL_KEY
+        sync: false
 
   - type: web
     name: reline-web
@@ -80,4 +82,6 @@ services:
       - key: POSTHOG_PERSONAL_API_KEY
         sync: false
       - key: POSTHOG_ENV_ID
+        sync: false
+      - key: RELINE_INTERNAL_KEY
         sync: false

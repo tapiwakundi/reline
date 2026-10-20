@@ -9,6 +9,7 @@ export const RESERVED_SLUGS = new Set([
   "favicon.ico",
   "robots.txt",
   "sitemap.xml",
+  "slack-link-preview",
 ]);
 
 export const WORKSPACE_SLUG_COOKIE = "workspace_slug";

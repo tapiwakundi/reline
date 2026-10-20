@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { slackLinkPreviewRewritePath } from "@/lib/slack-link-preview";
 import {
   RESERVED_SLUGS,
   WORKSPACE_SLUG_COOKIE,
@@ -20,6 +21,16 @@ const APP_SEGMENTS = new Set([
  * that call requireWorkspace() resolve the same workspace as the page.
  */
 export function middleware(request: NextRequest) {
+  const previewPath = slackLinkPreviewRewritePath(
+    request.nextUrl.pathname,
+    request.headers.get("user-agent")
+  );
+  if (previewPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = previewPath;
+    return NextResponse.rewrite(url);
+  }
+
   const segments = request.nextUrl.pathname.split("/").filter(Boolean);
   const slug = segments[0];
   const page = segments[1];
