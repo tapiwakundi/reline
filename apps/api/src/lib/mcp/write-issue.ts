@@ -1,8 +1,9 @@
-import type { IssueType, IssueUpdatePatch } from "@reline/shared";
+import type { AttachmentInput, IssueType, IssueUpdatePatch } from "@reline/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issues, labels, memberships, statuses, user as users } from "@/db/schema";
 import { HttpError, type WorkspaceContext } from "@/lib/context";
+import type { McpUpload } from "@/lib/mcp/attachment-input";
 import { formatIssue } from "@/lib/mcp/format";
 import {
   ATTACH_REQUIRES_EPIC,
@@ -24,7 +25,13 @@ import {
 } from "@/lib/mcp/load-issue";
 import { parseIssueRef, splitIssueKey, type IssueRef } from "@/lib/mcp/parse-link";
 import type { McpToolResult } from "@/lib/mcp/types";
-import { bulkUpdateIssues, createIssue, updateIssue } from "@/services/issues";
+import { deleteObjects, objectKey, putObject } from "@/lib/r2";
+import {
+  attachToIssue,
+  bulkUpdateIssues,
+  createIssue,
+  updateIssue,
+} from "@/services/issues";
 
 type WorkspaceRow = LoadedIssueRecord["workspace"];
 type MembershipRow = LoadedIssueRecord["membership"];
@@ -58,6 +65,9 @@ export async function createIssueTool(
     );
     if (!ctx) return toolError("Could not create that issue.");
 
+    const uploaded = await uploadAttachments(ctx.workspace.id, parsed.value.attachments);
+    if (!uploaded.ok) return toolError(uploaded.error);
+
     const created = await createIssue(ctx, {
       title: resolved.value.title,
       description: resolved.value.description,
@@ -68,6 +78,10 @@ export async function createIssueTool(
       cycleId: resolved.value.cycleId,
       epicId: resolved.value.epicId,
       labelIds: resolved.value.labelIds,
+      attachments: uploaded.value,
+    }).catch(async (error: unknown) => {
+      await discardUploads(uploaded.value);
+      throw error;
     });
     if (attachIds?.ok && attachIds.value.length) {
       await bulkUpdateIssues(ctx, attachIds.value, { epicId: created.id });
@@ -122,7 +136,20 @@ export async function updateIssueTool(
     );
     if (!ctx) return toolError("Could not update that issue.");
 
-    await updateIssue(ctx, loaded.value.issueId, resolved.value);
+    const uploaded = await uploadAttachments(ctx.workspace.id, parsed.value.attachments);
+    if (!uploaded.ok) return toolError(uploaded.error);
+
+    if (Object.keys(resolved.value).length) {
+      await updateIssue(ctx, loaded.value.issueId, resolved.value);
+    }
+    if (uploaded.value.length) {
+      await attachToIssue(ctx, loaded.value.issueId, uploaded.value).catch(
+        async (error: unknown) => {
+          await discardUploads(uploaded.value);
+          throw error;
+        }
+      );
+    }
     if (attachIds?.ok && attachIds.value.length) {
       await bulkUpdateIssues(ctx, attachIds.value, { epicId: loaded.value.issueId });
     }
@@ -130,6 +157,34 @@ export async function updateIssueTool(
   } catch (error) {
     return failure(error, "Could not update that issue.");
   }
+}
+
+async function uploadAttachments(
+  workspaceId: string,
+  uploads: McpUpload[] | undefined
+): Promise<{ ok: true; value: AttachmentInput[] } | { ok: false; error: string }> {
+  const stored: AttachmentInput[] = [];
+  for (const upload of uploads ?? []) {
+    const key = objectKey(workspaceId, upload.ext);
+    try {
+      await putObject(key, upload.bytes, upload.contentType);
+    } catch (error) {
+      console.error(error);
+      await discardUploads(stored);
+      return { ok: false, error: `Could not upload ${upload.filename}.` };
+    }
+    stored.push({
+      key,
+      filename: upload.filename,
+      contentType: upload.contentType,
+      size: upload.bytes.length,
+    });
+  }
+  return { ok: true, value: stored };
+}
+
+async function discardUploads(stored: AttachmentInput[]) {
+  if (stored.length) await deleteObjects(stored.map((file) => file.key));
 }
 
 async function resolveFields(

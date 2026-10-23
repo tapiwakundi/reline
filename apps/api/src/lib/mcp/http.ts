@@ -6,7 +6,8 @@ import {
 import type { McpScope, McpToolResult } from "@/lib/mcp/types";
 import { oauthWwwAuthenticate } from "@/lib/oauth/urls";
 
-const MAX_BODY_BYTES = 1_000_000;
+/** Room for base64 attachments on create_issue and update_issue. */
+const MAX_BODY_BYTES = 18_000_000;
 
 export type McpHttpDeps = {
   authenticate: (
@@ -55,6 +56,22 @@ export async function handleMcpHttpRequest(
     );
   }
 
+  // Authenticate before reading the body so only token holders can send large uploads.
+  const authorization = request.headers.get("authorization") ?? undefined;
+  const actor = await deps.authenticate(authorization);
+  if (!actor) {
+    // A missing Authorization header starts OAuth. A bad bearer token keeps a
+    // plain 401 so Cursor leaves a pasted mcp.json secret alone.
+    if (!authorization?.trim()) {
+      return json(
+        { error: "Unauthorized" },
+        401,
+        { "www-authenticate": oauthWwwAuthenticate() }
+      );
+    }
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     return json(
@@ -94,21 +111,6 @@ export async function handleMcpHttpRequest(
       ],
       400
     );
-  }
-
-  const authorization = request.headers.get("authorization") ?? undefined;
-  const actor = await deps.authenticate(authorization);
-  if (!actor) {
-    // A missing Authorization header starts OAuth. A bad bearer token keeps a
-    // plain 401 so Cursor leaves a pasted mcp.json secret alone.
-    if (!authorization?.trim()) {
-      return json(
-        { error: "Unauthorized" },
-        401,
-        { "www-authenticate": oauthWwwAuthenticate() }
-      );
-    }
-    return json({ error: "Unauthorized" }, 401);
   }
 
   const messages = Array.isArray(payload) ? payload : [payload];
