@@ -1,3 +1,8 @@
+import { MAX_ATTACHMENTS } from "@reline/shared";
+import {
+  MAX_MCP_ATTACHMENT_BYTES,
+  MAX_MCP_ATTACHMENTS_TOTAL_BYTES,
+} from "@/lib/mcp/attachment-input";
 import { ISSUE_DESCRIPTION_GUIDE } from "@/lib/mcp/issue-fields";
 import {
   MCP_READ_INSTRUCTIONS,
@@ -41,6 +46,28 @@ const DESCRIPTION_PROPERTY = {
     ISSUE_DESCRIPTION_GUIDE +
     " Example:\n## Summary\nLogin fails after the redirect.\n\n## Steps\n1. Open the app\n2. Sign in\n\n- Check the callback URL\n- [ ] Confirm the cookie domain",
 } as const;
+
+const ATTACHMENTS_PROPERTY = {
+  type: "array",
+  maxItems: MAX_ATTACHMENTS,
+  items: {
+    type: "object",
+    properties: {
+      filename: {
+        type: "string",
+        description: "File name to show on the issue, such as screenshot.png.",
+      },
+      data: {
+        type: "string",
+        description: "File contents as base64. A data: URL also works.",
+      },
+    },
+    required: ["filename", "data"],
+    additionalProperties: false,
+  },
+} as const;
+
+const ATTACHMENTS_GUIDE = `Images (jpeg, png, gif, webp, avif) and videos (mp4, webm, mov), up to ${MAX_ATTACHMENTS} files, each under ${MAX_MCP_ATTACHMENT_BYTES / (1024 * 1024)} MB and ${MAX_MCP_ATTACHMENTS_TOTAL_BYTES / (1024 * 1024)} MB together. The file type is read from the contents.`;
 
 const TOOLS = [
   {
@@ -106,7 +133,7 @@ const TOOLS = [
     name: "create_issue",
     title: "Create issue",
     description:
-      "Create an issue or epic in a workspace the user belongs to. Write the description in markdown so it renders with headings, lists, quotes, and the other formatting the issue editor supports. Use type epic for an epic. Use the epic field to put a new ticket under an epic. When type is epic, pass issues to attach existing tickets. Returns the created issue.",
+      "Create an issue or epic in a workspace the user belongs to. Write the description in markdown so it renders with headings, lists, quotes, and the other formatting the issue editor supports. Use type epic for an epic. Use the epic field to put a new ticket under an epic. When type is epic, pass issues to attach existing tickets. Pass attachments to upload screenshots or videos with the ticket. Returns the created issue.",
     inputSchema: {
       type: "object",
       properties: {
@@ -165,6 +192,10 @@ const TOOLS = [
           description:
             "Cycle name or number, such as Sprint 3 or 3. Pass none to leave it out of a cycle.",
         },
+        attachments: {
+          ...ATTACHMENTS_PROPERTY,
+          description: `Optional files to attach to the new issue, such as screenshots or screen recordings. ${ATTACHMENTS_GUIDE}`,
+        },
       },
       required: ["title"],
       additionalProperties: false,
@@ -182,7 +213,7 @@ const TOOLS = [
     name: "update_issue",
     title: "Update issue",
     description:
-      "Edit an existing issue or epic. Pass only the fields that should change. Description replaces the whole description, so call get_issue first and keep the parts the user did not ask to change. Use the issue editor's markdown for headings, bullets, numbered lists, checkboxes, quotes, code, and inline marks. Set epic to attach or remove a parent epic. On an epic, pass issues to attach tickets. Cannot delete the issue.",
+      "Edit an existing issue or epic. Pass only the fields that should change. Description replaces the whole description, so call get_issue first and keep the parts the user did not ask to change. Use the issue editor's markdown for headings, bullets, numbered lists, checkboxes, quotes, code, and inline marks. Set epic to attach or remove a parent epic. On an epic, pass issues to attach tickets. Pass attachments to add screenshots or videos. Cannot delete the issue or its attachments.",
     inputSchema: {
       type: "object",
       properties: {
@@ -243,6 +274,10 @@ const TOOLS = [
           type: "string",
           description: "Cycle name or number, such as Sprint 3 or 3. Pass none to clear the cycle.",
         },
+        attachments: {
+          ...ATTACHMENTS_PROPERTY,
+          description: `Files to add to the issue. Existing attachments stay. ${ATTACHMENTS_GUIDE}`,
+        },
       },
       additionalProperties: false,
     },
@@ -250,7 +285,7 @@ const TOOLS = [
       title: "Update issue",
       readOnlyHint: false,
       destructiveHint: true,
-      idempotentHint: true,
+      idempotentHint: false,
       openWorldHint: true,
     },
     requiresWrite: true,

@@ -5,6 +5,7 @@ import {
   normalizeIssueMarkdown,
   type IssueType,
 } from "@reline/shared";
+import { parseAttachmentUploads, type McpUpload } from "@/lib/mcp/attachment-input";
 import { parseIssueRef, splitIssueKey } from "@/lib/mcp/parse-link";
 
 export { ISSUE_DESCRIPTION_GUIDE };
@@ -49,6 +50,7 @@ export type IssueWriteInput = {
   cycle?: CycleInput;
   epic?: EpicInput;
   issues?: IssueKeyInput[];
+  attachments?: McpUpload[];
 };
 
 const CLEAR_ASSIGNEE = new Set(["none", "unassigned", "nobody", "no one"]);
@@ -149,6 +151,12 @@ export function parseIssueWriteArgs(
     input.issues = issues.value;
   }
 
+  if (hasOwn(record, "attachments")) {
+    const attachments = parseAttachmentUploads(record.attachments);
+    if (!attachments.ok) return attachments;
+    if (attachments.value.length) input.attachments = attachments.value;
+  }
+
   if (input.type === "epic" && input.epic?.kind === "query") {
     return { ok: false, error: "An epic cannot belong to another epic." };
   }
@@ -174,11 +182,12 @@ export function parseIssueWriteArgs(
       input.labels !== undefined ||
       input.cycle !== undefined ||
       input.epic !== undefined ||
-      input.issues !== undefined;
+      input.issues !== undefined ||
+      input.attachments !== undefined;
     if (!changing) {
       return {
         ok: false,
-        error: "Pass at least one field to change, such as title, description, or status.",
+        error: "Pass at least one field to change, such as title, description, status, or attachments.",
       };
     }
   }
