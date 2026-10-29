@@ -40,6 +40,9 @@ export function ReadableDescription({
   const anchorRef = useRef(0);
   const justSelected = useRef(false);
   const [indexes, setIndexes] = useState<number[] | null>(null);
+  // A drag selection keeps the browser's own highlight so it can be copied;
+  // keyboard and shift-click selections highlight whole blocks instead.
+  const [textSelected, setTextSelected] = useState(false);
 
   useEffect(() => {
     function onUp(event: PointerEvent) {
@@ -56,9 +59,9 @@ export function ReadableDescription({
       const [from, to] = anchor <= focus ? [anchor, focus] : [focus, anchor];
       const next: number[] = [];
       for (let index = from; index <= to; index += 1) next.push(index);
-      sel.removeAllRanges();
       justSelected.current = true;
       anchorRef.current = anchor;
+      setTextSelected(true);
       setIndexes(next);
       root.focus({ preventScroll: true });
     }
@@ -73,6 +76,7 @@ export function ReadableDescription({
       if (!(target instanceof Node)) return;
       if (rootRef.current?.contains(target)) return;
       if (target instanceof Element && target.closest("[data-selection-toolbar]")) return;
+      setTextSelected(false);
       setIndexes(null);
     }
     document.addEventListener("pointerdown", onDown);
@@ -84,6 +88,15 @@ export function ReadableDescription({
     const result = run(blocks);
     if (!result?.handled) return;
     onChange(serializeBlocks(result.blocks));
+    // The re-render drops the browser selection, so keep the blocks highlighted.
+    window.getSelection()?.removeAllRanges();
+    setTextSelected(false);
+  }
+
+  function clearSelection() {
+    window.getSelection()?.removeAllRanges();
+    setTextSelected(false);
+    setIndexes(null);
   }
 
   function pickedIds(blocks: ReturnType<typeof parseBlocks>) {
@@ -115,6 +128,7 @@ export function ReadableDescription({
     const next: number[] = [];
     for (let cursor = from; cursor <= to; cursor += 1) next.push(cursor);
     setIndexes(next);
+    setTextSelected(false);
     window.getSelection()?.removeAllRanges();
   }
 
@@ -152,6 +166,19 @@ export function ReadableDescription({
           }
           return;
         }
+        // The first click after a selection only dismisses it.
+        if (indexes) {
+          justSelected.current = true;
+          setTextSelected(false);
+          setIndexes(null);
+        }
+      }}
+      onCopy={(event) => {
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) return;
+        if (!selected.length) return;
+        event.preventDefault();
+        event.clipboardData.setData("text/plain", serializeBlocks(selected));
       }}
       onClick={(event) => {
         if (justSelected.current) {
@@ -168,13 +195,15 @@ export function ReadableDescription({
       onKeyDown={(event) => {
         if (event.key === "Escape" && indexes) {
           event.preventDefault();
-          setIndexes(null);
+          clearSelection();
           return;
         }
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
           event.preventDefault();
           const count = blocks.length;
           anchorRef.current = 0;
+          window.getSelection()?.removeAllRanges();
+          setTextSelected(false);
           setIndexes(Array.from({ length: count }, (_, index) => index));
           return;
         }
@@ -198,6 +227,8 @@ export function ReadableDescription({
           const to = Math.max(anchor, next);
           const range: number[] = [];
           for (let index = from; index <= to; index += 1) range.push(index);
+          window.getSelection()?.removeAllRanges();
+          setTextSelected(false);
           setIndexes(range);
           return;
         }
@@ -212,7 +243,7 @@ export function ReadableDescription({
           text={text}
           members={members}
           asBlocks
-          selectedIndexes={indexes ?? undefined}
+          selectedIndexes={textSelected ? undefined : (indexes ?? undefined)}
           onToggleTodo={onToggleTodo}
         />
       ) : (
