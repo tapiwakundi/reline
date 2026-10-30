@@ -129,12 +129,12 @@ describe("MCP HTTP", () => {
     };
     assert.deepEqual(
       body.result.tools.map((tool) => tool.name),
-      ["get_issue", "get_attachment", "create_issue", "update_issue"]
+      ["get_issue", "get_attachment", "create_issue", "update_issue", "create_attachment_upload"]
     );
     const writeTools = body.result.tools.filter((tool) => !tool.annotations.readOnlyHint);
     assert.deepEqual(
       writeTools.map((tool) => tool.name),
-      ["create_issue", "update_issue"]
+      ["create_issue", "update_issue", "create_attachment_upload"]
     );
 
     const initialize = await handleMcpHttpRequest(

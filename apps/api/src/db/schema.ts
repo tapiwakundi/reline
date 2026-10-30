@@ -111,6 +111,8 @@ export const memberships = pgTable(
       .default("member"),
     // Personal board display prefs (columns, completed window, card props, …)
     boardDisplay: jsonb("board_display"),
+    // Workspace MCP clients use when a call does not name one
+    isDefault: boolean("is_default").notNull().default(false),
     createdAt: timestamp("created_at")
       .$defaultFn(() => new Date())
       .notNull(),

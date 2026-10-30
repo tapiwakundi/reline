@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   MAX_MCP_ATTACHMENT_BYTES,
   parseAttachmentUploads,
+  type McpUpload,
   sniffContentType,
 } from "./attachment-input";
 import { parseIssueWriteArgs } from "./issue-fields";
@@ -24,12 +25,13 @@ describe("MCP attachment uploads", () => {
     ]);
     assert.equal(parsed.ok, true);
     if (!parsed.ok) return;
-    assert.equal(parsed.value[0]?.filename, "login.png");
-    assert.equal(parsed.value[0]?.contentType, "image/png");
-    assert.equal(parsed.value[0]?.ext, "png");
-    assert.deepEqual(parsed.value[0]?.bytes, PNG);
+    const [first, second] = parsed.value as McpUpload[];
+    assert.equal(first?.filename, "login.png");
+    assert.equal(first?.contentType, "image/png");
+    assert.equal(first?.ext, "png");
+    assert.deepEqual(first?.bytes, PNG);
     // The label says jpeg but the bytes are png.
-    assert.equal(parsed.value[1]?.contentType, "image/png");
+    assert.equal(second?.contentType, "image/png");
   });
 
   it("rejects files that are not supported images or videos", () => {

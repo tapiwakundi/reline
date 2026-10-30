@@ -147,3 +147,58 @@ describe("issue write fields", () => {
     assert.equal(matchCycle(cycles, { kind: "query", query: "Sprint 9" }).ok, false);
   });
 });
+
+describe("assignee and cycle shortcuts", () => {
+  const members = [
+    { id: "t", name: "Tapiwa Kundishora", email: "tkundishora@example.com" },
+    { id: "s", name: "Sam Lee", email: "sam@example.com" },
+    { id: "s2", name: "Sam Ortiz", email: "ortiz@example.com" },
+    { id: "l", name: "Lee", email: "lee@example.com" },
+  ];
+  const query = (value: string) => ({ kind: "query" as const, query: value });
+
+  it("matches a first name, surname, or email name when only one member fits", () => {
+    assert.deepEqual(matchAssignee(members, query("tapiwa"), "t"), { ok: true, value: "t" });
+    assert.deepEqual(matchAssignee(members, query("Kundishora"), "t"), { ok: true, value: "t" });
+    assert.deepEqual(matchAssignee(members, query("tkundishora"), "t"), { ok: true, value: "t" });
+    assert.deepEqual(matchAssignee(members, query("ortiz"), "t"), { ok: true, value: "s2" });
+  });
+
+  it("lists the candidates when a name is ambiguous and never guesses", () => {
+    const result = matchAssignee(members, query("sam"), "t");
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /Sam Lee \(sam@example.com\), Sam Ortiz \(ortiz@example.com\)/);
+  });
+
+  it("prefers an exact name over a partial one", () => {
+    assert.deepEqual(matchAssignee(members, query("Lee"), "t"), { ok: true, value: "l" });
+  });
+
+  it("does not match a fragment of a name", () => {
+    assert.equal(matchAssignee(members, query("Taps"), "t").ok, false);
+    assert.equal(matchAssignee(members, query("Tap"), "t").ok, false);
+  });
+
+  it("resolves active to the current cycle", () => {
+    const cycles = [{ id: "c1", name: "Sprint 1", number: 1 }];
+    assert.deepEqual(matchCycle(cycles, query("active"), "c1"), { ok: true, value: "c1" });
+    assert.deepEqual(matchCycle(cycles, query("Current"), "c1"), { ok: true, value: "c1" });
+    assert.equal(matchCycle(cycles, query("active"), null).ok, false);
+  });
+
+  it("lets a cycle actually named Active win over the keyword", () => {
+    const cycles = [
+      { id: "c1", name: "Sprint 1", number: 1 },
+      { id: "c2", name: "Active", number: 2 },
+    ];
+    assert.deepEqual(matchCycle(cycles, query("active"), "c1"), { ok: true, value: "c2" });
+  });
+
+  it("names every missing label at once", () => {
+    const result = matchLabels([{ id: "1", name: "Auth" }], ["Nope", "Auth", "Also"]);
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /"Nope", "Also"/);
+  });
+});

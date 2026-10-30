@@ -15,72 +15,130 @@ export type McpUpload = {
   bytes: Buffer;
 };
 
+/** A file the server fetches from a public https URL while validating the call. */
+export type McpUrlAttachment = { url: string; filename?: string };
+/** A file the client already PUT to an upload link from create_attachment_upload. */
+export type McpReferencedUpload = { uploadKey: string; filename: string };
+export type McpAttachmentSource = McpUpload | McpUrlAttachment | McpReferencedUpload;
+
 type UploadResult =
-  | { ok: true; value: McpUpload[] }
-  | { ok: false; error: string };
+  | { ok: true; value: McpAttachmentSource[] }
+  | { ok: false; error: string; errors: string[] };
+
+/** One problem reads as a sentence; several become a list. */
+export function joinProblems(problems: string[]): string {
+  const unique = [...new Set(problems)];
+  if (unique.length === 1) return unique[0]!;
+  return `${unique.length} problems:\n${unique.map((problem) => `- ${problem}`).join("\n")}`;
+}
+
+function failed(errors: string[]): UploadResult {
+  return { ok: false, error: joinProblems(errors), errors };
+}
 
 /**
- * Parse the `attachments` tool argument: a list of
- * `{ filename, data }` where data is base64 (a data: URL works too). The file type
+ * Parse the `attachments` tool argument. Each item is `{ filename, data }` with
+ * base64 data (a data: URL works too), `{ url, filename? }`, or
+ * `{ upload, filename }` from create_attachment_upload. The file type always
  * comes from the bytes themselves.
  */
 export function parseAttachmentUploads(value: unknown): UploadResult {
   if (!Array.isArray(value)) {
-    return { ok: false, error: "Attachments must be a list of { filename, data } objects." };
+    return failed(["Attachments must be a list of objects with data, url, or upload."]);
   }
   if (value.length > MAX_ATTACHMENTS) {
-    return { ok: false, error: `Attach at most ${MAX_ATTACHMENTS} files at a time.` };
+    return failed([`Attach at most ${MAX_ATTACHMENTS} files at a time.`]);
   }
 
-  const uploads: McpUpload[] = [];
+  const sources: McpAttachmentSource[] = [];
+  const errors: string[] = [];
   let total = 0;
   for (const [index, item] of value.entries()) {
     const label = `Attachment ${index + 1}`;
     if (!item || typeof item !== "object" || Array.isArray(item)) {
-      return { ok: false, error: `${label} must be an object with filename and data.` };
+      errors.push(`${label} must be an object with data, url, or upload.`);
+      continue;
     }
     const record = item as Record<string, unknown>;
-
     const filename = cleanFilename(record.filename);
-    if (!filename) return { ok: false, error: `${label} needs a filename, such as screenshot.png.` };
+
+    const given = ["data", "url", "upload"].filter((key) => record[key] !== undefined);
+    if (given.length > 1) {
+      errors.push(`${filename ?? label} must have only one of data, url, or upload.`);
+      continue;
+    }
+
+    if (given[0] === "url") {
+      if (typeof record.url !== "string" || !record.url.trim()) {
+        errors.push(`${filename ?? label} needs a url.`);
+        continue;
+      }
+      sources.push({ url: record.url.trim(), ...(filename ? { filename } : {}) });
+      continue;
+    }
+
+    if (!filename) {
+      errors.push(`${label} needs a filename, such as screenshot.png.`);
+      continue;
+    }
+
+    if (given[0] === "upload") {
+      if (typeof record.upload !== "string" || !record.upload.trim()) {
+        errors.push(`${filename} needs the upload value from create_attachment_upload.`);
+        continue;
+      }
+      sources.push({ uploadKey: record.upload.trim(), filename });
+      continue;
+    }
 
     if (typeof record.data !== "string" || !record.data.trim()) {
-      return { ok: false, error: `${filename} needs base64 data.` };
+      errors.push(`${filename} needs base64 data, a url, or an upload.`);
+      continue;
     }
     const bytes = decodeData(record.data);
-    if (!bytes) return { ok: false, error: `${filename} data is not valid base64.` };
-    if (!bytes.length) return { ok: false, error: `${filename} is empty.` };
-
-    // Trust the bytes, not the label, so nothing else lands in the bucket as an image.
-    const contentType = sniffContentType(bytes);
-    const media = contentType ? classifyContentType(contentType) : null;
-    if (!contentType || !media) {
-      return {
-        ok: false,
-        error: `${filename} is not a supported file. Only images (jpeg, png, gif, webp, avif) and videos (mp4, webm, mov) can be attached.`,
-      };
+    if (!bytes) {
+      errors.push(`${filename} data is not valid base64.`);
+      continue;
     }
-
-    if (bytes.length > MAX_MCP_ATTACHMENT_BYTES) {
-      return {
-        ok: false,
-        error: `${filename} is too large. Files sent through MCP must be under ${MAX_MCP_ATTACHMENT_BYTES / (1024 * 1024)} MB.`,
-      };
+    const upload = uploadFromBytes(filename, bytes);
+    if (!upload.ok) {
+      errors.push(upload.error);
+      continue;
     }
     total += bytes.length;
-    if (total > MAX_MCP_ATTACHMENTS_TOTAL_BYTES) {
-      return {
-        ok: false,
-        error: `Attachments are too large together. Keep one call under ${MAX_MCP_ATTACHMENTS_TOTAL_BYTES / (1024 * 1024)} MB.`,
-      };
-    }
-
-    uploads.push({ filename, contentType, kind: media.kind, ext: media.ext, bytes });
+    sources.push(upload.value);
   }
-  return { ok: true, value: uploads };
+  if (total > MAX_MCP_ATTACHMENTS_TOTAL_BYTES) errors.push(TOTAL_TOO_LARGE);
+  return errors.length ? failed(errors) : { ok: true, value: sources };
 }
 
-function cleanFilename(value: unknown): string | null {
+export const TOTAL_TOO_LARGE = `Attachments are too large together. Keep one call under ${MAX_MCP_ATTACHMENTS_TOTAL_BYTES / (1024 * 1024)} MB.`;
+
+export const UNSUPPORTED_FILE =
+  "is not a supported file. Only images (jpeg, png, gif, webp, avif) and videos (mp4, webm, mov) can be attached.";
+
+export function uploadFromBytes(
+  filename: string,
+  bytes: Buffer
+): { ok: true; value: McpUpload } | { ok: false; error: string } {
+  if (!bytes.length) return { ok: false, error: `${filename} is empty.` };
+
+  // Trust the bytes, not the label, so nothing else lands in the bucket as an image.
+  const contentType = sniffContentType(bytes);
+  const media = contentType ? classifyContentType(contentType) : null;
+  if (!contentType || !media) {
+    return { ok: false, error: `${filename} ${UNSUPPORTED_FILE}` };
+  }
+  if (bytes.length > MAX_MCP_ATTACHMENT_BYTES) {
+    return {
+      ok: false,
+      error: `${filename} is too large. Files sent through MCP must be under ${MAX_MCP_ATTACHMENT_BYTES / (1024 * 1024)} MB.`,
+    };
+  }
+  return { ok: true, value: { filename, contentType, kind: media.kind, ext: media.ext, bytes } };
+}
+
+export function cleanFilename(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const base = value.split(/[\\/]/).pop() ?? "";
   const name = base.replace(/[\u0000-\u001f\u007f]/g, "").trim();

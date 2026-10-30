@@ -17,6 +17,7 @@ import {
   type McpScope,
   type McpToolResult,
 } from "@/lib/mcp/types";
+import { createAttachmentUploadTool } from "@/lib/mcp/attachment-upload";
 import { createIssueTool, updateIssueTool } from "@/lib/mcp/write-issue";
 
 export async function getIssueTool(
@@ -94,9 +95,14 @@ export async function callMcpTool(
 ): Promise<McpToolResult> {
   if (name === "get_issue") return getIssueTool(actor.id, args);
   if (name === "get_attachment") return getAttachmentTool(actor.id, args);
-  if (name === "create_issue" || name === "update_issue") {
+  if (
+    name === "create_issue" ||
+    name === "update_issue" ||
+    name === "create_attachment_upload"
+  ) {
     if (actor.scope !== MCP_WRITE_SCOPE) return toolError(MCP_READ_ONLY_TOKEN_MESSAGE);
     if (name === "create_issue") return createIssueTool(actor.id, args);
+    if (name === "create_attachment_upload") return createAttachmentUploadTool(actor.id, args);
     return updateIssueTool(actor.id, args);
   }
   return toolError("Unknown tool.");

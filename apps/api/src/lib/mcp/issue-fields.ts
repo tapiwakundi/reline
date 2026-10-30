@@ -5,10 +5,14 @@ import {
   normalizeIssueMarkdown,
   type IssueType,
 } from "@reline/shared";
-import { parseAttachmentUploads, type McpUpload } from "@/lib/mcp/attachment-input";
+import {
+  joinProblems,
+  parseAttachmentUploads,
+  type McpAttachmentSource,
+} from "@/lib/mcp/attachment-input";
 import { parseIssueRef, splitIssueKey } from "@/lib/mcp/parse-link";
 
-export { ISSUE_DESCRIPTION_GUIDE };
+export { ISSUE_DESCRIPTION_GUIDE, joinProblems };
 
 export const TITLE_MAX = 512;
 export const DESCRIPTION_MAX = 100_000;
@@ -50,11 +54,12 @@ export type IssueWriteInput = {
   cycle?: CycleInput;
   epic?: EpicInput;
   issues?: IssueKeyInput[];
-  attachments?: McpUpload[];
+  attachments?: McpAttachmentSource[];
 };
 
 const CLEAR_ASSIGNEE = new Set(["none", "unassigned", "nobody", "no one"]);
 const CLEAR_CYCLE = new Set(["none", "no cycle", "unassigned"]);
+const ACTIVE_CYCLE = new Set(["active", "current"]);
 const CLEAR_EPIC = new Set(["none", "no epic"]);
 const TYPE_ERROR = "Type must be epic, story, task, or bug.";
 export const ATTACH_REQUIRES_EPIC =
@@ -65,112 +70,127 @@ export function parseIssueWriteArgs(
   args: unknown,
   mode: "create" | "update"
 ): FieldResult<IssueWriteInput> {
+  const draft = parseIssueWriteDraft(args, mode);
+  if (draft.errors.length) return { ok: false, error: joinProblems(draft.errors) };
+  return { ok: true, value: draft.value };
+}
+
+/**
+ * Parse every field and keep going past bad ones, so a client can fix all of
+ * its mistakes in one retry. `value` holds only the fields that parsed.
+ */
+export function parseIssueWriteDraft(
+  args: unknown,
+  mode: "create" | "update"
+): { value: IssueWriteInput; errors: string[] } {
+  const input: IssueWriteInput = {};
+  const errors: string[] = [];
   if (args === undefined) args = {};
   if (!args || typeof args !== "object" || Array.isArray(args)) {
-    return { ok: false, error: "Tool arguments must be an object." };
+    return { value: input, errors: ["Tool arguments must be an object."] };
   }
   const record = args as Record<string, unknown>;
-  const input: IssueWriteInput = {};
 
   const url = optionalText(record, "url");
-  if (!url.ok) return url;
-  if (url.value) input.url = url.value;
+  if (!url.ok) errors.push(url.error);
+  else if (url.value) input.url = url.value;
 
   const identifier = optionalText(record, "identifier");
-  if (!identifier.ok) return identifier;
-  if (identifier.value) input.identifier = identifier.value;
+  if (!identifier.ok) errors.push(identifier.error);
+  else if (identifier.value) input.identifier = identifier.value;
 
   const workspace = optionalText(record, "workspace");
-  if (!workspace.ok) return workspace;
-  if (workspace.value) input.workspace = workspace.value;
+  if (!workspace.ok) errors.push(workspace.error);
+  else if (workspace.value) input.workspace = workspace.value;
 
   if (hasOwn(record, "title")) {
-    if (typeof record.title !== "string") {
-      return { ok: false, error: "Title must be a string." };
-    }
-    const title = cleanTitle(record.title);
-    if (!title.ok) return title;
-    input.title = title.value;
+    const title =
+      typeof record.title === "string"
+        ? cleanTitle(record.title)
+        : ({ ok: false, error: "Title must be a string." } as const);
+    if (!title.ok) errors.push(title.error);
+    else input.title = title.value;
   }
 
   if (hasOwn(record, "description")) {
-    if (typeof record.description !== "string") {
-      return { ok: false, error: "Description must be a string." };
-    }
-    const description = cleanDescription(record.description);
-    if (!description.ok) return description;
-    input.description = description.value;
+    const description =
+      typeof record.description === "string"
+        ? cleanDescription(record.description)
+        : ({ ok: false, error: "Description must be a string." } as const);
+    if (!description.ok) errors.push(description.error);
+    else input.description = description.value;
   }
 
   if (hasOwn(record, "status")) {
     if (typeof record.status !== "string" || !record.status.trim()) {
-      return { ok: false, error: "Status must be a name, such as Todo or In Progress." };
+      errors.push("Status must be a name, such as Todo or In Progress.");
+    } else {
+      input.status = record.status.trim();
     }
-    input.status = record.status.trim();
   }
 
   if (hasOwn(record, "priority")) {
     const priority = parsePriority(record.priority);
-    if (!priority.ok) return priority;
-    input.priority = priority.value;
+    if (!priority.ok) errors.push(priority.error);
+    else input.priority = priority.value;
   }
 
   if (hasOwn(record, "type")) {
     const type = parseIssueType(record.type);
-    if (!type.ok) return type;
-    input.type = type.value;
+    if (!type.ok) errors.push(type.error);
+    else input.type = type.value;
   }
 
   if (hasOwn(record, "assignee")) {
     const assignee = parseAssignee(record.assignee);
-    if (!assignee.ok) return assignee;
-    input.assignee = assignee.value;
+    if (!assignee.ok) errors.push(assignee.error);
+    else input.assignee = assignee.value;
   }
 
   if (hasOwn(record, "labels")) {
     const labels = parseLabels(record.labels);
-    if (!labels.ok) return labels;
-    input.labels = labels.value;
+    if (!labels.ok) errors.push(labels.error);
+    else input.labels = labels.value;
   }
 
   if (hasOwn(record, "cycle")) {
     const cycle = parseCycle(record.cycle);
-    if (!cycle.ok) return cycle;
-    input.cycle = cycle.value;
+    if (!cycle.ok) errors.push(cycle.error);
+    else input.cycle = cycle.value;
   }
 
   if (hasOwn(record, "epic")) {
     const epic = parseEpic(record.epic);
-    if (!epic.ok) return epic;
-    input.epic = epic.value;
+    if (!epic.ok) errors.push(epic.error);
+    else input.epic = epic.value;
   }
 
   if (hasOwn(record, "issues")) {
     const issues = parseIssueKeys(record.issues);
-    if (!issues.ok) return issues;
-    input.issues = issues.value;
+    if (!issues.ok) errors.push(issues.error);
+    else input.issues = issues.value;
   }
 
   if (hasOwn(record, "attachments")) {
     const attachments = parseAttachmentUploads(record.attachments);
-    if (!attachments.ok) return attachments;
-    if (attachments.value.length) input.attachments = attachments.value;
+    if (!attachments.ok) errors.push(...attachments.errors);
+    else if (attachments.value.length) input.attachments = attachments.value;
   }
 
   if (input.type === "epic" && input.epic?.kind === "query") {
-    return { ok: false, error: "An epic cannot belong to another epic." };
+    errors.push("An epic cannot belong to another epic.");
   }
   if (input.issues && input.type && input.type !== "epic") {
-    return { ok: false, error: ATTACH_REQUIRES_EPIC };
+    errors.push(ATTACH_REQUIRES_EPIC);
   }
 
-  if (mode === "create" && !input.title) {
-    return { ok: false, error: "Title is required." };
+  if (mode === "create" && !hasOwn(record, "title")) {
+    errors.push("Title is required.");
   }
 
   if (mode === "update") {
     if (!input.url && !input.identifier) {
-      return { ok: false, error: "Pass a Reline issue URL or an identifier like REL-42." };
+      errors.push("Pass a Reline issue URL or an identifier like REL-42.");
     }
     const changing =
       input.title !== undefined ||
@@ -184,15 +204,14 @@ export function parseIssueWriteArgs(
       input.epic !== undefined ||
       input.issues !== undefined ||
       input.attachments !== undefined;
-    if (!changing) {
-      return {
-        ok: false,
-        error: "Pass at least one field to change, such as title, description, status, or attachments.",
-      };
+    if (!changing && !errors.length) {
+      errors.push(
+        "Pass at least one field to change, such as title, description, status, or attachments."
+      );
     }
   }
 
-  return { ok: true, value: input };
+  return { value: input, errors };
 }
 
 export function cleanTitle(value: string): FieldResult<string> {
@@ -366,7 +385,7 @@ export function parseCycle(value: unknown): FieldResult<CycleInput> {
     return { ok: true, value: { kind: "query", query: String(value) } };
   }
   if (typeof value !== "string") {
-    return { ok: false, error: "Cycle must be a name, a number, or none." };
+    return { ok: false, error: "Cycle must be a name, a number, active, or none." };
   }
   const trimmed = value.trim();
   if (!trimmed || CLEAR_CYCLE.has(trimmed.toLowerCase())) {
@@ -395,10 +414,30 @@ export function matchLabels(
   names: string[]
 ): FieldResult<string[]> {
   const ids: string[] = [];
+  const missing: string[] = [];
+  let firstError = "";
   for (const name of names) {
     const match = matchByName(labels, name, "label");
-    if (!match.ok) return match;
-    if (!ids.includes(match.value.id)) ids.push(match.value.id);
+    if (!match.ok) {
+      firstError ||= match.error;
+      if (labels.some((label) => label.name.trim().toLowerCase() === name.toLowerCase())) {
+        return match;
+      }
+      missing.push(name);
+    } else if (!ids.includes(match.value.id)) {
+      ids.push(match.value.id);
+    }
+  }
+  if (missing.length === 1) return { ok: false, error: firstError };
+  if (missing.length) {
+    const available = uniqueNames(labels.map((label) => label.name));
+    const quoted = missing.map((name) => `"${name}"`).join(", ");
+    return {
+      ok: false,
+      error: available.length
+        ? `No labels named ${quoted}. Available: ${available.join(", ")}.`
+        : "This workspace has no labels.",
+    };
   }
   return { ok: true, value: ids };
 }
@@ -416,12 +455,22 @@ export function matchAssignee(
     return { ok: true, value: selfId };
   }
   const needle = assignee.query.trim().toLowerCase();
-  const byEmail = members.filter((member) => member.email.toLowerCase() === needle);
-  if (byEmail.length === 1) return { ok: true, value: byEmail[0]!.id };
-  const byName = members.filter((member) => member.name.trim().toLowerCase() === needle);
-  if (byName.length === 1) return { ok: true, value: byName[0]!.id };
-  if (byEmail.length + byName.length > 1) {
-    return { ok: false, error: `"${assignee.query}" matches more than one member.` };
+  // The most exact form wins, so a full name still beats someone's first name.
+  const tiers = [
+    members.filter((member) => member.email.toLowerCase() === needle),
+    members.filter((member) => member.name.trim().toLowerCase() === needle),
+    members.filter(
+      (member) =>
+        member.name.trim().toLowerCase().split(/\s+/).includes(needle) ||
+        member.email.toLowerCase().split("@")[0] === needle
+    ),
+  ];
+  for (const tier of tiers) {
+    if (tier.length === 1) return { ok: true, value: tier[0]!.id };
+    if (tier.length > 1) {
+      const options = tier.map((member) => `${member.name} (${member.email})`).join(", ");
+      return { ok: false, error: `"${assignee.query}" matches more than one member: ${options}.` };
+    }
   }
   const names = uniqueNames(members.map((member) => member.name));
   return { ok: false, error: missingNamed("member", assignee.query, names) };
@@ -429,7 +478,8 @@ export function matchAssignee(
 
 export function matchCycle(
   cycles: { id: string; name: string; number: number }[],
-  cycle: CycleInput
+  cycle: CycleInput,
+  activeId: string | null = null
 ): FieldResult<string | null> {
   if (cycle.kind === "clear") return { ok: true, value: null };
   const query = cycle.query.trim();
@@ -445,6 +495,10 @@ export function matchCycle(
     if (byNumber.length > 1) {
       return { ok: false, error: `Cycle ${number} matches more than one cycle.` };
     }
+  }
+  if (ACTIVE_CYCLE.has(query.toLowerCase())) {
+    if (activeId) return { ok: true, value: activeId };
+    return { ok: false, error: "This workspace has no active cycle." };
   }
   const names = uniqueNames(cycles.map((item) => `${item.number} · ${item.name}`));
   return { ok: false, error: missingNamed("cycle", query, names) };

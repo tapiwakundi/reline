@@ -55,19 +55,30 @@ const ATTACHMENTS_PROPERTY = {
     properties: {
       filename: {
         type: "string",
-        description: "File name to show on the issue, such as screenshot.png.",
+        description:
+          "File name to show on the issue, such as screenshot.png. Optional with url.",
+      },
+      url: {
+        type: "string",
+        description:
+          "Public https URL of the file. Reline downloads it, so prefer this when the file is already hosted.",
+      },
+      upload: {
+        type: "string",
+        description:
+          "The upload value from create_attachment_upload, after the file has been PUT to its upload URL. Prefer this for local files.",
       },
       data: {
         type: "string",
-        description: "File contents as base64. A data: URL also works.",
+        description:
+          "File contents as base64. A data: URL also works. Use only when url and upload are not possible, because it is slow.",
       },
     },
-    required: ["filename", "data"],
     additionalProperties: false,
   },
 } as const;
 
-const ATTACHMENTS_GUIDE = `Images (jpeg, png, gif, webp, avif) and videos (mp4, webm, mov), up to ${MAX_ATTACHMENTS} files, each under ${MAX_MCP_ATTACHMENT_BYTES / (1024 * 1024)} MB and ${MAX_MCP_ATTACHMENTS_TOTAL_BYTES / (1024 * 1024)} MB together. The file type is read from the contents.`;
+const ATTACHMENTS_GUIDE = `Images (jpeg, png, gif, webp, avif) and videos (mp4, webm, mov), up to ${MAX_ATTACHMENTS} files, each under ${MAX_MCP_ATTACHMENT_BYTES / (1024 * 1024)} MB and ${MAX_MCP_ATTACHMENTS_TOTAL_BYTES / (1024 * 1024)} MB together. The file type is read from the contents. Each item needs exactly one of url, upload, or data.`;
 
 const TOOLS = [
   {
@@ -151,7 +162,7 @@ const TOOLS = [
         workspace: {
           type: "string",
           description:
-            "Workspace slug, such as acme. Required when the user belongs to more than one workspace.",
+            "Workspace slug, such as acme. Required when the user belongs to more than one workspace and has not set a default.",
         },
         status: {
           type: "string",
@@ -180,7 +191,7 @@ const TOOLS = [
         assignee: {
           type: "string",
           description:
-            "Member name or email, or me. Pass none to leave the issue unassigned.",
+            "Member name, first name, or email, or me. Pass none to leave the issue unassigned.",
         },
         labels: {
           type: "array",
@@ -190,7 +201,7 @@ const TOOLS = [
         cycle: {
           type: "string",
           description:
-            "Cycle name or number, such as Sprint 3 or 3. Pass none to leave it out of a cycle.",
+            "Cycle name or number, such as Sprint 3 or 3, or active for the current cycle. Pass none to leave it out of a cycle.",
         },
         attachments: {
           ...ATTACHMENTS_PROPERTY,
@@ -262,7 +273,7 @@ const TOOLS = [
         },
         assignee: {
           type: "string",
-          description: "Member name or email, or me. Pass none to unassign.",
+          description: "Member name, first name, or email, or me. Pass none to unassign.",
         },
         labels: {
           type: "array",
@@ -272,7 +283,8 @@ const TOOLS = [
         },
         cycle: {
           type: "string",
-          description: "Cycle name or number, such as Sprint 3 or 3. Pass none to clear the cycle.",
+          description:
+            "Cycle name or number, such as Sprint 3 or 3, or active for the current cycle. Pass none to clear the cycle.",
         },
         attachments: {
           ...ATTACHMENTS_PROPERTY,
@@ -285,6 +297,44 @@ const TOOLS = [
       title: "Update issue",
       readOnlyHint: false,
       destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    requiresWrite: true,
+  },
+  {
+    name: "create_attachment_upload",
+    title: "Create attachment upload",
+    description:
+      "Get a short-lived link for uploading a local screenshot or video without sending it through a tool call. PUT the file to the returned URL with the returned headers, then pass the returned attachment object in attachments on create_issue or update_issue. This is much faster than base64 when you can make network requests or run commands.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filename: {
+          type: "string",
+          description: "File name to show on the issue, such as screenshot.png.",
+        },
+        contentType: {
+          type: "string",
+          description: "File type, such as image/png or video/mp4.",
+        },
+        size: {
+          type: "integer",
+          description: "Exact file size in bytes.",
+        },
+        workspace: {
+          type: "string",
+          description:
+            "Workspace slug of the issue this file is for. Required when the user belongs to more than one workspace and has not set a default.",
+        },
+      },
+      required: ["filename", "contentType", "size"],
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "Create attachment upload",
+      readOnlyHint: false,
+      destructiveHint: false,
       idempotentHint: false,
       openWorldHint: true,
     },
