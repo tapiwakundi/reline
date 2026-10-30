@@ -208,9 +208,16 @@ export async function membershipForUser(
         value: { workspace: only.workspace, membership: membershipOnly(only) },
       };
     }
+    const fallback = rows.find((row) => row.isDefault);
+    if (fallback) {
+      return {
+        ok: true,
+        value: { workspace: fallback.workspace, membership: membershipOnly(fallback) },
+      };
+    }
     return {
       ok: false,
-      error: `You belong to more than one workspace: ${formatWorkspaces(rows)}. Pass the workspace slug.`,
+      error: `You belong to more than one workspace: ${formatWorkspaces(rows)}. Pass the workspace slug, or set a default in Settings → Cursor.`,
     };
   }
   const match = rows.find((row) => slugsMatch(row.workspace.slug, slug));
@@ -240,6 +247,7 @@ function membershipOnly(row: MembershipWithWorkspace): MembershipRow {
     userId: row.userId,
     role: row.role,
     boardDisplay: row.boardDisplay,
+    isDefault: row.isDefault,
     createdAt: row.createdAt,
   };
 }

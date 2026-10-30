@@ -1,4 +1,9 @@
-import { S3Client, DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { nanoid } from "nanoid";
 
@@ -38,6 +43,15 @@ function r2() {
 
 export function objectKey(workspaceId: string, ext: string) {
   return `${workspaceId}/${nanoid()}.${ext}`;
+}
+
+/** Per-user prefix so an MCP client can only attach files that same user uploaded. */
+export function mcpUploadKey(workspaceId: string, userId: string, ext: string) {
+  return `${mcpUploadPrefix(workspaceId, userId)}${nanoid()}.${ext}`;
+}
+
+export function mcpUploadPrefix(workspaceId: string, userId: string) {
+  return `${workspaceId}/mcp/${userId}/`;
 }
 
 /** Per-user prefix so a profile upload can only replace that user's own photo. */
@@ -89,6 +103,30 @@ export async function presignPut(key: string, contentType: string, size: number)
     ContentLength: size,
   });
   return getSignedUrl(r2(), command, { expiresIn: 600 });
+}
+
+/** The first bytes of an object and its full size, or null when it does not exist. */
+export async function readObjectStart(key: string, length: number) {
+  try {
+    const response = await r2().send(
+      new GetObjectCommand({
+        Bucket: env("R2_BUCKET_NAME"),
+        Key: key,
+        Range: `bytes=0-${length - 1}`,
+      })
+    );
+    const bytes = Buffer.from((await response.Body?.transformToByteArray()) ?? []);
+    const total = /\/(\d+)$/.exec(response.ContentRange ?? "")?.[1];
+    return {
+      bytes,
+      size: total ? Number(total) : bytes.length,
+      contentType: response.ContentType,
+    };
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (name === "NoSuchKey" || name === "NotFound" || name === "InvalidRange") return null;
+    throw error;
+  }
 }
 
 export async function putObject(

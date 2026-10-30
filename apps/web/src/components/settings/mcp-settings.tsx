@@ -81,6 +81,8 @@ export function McpSettings() {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedToken | null>(null);
+  const [workspaces, setWorkspaces] = useState<{ slug: string; name: string }[]>([]);
+  const [defaultSlug, setDefaultSlug] = useState("");
 
   const mcpUrl = origin ? `${origin}/api/mcp` : "";
 
@@ -104,6 +106,41 @@ export function McpSettings() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchJson<{
+      workspaces: { slug: string; name: string }[];
+      defaultSlug: string | null;
+    }>("/api/mcp/default-workspace")
+      .then((data) => {
+        if (cancelled) return;
+        setWorkspaces(data.workspaces);
+        setDefaultSlug(data.defaultSlug ?? "");
+      })
+      .catch(() => {
+        // The picker stays hidden; everything else on this page still works.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function changeDefaultWorkspace(slug: string) {
+    const previous = defaultSlug;
+    setDefaultSlug(slug);
+    try {
+      await fetchJson("/api/mcp/default-workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: slug || null }),
+      });
+      toast.success("Default workspace saved");
+    } catch (error) {
+      setDefaultSlug(previous);
+      toast.error(error instanceof Error ? error.message : "Could not save default workspace");
+    }
+  }
 
   async function createToken(event: React.FormEvent) {
     event.preventDefault();
@@ -165,6 +202,30 @@ export function McpSettings() {
           lists, checkboxes, quotes, and code.
         </p>
       </div>
+
+      {workspaces.length > 1 ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+          <div>
+            <Label htmlFor="mcp-default-workspace">Default workspace</Label>
+            <p className="mt-1 text-sm text-muted-foreground">
+              New tickets go here when the client does not name a workspace.
+            </p>
+          </div>
+          <select
+            id="mcp-default-workspace"
+            className="h-9 rounded-md border border-border bg-background px-2.5 text-sm"
+            value={defaultSlug}
+            onChange={(event) => changeDefaultWorkspace(event.target.value)}
+          >
+            <option value="">No default</option>
+            {workspaces.map((workspace) => (
+              <option key={workspace.slug} value={workspace.slug}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
         <div>

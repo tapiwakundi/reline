@@ -1,9 +1,15 @@
-import type { AttachmentInput, IssueType, IssueUpdatePatch } from "@reline/shared";
+import {
+  activeCycleIdFromRows,
+  type AttachmentInput,
+  type IssueType,
+  type IssueUpdatePatch,
+} from "@reline/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { cycles, issues, labels, memberships, statuses, user as users } from "@/db/schema";
 import { HttpError, type WorkspaceContext } from "@/lib/context";
-import type { McpUpload } from "@/lib/mcp/attachment-input";
+import { prepareAttachments } from "@/lib/mcp/attachment-upload";
+import { joinProblems, type McpUpload } from "@/lib/mcp/attachment-input";
 import { formatIssue } from "@/lib/mcp/format";
 import {
   ATTACH_REQUIRES_EPIC,
@@ -11,7 +17,7 @@ import {
   matchByName,
   matchCycle,
   matchLabels,
-  parseIssueWriteArgs,
+  parseIssueWriteDraft,
   resolveEpicSelection,
   type EpicCandidate,
   type IssueKeyInput,
@@ -40,23 +46,33 @@ export async function createIssueTool(
   userId: string,
   args: unknown
 ): Promise<McpToolResult> {
-  const parsed = parseIssueWriteArgs(args, "create");
-  if (!parsed.ok) return toolError(parsed.error);
+  const parsed = parseIssueWriteDraft(args, "create");
+  const problems = [...parsed.errors];
 
   const located = await membershipForUser(userId, parsed.value.workspace);
-  if (!located.ok) return toolError(located.error);
+  if (!located.ok) return toolError(joinProblems([...problems, located.error]));
 
   try {
     const resolved = await resolveFields(userId, located.value.workspace, parsed.value);
-    if (!resolved.ok) return toolError(resolved.error);
-    if (!resolved.value.title) return toolError("Title is required.");
+    problems.push(...resolved.errors);
 
     const creatingEpic = (resolved.value.type ?? "story") === "epic";
-    if (parsed.value.issues && !creatingEpic) return toolError(ATTACH_REQUIRES_EPIC);
-    const attachIds = parsed.value.issues
-      ? await resolveAttachIds(located.value.workspace, parsed.value.issues)
-      : null;
-    if (attachIds && !attachIds.ok) return toolError(attachIds.error);
+    if (parsed.value.issues && !creatingEpic) problems.push(ATTACH_REQUIRES_EPIC);
+    const attachIds =
+      parsed.value.issues && creatingEpic
+        ? await resolveAttachIds(located.value.workspace, parsed.value.issues)
+        : null;
+    if (attachIds && !attachIds.ok) problems.push(...attachIds.errors);
+
+    const prepared = await prepareAttachments(
+      userId,
+      located.value.workspace.id,
+      parsed.value.attachments
+    );
+    problems.push(...prepared.errors);
+
+    if (problems.length) return toolError(joinProblems(problems));
+    if (!resolved.value.title) return toolError("Title is required.");
 
     const ctx = await workspaceContext(
       userId,
@@ -65,7 +81,7 @@ export async function createIssueTool(
     );
     if (!ctx) return toolError("Could not create that issue.");
 
-    const uploaded = await uploadAttachments(ctx.workspace.id, parsed.value.attachments);
+    const uploaded = await uploadAttachments(ctx.workspace.id, prepared.uploads);
     if (!uploaded.ok) return toolError(uploaded.error);
 
     const created = await createIssue(ctx, {
@@ -78,7 +94,7 @@ export async function createIssueTool(
       cycleId: resolved.value.cycleId,
       epicId: resolved.value.epicId,
       labelIds: resolved.value.labelIds,
-      attachments: uploaded.value,
+      attachments: [...uploaded.value, ...prepared.references],
     }).catch(async (error: unknown) => {
       await discardUploads(uploaded.value);
       throw error;
@@ -100,15 +116,16 @@ export async function updateIssueTool(
   userId: string,
   args: unknown
 ): Promise<McpToolResult> {
-  const parsed = parseIssueWriteArgs(args, "update");
-  if (!parsed.ok) return toolError(parsed.error);
+  const parsed = parseIssueWriteDraft(args, "update");
+  const problems = [...parsed.errors];
 
+  if (!parsed.value.url && !parsed.value.identifier) return toolError(joinProblems(problems));
   const ref = issueRef(parsed.value);
-  if (!ref.ok) return toolError(ref.error);
+  if (!ref.ok) return toolError(joinProblems([...problems, ref.error]));
 
   try {
     const loaded = await loadIssueRecordForUser(userId, ref.value);
-    if (!loaded.ok) return toolError(loaded.error);
+    if (!loaded.ok) return toolError(joinProblems([...problems, loaded.error]));
 
     const resolved = await resolveFields(
       userId,
@@ -116,18 +133,28 @@ export async function updateIssueTool(
       parsed.value,
       loaded.value.issueType
     );
-    if (!resolved.ok) return toolError(resolved.error);
+    problems.push(...resolved.errors);
 
     const nextType = resolved.value.type ?? loaded.value.issueType;
-    if (parsed.value.issues && nextType !== "epic") return toolError(ATTACH_REQUIRES_EPIC);
-    const attachIds = parsed.value.issues
-      ? await resolveAttachIds(
-          loaded.value.workspace,
-          parsed.value.issues,
-          loaded.value.issueId
-        )
-      : null;
-    if (attachIds && !attachIds.ok) return toolError(attachIds.error);
+    if (parsed.value.issues && nextType !== "epic") problems.push(ATTACH_REQUIRES_EPIC);
+    const attachIds =
+      parsed.value.issues && nextType === "epic"
+        ? await resolveAttachIds(
+            loaded.value.workspace,
+            parsed.value.issues,
+            loaded.value.issueId
+          )
+        : null;
+    if (attachIds && !attachIds.ok) problems.push(...attachIds.errors);
+
+    const prepared = await prepareAttachments(
+      userId,
+      loaded.value.workspace.id,
+      parsed.value.attachments
+    );
+    problems.push(...prepared.errors);
+
+    if (problems.length) return toolError(joinProblems(problems));
 
     const ctx = await workspaceContext(
       userId,
@@ -136,14 +163,15 @@ export async function updateIssueTool(
     );
     if (!ctx) return toolError("Could not update that issue.");
 
-    const uploaded = await uploadAttachments(ctx.workspace.id, parsed.value.attachments);
+    const uploaded = await uploadAttachments(ctx.workspace.id, prepared.uploads);
     if (!uploaded.ok) return toolError(uploaded.error);
+    const attached = [...uploaded.value, ...prepared.references];
 
     if (Object.keys(resolved.value).length) {
       await updateIssue(ctx, loaded.value.issueId, resolved.value);
     }
-    if (uploaded.value.length) {
-      await attachToIssue(ctx, loaded.value.issueId, uploaded.value).catch(
+    if (attached.length) {
+      await attachToIssue(ctx, loaded.value.issueId, attached).catch(
         async (error: unknown) => {
           await discardUploads(uploaded.value);
           throw error;
@@ -192,9 +220,10 @@ async function resolveFields(
   workspace: { id: string; slug: string; prefix: string },
   input: IssueWriteInput,
   currentType?: IssueType
-) {
+): Promise<{ value: IssueUpdatePatch; errors: string[] }> {
   const workspaceId = workspace.id;
   const resolved: IssueUpdatePatch = {};
+  const errors: string[] = [];
   if (input.title !== undefined) resolved.title = input.title;
   if (input.description !== undefined) resolved.description = input.description;
   if (input.priority !== undefined) resolved.priority = input.priority;
@@ -203,15 +232,14 @@ async function resolveFields(
   if (input.epic !== undefined) {
     const nextType = input.type ?? currentType ?? "story";
     if (nextType === "epic" && input.epic.kind === "query") {
-      return { ok: false as const, error: "An epic cannot belong to another epic." };
-    }
-    if (input.epic.kind === "clear") {
+      errors.push("An epic cannot belong to another epic.");
+    } else if (input.epic.kind === "clear") {
       resolved.epicId = null;
     } else {
       const rows = await epicRowsForQuery(workspace, input.epic.query);
       const match = resolveEpicSelection(rows, input.epic, workspace);
-      if (!match.ok) return match;
-      resolved.epicId = match.value;
+      if (!match.ok) errors.push(match.error);
+      else resolved.epicId = match.value;
     }
   }
 
@@ -221,8 +249,8 @@ async function resolveFields(
     });
     rows.sort((a, b) => a.position - b.position);
     const match = matchByName(rows, input.status, "status");
-    if (!match.ok) return match;
-    resolved.statusId = match.value.id;
+    if (!match.ok) errors.push(match.error);
+    else resolved.statusId = match.value.id;
   }
 
   if (input.labels !== undefined) {
@@ -230,8 +258,8 @@ async function resolveFields(
       where: eq(labels.workspaceId, workspaceId),
     });
     const match = matchLabels(rows, input.labels);
-    if (!match.ok) return match;
-    resolved.labelIds = match.value;
+    if (!match.ok) errors.push(match.error);
+    else resolved.labelIds = match.value;
   }
 
   if (input.assignee !== undefined) {
@@ -245,8 +273,8 @@ async function resolveFields(
         : []
     );
     const match = matchAssignee(members, input.assignee, userId);
-    if (!match.ok) return match;
-    resolved.assigneeId = match.value;
+    if (!match.ok) errors.push(match.error);
+    else resolved.assigneeId = match.value;
   }
 
   if (input.cycle !== undefined) {
@@ -255,13 +283,14 @@ async function resolveFields(
     });
     const match = matchCycle(
       rows.map((row) => ({ id: row.id, name: row.name, number: row.number })),
-      input.cycle
+      input.cycle,
+      activeCycleIdFromRows(rows)
     );
-    if (!match.ok) return match;
-    resolved.cycleId = match.value;
+    if (!match.ok) errors.push(match.error);
+    else resolved.cycleId = match.value;
   }
 
-  return { ok: true as const, value: resolved };
+  return { value: resolved, errors };
 }
 
 async function epicRowsForQuery(
@@ -304,19 +333,22 @@ async function resolveAttachIds(
   workspace: { id: string; slug: string; prefix: string },
   keys: IssueKeyInput[],
   selfId?: string
-): Promise<{ ok: true; value: string[] } | { ok: false; error: string }> {
+): Promise<{ ok: true; value: string[] } | { ok: false; errors: string[] }> {
+  const errors: string[] = [];
+  const valid: IssueKeyInput[] = [];
   for (const key of keys) {
-    if (key.slug && !sameSlug(workspace.slug, key.slug)) {
-      return { ok: false, error: `${key.identifier} is in a different workspace.` };
-    }
     const parts = splitIssueKey(key.identifier);
-    if (!parts || !samePrefix(workspace.prefix, parts.prefix)) {
-      return { ok: false, error: `No issue ${key.identifier} in this workspace.` };
+    if (key.slug && !sameSlug(workspace.slug, key.slug)) {
+      errors.push(`${key.identifier} is in a different workspace.`);
+    } else if (!parts || !samePrefix(workspace.prefix, parts.prefix)) {
+      errors.push(`No issue ${key.identifier} in this workspace.`);
+    } else {
+      valid.push(key);
     }
   }
 
   const numbers = [
-    ...new Set(keys.map((key) => splitIssueKey(key.identifier)!.number)),
+    ...new Set(valid.map((key) => splitIssueKey(key.identifier)!.number)),
   ];
   const rows = await db.query.issues.findMany({
     where: and(eq(issues.workspaceId, workspace.id), inArray(issues.number, numbers)),
@@ -324,23 +356,18 @@ async function resolveAttachIds(
   });
   const byNumber = new Map(rows.map((row) => [row.number, row]));
   const ids: string[] = [];
-  for (const key of keys) {
+  for (const key of valid) {
     const number = splitIssueKey(key.identifier)!.number;
     const row = byNumber.get(number);
     const identifier = `${workspace.prefix}-${number}`;
-    if (!row) return { ok: false, error: `No issue ${identifier} in this workspace.` };
-    if (row.type === "epic") {
-      return {
-        ok: false,
-        error: `${identifier} is an epic and cannot belong to another epic.`,
-      };
-    }
-    if (selfId && row.id === selfId) {
-      return { ok: false, error: "An issue cannot belong to itself." };
-    }
-    if (!ids.includes(row.id)) ids.push(row.id);
+    if (!row) errors.push(`No issue ${identifier} in this workspace.`);
+    else if (row.type === "epic") {
+      errors.push(`${identifier} is an epic and cannot belong to another epic.`);
+    } else if (selfId && row.id === selfId) {
+      errors.push("An issue cannot belong to itself.");
+    } else if (!ids.includes(row.id)) ids.push(row.id);
   }
-  return { ok: true, value: ids };
+  return errors.length ? { ok: false, errors } : { ok: true, value: ids };
 }
 
 function sameSlug(stored: string, given: string): boolean {
