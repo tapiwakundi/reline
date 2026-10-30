@@ -15,7 +15,7 @@ const tabDefs = [
   { path: "/settings/members", label: "Members" },
   { path: "/settings/labels", label: "Labels" },
   { path: "/settings/import", label: "Import" },
-  { path: "/settings/cursor", label: "Cursor" },
+  { path: "/settings/claude", label: "Claude" },
   { path: "/settings/slack", label: "Slack" },
 ];
 

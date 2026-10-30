@@ -28,6 +28,15 @@ const nextConfig: NextConfig = {
   // `/api/rline/e/` must keep its trailing slash on the way to the API.
   // PostHog drops the event when that slash is redirected away.
   skipTrailingSlashRedirect: true,
+  async redirects() {
+    return [
+      {
+        source: "/:workspaceSlug/settings/cursor",
+        destination: "/:workspaceSlug/settings/claude",
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     const api = apiInternalUrl();
     return [

@@ -77,7 +77,7 @@ function formatWhen(iso: string) {
 export function McpSettings() {
   const [origin, setOrigin] = useState("");
   const [tokens, setTokens] = useState<McpToken[] | null>(null);
-  const [name, setName] = useState("Cursor");
+  const [name, setName] = useState("Claude");
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedToken | null>(null);
@@ -165,8 +165,8 @@ export function McpSettings() {
     if (revoking) return;
     const message =
       token.kind === "oauth"
-        ? `Disconnect “${token.name}”? Cursor will need to authorize again.`
-        : `Revoke “${token.name}”? Cursor will no longer be able to use this token.`;
+        ? `Disconnect “${token.name}”? It will need to authorize again.`
+        : `Revoke “${token.name}”? It will no longer be able to use this token.`;
     if (!window.confirm(message)) return;
     setRevoking(token.id);
     try {
@@ -193,9 +193,9 @@ export function McpSettings() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-base font-semibold">Cursor</h2>
+        <h2 className="text-base font-semibold">Claude</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Connect Cursor to issues in workspaces you belong to. It can read a
+          Connect Claude to issues in workspaces you belong to. It can read a
           ticket, create one, and edit the title, description, status, and
           other fields. It can also create epics and attach tickets to them.
           Descriptions use the same formatting as the issue editor: headings,
@@ -231,7 +231,7 @@ export function McpSettings() {
         <div>
           <div className="text-sm font-medium">Connect in the browser</div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add this URL as a remote MCP server in Cursor. When Cursor opens
+            Add this URL as a custom connector in Claude. When Claude opens
             the browser, click Authorize. You don&apos;t need to paste a token.
           </p>
         </div>
@@ -250,6 +250,9 @@ export function McpSettings() {
         </div>
         {mcpUrl ? (
           <>
+            <p className="text-sm text-muted-foreground">
+              Using Cursor? Add this to its MCP config instead.
+            </p>
             <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 text-[12px] leading-relaxed">
               {cursorUrlConfig(mcpUrl)}
             </pre>
@@ -294,7 +297,7 @@ export function McpSettings() {
               id="mcp-token-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Cursor on my laptop"
+              placeholder="Claude on my laptop"
               maxLength={64}
               required
             />
@@ -310,9 +313,10 @@ export function McpSettings() {
           <div>
             <div className="text-sm font-medium">Token created</div>
             <p className="mt-1 text-sm text-muted-foreground">
-              This token can read, create, and edit issues. Copy it into{" "}
-              <span className="font-mono text-xs">~/.cursor/mcp.json</span> or
-              Cursor’s MCP settings. It will not be shown again.
+              This token can read, create, and edit issues. Copy it into your
+              MCP client’s config, such as{" "}
+              <span className="font-mono text-xs">~/.cursor/mcp.json</span>. It
+              will not be shown again.
             </p>
           </div>
           <code className="overflow-x-auto rounded-md border border-border bg-background px-2.5 py-1.5 text-[13px]">
@@ -342,8 +346,8 @@ export function McpSettings() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : tokens.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No connections yet. Add the server URL in Cursor, or create a
-            token below.
+            No connections yet. Add the server URL in Claude, or create a
+            token above.
           </p>
         ) : (
           <div className="divide-y divide-border rounded-lg border border-border bg-card">

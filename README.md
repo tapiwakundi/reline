@@ -216,7 +216,7 @@ as URLs. With write access, `create_issue` and `update_issue` write tickets.
 Descriptions are markdown (`#` headings, `-` bullets, `1.` lists, `- [ ]`
 checkboxes, quotes, and fenced code) and render in the issue editor.
 
-Settings → Cursor can still mint a personal token if you need a pasted bearer
+Settings → Claude can still mint a personal token if you need a pasted bearer
 secret. The secret is shown once and only its hash is stored. Disconnect or
 revoke from the same settings page. Tokens created before write access stay
 read-only until you revoke them and connect again.

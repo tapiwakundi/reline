@@ -217,7 +217,7 @@ export async function membershipForUser(
     }
     return {
       ok: false,
-      error: `You belong to more than one workspace: ${formatWorkspaces(rows)}. Pass the workspace slug, or set a default in Settings → Cursor.`,
+      error: `You belong to more than one workspace: ${formatWorkspaces(rows)}. Pass the workspace slug, or set a default in Settings → Claude.`,
     };
   }
   const match = rows.find((row) => slugsMatch(row.workspace.slug, slug));
