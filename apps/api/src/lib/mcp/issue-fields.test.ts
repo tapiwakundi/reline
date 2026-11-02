@@ -6,8 +6,10 @@ import {
   matchCycle,
   matchLabels,
   parseIssueWriteArgs,
+  parseListIssuesArgs,
   parsePriority,
   resolveEpicSelection,
+  resolveStatusFilter,
 } from "./issue-fields";
 
 describe("issue write fields", () => {
@@ -200,5 +202,121 @@ describe("assignee and cycle shortcuts", () => {
     assert.equal(result.ok, false);
     if (result.ok) return;
     assert.match(result.error, /"Nope", "Also"/);
+  });
+});
+
+describe("list issue filters", () => {
+  it("defaults to no filters and 50 results", () => {
+    assert.deepEqual(parseListIssuesArgs({}), { ok: true, value: { limit: 50 } });
+    assert.deepEqual(parseListIssuesArgs(undefined), { ok: true, value: { limit: 50 } });
+  });
+
+  it("treats blank and null filters as absent, not as unassigned", () => {
+    assert.deepEqual(
+      parseListIssuesArgs({
+        workspace: " ",
+        status: "  ",
+        assignee: "",
+        cycle: null,
+        type: null,
+        limit: null,
+      }),
+      { ok: true, value: { limit: 50 } }
+    );
+  });
+
+  it("reads none as unassigned and no cycle", () => {
+    assert.deepEqual(parseListIssuesArgs({ assignee: "none", cycle: "none" }), {
+      ok: true,
+      value: { assignee: { kind: "clear" }, cycle: { kind: "clear" }, limit: 50 },
+    });
+  });
+
+  it("parses each filter", () => {
+    assert.deepEqual(
+      parseListIssuesArgs({
+        workspace: "acme",
+        status: " Todo ",
+        assignee: "me",
+        cycle: 3,
+        type: "Bug",
+        limit: 10,
+      }),
+      {
+        ok: true,
+        value: {
+          workspace: "acme",
+          status: "Todo",
+          assignee: { kind: "me" },
+          cycle: { kind: "query", query: "3" },
+          type: "bug",
+          limit: 10,
+        },
+      }
+    );
+  });
+
+  it("caps the limit at 100", () => {
+    assert.deepEqual(parseListIssuesArgs({ limit: 500 }), { ok: true, value: { limit: 100 } });
+  });
+
+  it("rejects a limit that is not a positive whole number", () => {
+    for (const limit of [0, -1, 2.5, "ten"]) {
+      assert.equal(parseListIssuesArgs({ limit }).ok, false, `limit ${String(limit)}`);
+    }
+  });
+
+  it("rejects arguments that are not an object", () => {
+    assert.equal(parseListIssuesArgs([]).ok, false);
+  });
+
+  it("names every bad filter at once", () => {
+    const result = parseListIssuesArgs({ status: 5, type: "nope", limit: 0 });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /3 problems/);
+    assert.match(result.error, /Status/);
+    assert.match(result.error, /Type/);
+    assert.match(result.error, /Limit/);
+  });
+});
+
+describe("resolveStatusFilter", () => {
+  const rows = [
+    { id: "s1", name: "Backlog", type: "backlog" },
+    { id: "s2", name: "Todo", type: "unstarted" },
+    { id: "s3", name: "In Progress", type: "started" },
+    { id: "s4", name: "Done", type: "done" },
+    { id: "s5", name: "Canceled", type: "canceled" },
+  ];
+
+  it("hides done and canceled statuses when none is named", () => {
+    assert.deepEqual(resolveStatusFilter(rows, undefined), {
+      ok: true,
+      value: ["s1", "s2", "s3"],
+    });
+  });
+
+  it("matches a named status in any case", () => {
+    assert.deepEqual(resolveStatusFilter(rows, "todo"), { ok: true, value: ["s2"] });
+    assert.deepEqual(resolveStatusFilter(rows, "DONE"), { ok: true, value: ["s4"] });
+  });
+
+  it("drops the status filter for all", () => {
+    assert.deepEqual(resolveStatusFilter(rows, "All"), { ok: true, value: null });
+  });
+
+  it("lets a status actually named All win over the keyword", () => {
+    const named = [...rows, { id: "s6", name: "All", type: "started" }];
+    assert.deepEqual(resolveStatusFilter(named, "all"), { ok: true, value: ["s6"] });
+  });
+
+  it("lists the valid names for an unknown status", () => {
+    const result = resolveStatusFilter(rows, "Doing");
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.match(result.error, /Doing/);
+    assert.match(result.error, /Todo/);
+    assert.match(result.error, /In Progress/);
   });
 });

@@ -215,7 +215,7 @@ async function discardUploads(stored: AttachmentInput[]) {
   if (stored.length) await deleteObjects(stored.map((file) => file.key));
 }
 
-async function resolveFields(
+export async function resolveFields(
   userId: string,
   workspace: { id: string; slug: string; prefix: string },
   input: IssueWriteInput,

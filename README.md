@@ -212,7 +212,10 @@ app origin in production. Next.js forwards `/api/mcp` to the API. Then paste an
 issue link such as `https://<your-web-app>/acme/issue/REL-42` in chat. Cursor
 calls `get_issue` for the title, description, comments, and attachments, and
 `get_attachment` to refetch one file. Images are returned inline. Videos stay
-as URLs. With write access, `create_issue` and `update_issue` write tickets.
+as URLs. Ask for "tickets in Todo" or "my tickets" and Cursor calls
+`list_issues`, which filters by status, assignee, cycle, or type and hides Done
+and Canceled unless you name them. With write access, `create_issue` and
+`update_issue` write tickets.
 Descriptions are markdown (`#` headings, `-` bullets, `1.` lists, `- [ ]`
 checkboxes, quotes, and fenced code) and render in the issue editor.
 

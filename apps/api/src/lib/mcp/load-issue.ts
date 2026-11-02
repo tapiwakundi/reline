@@ -373,7 +373,7 @@ function prefixesMatch(stored: string, given: string): boolean {
   return stored.toLowerCase() === given.toLowerCase();
 }
 
-function priorityLabel(value: number): string {
+export function priorityLabel(value: number): string {
   return PRIORITIES.find((item) => item.value === value)?.label ?? `Priority ${value}`;
 }
 

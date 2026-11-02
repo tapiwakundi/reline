@@ -1,4 +1,10 @@
-import type { McpAttachment, McpComment, McpIssue, McpPerson } from "@/lib/mcp/types";
+import type {
+  McpAttachment,
+  McpComment,
+  McpIssue,
+  McpIssueListItem,
+  McpPerson,
+} from "@/lib/mcp/types";
 import { EMBEDDABLE_IMAGE_TYPES } from "@/lib/mcp/types";
 
 export function allAttachments(issue: McpIssue): McpAttachment[] {
@@ -68,6 +74,32 @@ export function formatIssue(issue: McpIssue, embedded: Set<string>): string {
     formatComments(issue.comments, embedded),
   ];
   return lines.filter((line) => line !== null).join("\n");
+}
+
+export function formatIssueList(
+  items: McpIssueListItem[],
+  total: number,
+  workspace: { name: string; slug: string }
+): string {
+  const where = `${workspace.name} (${workspace.slug})`;
+  if (!total) return `No issues match those filters in ${where}.`;
+  const count =
+    items.length < total
+      ? `Showing ${items.length} of ${total} issues`
+      : `${total} ${total === 1 ? "issue" : "issues"}`;
+  return [
+    `${count} in ${where}, most recently updated first:`,
+    ...items.map((item) =>
+      [
+        item.identifier,
+        item.title,
+        item.statusName,
+        item.priorityLabel,
+        item.assigneeName ?? "Unassigned",
+        ...(item.url ? [item.url] : []),
+      ].join(" · ")
+    ),
+  ].join("\n");
 }
 
 export function formatAttachment(attachment: McpAttachment, embedded: boolean): string {

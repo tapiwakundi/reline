@@ -116,6 +116,55 @@ const TOOLS = [
     requiresWrite: false,
   },
   {
+    name: "list_issues",
+    title: "List issues",
+    description:
+      "List issues in a workspace, filtered by status, assignee, cycle, or type. Use this when the user asks which tickets exist, such as tickets in Todo, my tickets, or what is in the current cycle. Returns one line per issue with its key, title, status, priority, assignee, and URL, most recently updated first. Call get_issue for descriptions and comments. Read-only.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        status: {
+          type: "string",
+          description:
+            "Status name in that workspace, such as Backlog, Todo, In Progress, Done, or Canceled. Leave it out to hide Done and Canceled issues. Pass all to include every status.",
+        },
+        assignee: {
+          type: "string",
+          description:
+            "Member name, first name, or email, or me. Pass none for unassigned issues. Leave it out to include everyone.",
+        },
+        cycle: {
+          type: "string",
+          description:
+            "Cycle name or number, such as Sprint 3 or 3, or active for the current cycle. Pass none for issues outside a cycle.",
+        },
+        type: {
+          type: "string",
+          description: "epic, story, task, or bug.",
+        },
+        workspace: {
+          type: "string",
+          description:
+            "Workspace slug, such as acme. Required when the user belongs to more than one workspace and has not set a default.",
+        },
+        limit: {
+          type: "integer",
+          minimum: 1,
+          description: "Most issues to return. Defaults to 50. Values above 100 return 100.",
+        },
+      },
+      additionalProperties: false,
+    },
+    annotations: {
+      title: "List issues",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    requiresWrite: false,
+  },
+  {
     name: "get_attachment",
     title: "Get attachment",
     description:

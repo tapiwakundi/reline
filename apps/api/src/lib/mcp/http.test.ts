@@ -129,7 +129,14 @@ describe("MCP HTTP", () => {
     };
     assert.deepEqual(
       body.result.tools.map((tool) => tool.name),
-      ["get_issue", "get_attachment", "create_issue", "update_issue", "create_attachment_upload"]
+      [
+        "get_issue",
+        "list_issues",
+        "get_attachment",
+        "create_issue",
+        "update_issue",
+        "create_attachment_upload",
+      ]
     );
     const writeTools = body.result.tools.filter((tool) => !tool.annotations.readOnlyHint);
     assert.deepEqual(
@@ -155,6 +162,47 @@ describe("MCP HTTP", () => {
     assert.match(initBody.result.instructions, /create_issue/);
     assert.match(initBody.result.instructions, /epic/i);
     assert.match(initBody.result.instructions, /headings/i);
+  });
+
+  it("runs list_issues on a read token and tells clients about it", async () => {
+    let called: { name: string; args: unknown } | null = null;
+    const response = await handleMcpHttpRequest(
+      post(
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "list_issues", arguments: { status: "Todo" } },
+        },
+        { authorization: "Bearer rel_test", accept: "application/json" }
+      ),
+      deps({
+        callTool: async (_actor, name, args) => {
+          called = { name, args };
+          return { content: [{ type: "text", text: "1 issue" }] };
+        },
+      })
+    );
+    const body = (await response.json()) as { result: { isError: boolean } };
+    assert.equal(body.result.isError, false);
+    assert.deepEqual(called, { name: "list_issues", args: { status: "Todo" } });
+
+    for (const scope of ["read", "write"] as const) {
+      const initialize = await handleMcpHttpRequest(
+        post(
+          {
+            jsonrpc: "2.0",
+            id: 2,
+            method: "initialize",
+            params: { protocolVersion: "2025-03-26" },
+          },
+          { authorization: "Bearer rel_test", accept: "application/json" }
+        ),
+        deps({}, scope)
+      );
+      const initBody = (await initialize.json()) as { result: { instructions: string } };
+      assert.match(initBody.result.instructions, /list_issues/, scope);
+    }
   });
 
   it("loads an issue through get_issue and blocks writes on a read token", async () => {

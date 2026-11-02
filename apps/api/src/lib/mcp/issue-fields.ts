@@ -57,6 +57,17 @@ export type IssueWriteInput = {
   attachments?: McpAttachmentSource[];
 };
 
+export type ListIssuesInput = {
+  workspace?: string;
+  status?: string;
+  assignee?: AssigneeInput;
+  cycle?: CycleInput;
+  type?: IssueType;
+  limit: number;
+};
+
+const DEFAULT_LIST_LIMIT = 50;
+const MAX_LIST_LIMIT = 100;
 const CLEAR_ASSIGNEE = new Set(["none", "unassigned", "nobody", "no one"]);
 const CLEAR_CYCLE = new Set(["none", "no cycle", "unassigned"]);
 const ACTIVE_CYCLE = new Set(["active", "current"]);
@@ -212,6 +223,87 @@ export function parseIssueWriteDraft(
   }
 
   return { value: input, errors };
+}
+
+/**
+ * Parse list_issues filters. Unlike a write, a blank or null filter means the
+ * caller did not ask for one, so only an explicit none selects unassigned.
+ */
+export function parseListIssuesArgs(args: unknown): FieldResult<ListIssuesInput> {
+  if (args === undefined) args = {};
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return { ok: false, error: "Tool arguments must be an object." };
+  }
+  const record = args as Record<string, unknown>;
+  const input: ListIssuesInput = { limit: DEFAULT_LIST_LIMIT };
+  const errors: string[] = [];
+
+  const workspace = optionalText(record, "workspace");
+  if (!workspace.ok) errors.push(workspace.error);
+  else if (workspace.value) input.workspace = workspace.value;
+
+  if (!isBlankFilter(record.status)) {
+    if (typeof record.status !== "string") {
+      errors.push("Status must be a name, such as Todo or In Progress.");
+    } else {
+      input.status = record.status.trim();
+    }
+  }
+
+  if (!isBlankFilter(record.assignee)) {
+    const assignee = parseAssignee(record.assignee);
+    if (!assignee.ok) errors.push(assignee.error);
+    else input.assignee = assignee.value;
+  }
+
+  if (!isBlankFilter(record.cycle)) {
+    const cycle = parseCycle(record.cycle);
+    if (!cycle.ok) errors.push(cycle.error);
+    else input.cycle = cycle.value;
+  }
+
+  if (!isBlankFilter(record.type)) {
+    const type = parseIssueType(record.type);
+    if (!type.ok) errors.push(type.error);
+    else input.type = type.value;
+  }
+
+  if (record.limit != null) {
+    const limit = record.limit;
+    if (typeof limit !== "number" || !Number.isInteger(limit) || limit < 1) {
+      errors.push("Limit must be a whole number of at least 1.");
+    } else {
+      input.limit = Math.min(limit, MAX_LIST_LIMIT);
+    }
+  }
+
+  if (errors.length) return { ok: false, error: joinProblems(errors) };
+  return { ok: true, value: input };
+}
+
+/**
+ * Status ids to list, or null for every status. With no name given, this leaves
+ * out done and canceled work.
+ */
+export function resolveStatusFilter(
+  rows: { id: string; name: string; type: string }[],
+  status: string | undefined
+): FieldResult<string[] | null> {
+  if (status === undefined) {
+    return {
+      ok: true,
+      value: rows
+        .filter((row) => row.type !== "done" && row.type !== "canceled")
+        .map((row) => row.id),
+    };
+  }
+  const needle = status.trim().toLowerCase();
+  if (needle === "all" && !rows.some((row) => row.name.trim().toLowerCase() === needle)) {
+    return { ok: true, value: null };
+  }
+  const match = matchByName(rows, status, "status");
+  if (!match.ok) return match;
+  return { ok: true, value: [match.value.id] };
 }
 
 export function cleanTitle(value: string): FieldResult<string> {
@@ -540,6 +632,10 @@ function optionalText(
   }
   const trimmed = (record[key] as string).trim();
   return { ok: true, value: trimmed || undefined };
+}
+
+function isBlankFilter(value: unknown): boolean {
+  return value == null || (typeof value === "string" && !value.trim());
 }
 
 function labelFor(key: string): string {

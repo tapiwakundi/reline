@@ -6,6 +6,7 @@ import {
   selectEmbedded,
 } from "@/lib/mcp/format";
 import { embedImages } from "@/lib/mcp/images";
+import { listIssuesTool } from "@/lib/mcp/list-issues";
 import { loadAttachmentForUser, loadIssueForUser } from "@/lib/mcp/load-issue";
 import { parseIssueRef } from "@/lib/mcp/parse-link";
 import {
@@ -94,6 +95,7 @@ export async function callMcpTool(
   args: unknown
 ): Promise<McpToolResult> {
   if (name === "get_issue") return getIssueTool(actor.id, args);
+  if (name === "list_issues") return listIssuesTool(actor.id, args);
   if (name === "get_attachment") return getAttachmentTool(actor.id, args);
   if (
     name === "create_issue" ||
