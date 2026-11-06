@@ -3,6 +3,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
+import { MAX_VIDEO_BYTES } from "@reline/shared";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { auth } from "@/lib/auth";
 import { HttpError } from "@/lib/context";
@@ -52,6 +53,7 @@ app.use(
   "/api/attachments/*",
   bodyLimit({ maxSize: 110 * 1024 * 1024 })
 );
+app.use("/api/mcp/uploads/*", bodyLimit({ maxSize: MAX_VIDEO_BYTES }));
 app.use("/api/profile/avatar", bodyLimit({ maxSize: 6 * 1024 * 1024 }));
 app.use("/api/workspace/logo", bodyLimit({ maxSize: 6 * 1024 * 1024 }));
 app.use("/api/import/*", bodyLimit({ maxSize: 50 * 1024 * 1024 }));

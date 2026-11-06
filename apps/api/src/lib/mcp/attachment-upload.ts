@@ -19,14 +19,16 @@ import {
 } from "@/lib/mcp/attachment-input";
 import { membershipForUser } from "@/lib/mcp/load-issue";
 import type { McpToolResult } from "@/lib/mcp/types";
-import { mcpUploadKey, mcpUploadPrefix, presignPut, readObjectStart } from "@/lib/r2";
+import { signUploadLink, UPLOAD_LINK_TTL_MS, uploadLinkUrl } from "@/lib/mcp/upload-link";
+import { mcpUploadKey, mcpUploadPrefix, readObjectStart } from "@/lib/r2";
 
 /** Enough of a file to read its type. */
 const SNIFF_BYTES = 512;
 
 export async function createAttachmentUploadTool(
   userId: string,
-  args: unknown
+  args: unknown,
+  locate: typeof membershipForUser = membershipForUser
 ): Promise<McpToolResult> {
   const record = (args && typeof args === "object" ? args : {}) as Record<string, unknown>;
   const errors: string[] = [];
@@ -50,7 +52,7 @@ export async function createAttachmentUploadTool(
   }
 
   const slug = typeof record.workspace === "string" ? record.workspace.trim() : undefined;
-  const located = await membershipForUser(userId, slug || undefined);
+  const located = await locate(userId, slug || undefined);
   if (!located.ok) errors.push(located.error);
 
   if (errors.length || !filename || !media || !located.ok) {
@@ -59,7 +61,10 @@ export async function createAttachmentUploadTool(
 
   try {
     const key = mcpUploadKey(located.value.workspace.id, userId, media.ext);
-    const uploadUrl = await presignPut(key, contentType, size as number);
+    // The link points at our own host, so the client never has to reach R2.
+    const uploadUrl = uploadLinkUrl(
+      signUploadLink({ key, contentType, size: size as number, filename })
+    );
     return {
       content: [
         {
@@ -69,7 +74,7 @@ export async function createAttachmentUploadTool(
               uploadUrl,
               method: "PUT",
               headers: { "Content-Type": contentType, "Content-Length": String(size) },
-              expiresInSeconds: 600,
+              expiresInSeconds: UPLOAD_LINK_TTL_MS / 1000,
               attachment: { upload: key, filename },
             },
             null,
