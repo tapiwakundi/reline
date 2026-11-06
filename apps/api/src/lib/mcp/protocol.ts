@@ -355,7 +355,7 @@ const TOOLS = [
     name: "create_attachment_upload",
     title: "Create attachment upload",
     description:
-      "Get a short-lived link for uploading a local screenshot or video without sending it through a tool call. PUT the file to the returned URL with the returned headers, then pass the returned attachment object in attachments on create_issue or update_issue. This is much faster than base64 when you can make network requests or run commands.",
+      "Get a short-lived link for uploading a local screenshot or video without sending it through a tool call. PUT the file to the returned URL with the returned headers, for example `curl -X PUT -H 'Content-Type: video/mp4' --data-binary @clip.mp4 <uploadUrl>`, then pass the returned attachment object in attachments on create_issue or update_issue. The link is on Reline's own host, the same domain as this server, so it works from a sandbox that only allows that domain. This is much faster than base64 when you can make network requests or run commands.",
     inputSchema: {
       type: "object",
       properties: {

@@ -219,6 +219,16 @@ and Canceled unless you name them. With write access, `create_issue` and
 Descriptions are markdown (`#` headings, `-` bullets, `1.` lists, `- [ ]`
 checkboxes, quotes, and fenced code) and render in the issue editor.
 
+Both take screenshots and videos as attachments. For a local file the client
+calls `create_attachment_upload`, PUTs the file to the link it returns (curl
+works), and passes back the attachment object. The link is served by the web
+app at `/api/mcp/uploads/…` and the API forwards the bytes to R2, so a sandbox
+only needs the web host reachable, the same domain as the MCP URL; nothing on
+`r2.cloudflarestorage.com` has to be allowed. If the client's environment
+restricts outbound domains, add the web host (for example
+`reline-web.onrender.com`) to its allowed domains. Links expire after 10
+minutes. Base64 in the tool call still works for small images.
+
 Settings → Claude can still mint a personal token if you need a pasted bearer
 secret. The secret is shown once and only its hash is stored. Disconnect or
 revoke from the same settings page. Tokens created before write access stay
